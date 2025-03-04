@@ -264,6 +264,7 @@ func (ph *PostHandler) handleGetPosts(w http.ResponseWriter, r *http.Request) {
 		utils.RenderErrorPage(w, http.StatusInternalServerError, utils.ErrTemplateExec)
 	}
 }
+
 func (ph *PostHandler) getAllUsers() ([]utils.User, error) {
 	rows, err := utils.GlobalDB.Query(`
         SELECT id, username, profile_pic 
@@ -286,6 +287,7 @@ func (ph *PostHandler) getAllUsers() ([]utils.User, error) {
 	}
 	return users, nil
 }
+
 func (ph *PostHandler) getAllPosts() ([]utils.Post, error) {
 	rows, err := utils.GlobalDB.Query(`
         SELECT p.id, p.user_id, p.title, p.content, p.imagepath, 
@@ -1132,4 +1134,80 @@ func (ph *PostHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) 
 	}
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (ph *PostHandler) getPostsByCategoryName(categoryName string) ([]utils.Post, error) {
+	rows, err := utils.GlobalDB.Query(`
+        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at, p.likes, p.dislikes, p.comments,
+               u.username, u.profile_pic, c.id AS category_id, c.name AS category_name
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        JOIN post_categories pc ON p.id = pc.post_id
+        JOIN categories c ON pc.category_id = c.id
+        WHERE c.name = ?
+        ORDER BY p.post_at DESC
+    `, categoryName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return ph.scanPosts(rows)
+}
+
+func (ph *PostHandler) scanPosts(rows *sql.Rows) ([]utils.Post, error) {
+	postMap := make(map[int]utils.Post)
+	for rows.Next() {
+		var post utils.Post
+		var postTime time.Time
+		var categoryID sql.NullInt64
+		var categoryName sql.NullString
+
+		// Scan row into post struct
+		err := rows.Scan(
+			&post.ID,
+			&post.UserID,
+			&post.Title,
+			&post.Content,
+			&post.ImagePath,
+			&postTime,
+			&post.Likes,
+			&post.Dislikes,
+			&post.Comments,
+			&post.Username,
+			&post.ProfilePic,
+			&categoryID,
+			&categoryName,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		post.PostTime = FormatTimeAgo(postTime)
+
+		if existingPost, ok := postMap[post.ID]; ok {
+			if categoryID.Valid && categoryName.Valid {
+				existingPost.Categories = append(existingPost.Categories, utils.Category{
+					ID:   int(categoryID.Int64),
+					Name: categoryName.String,
+				})
+				postMap[post.ID] = existingPost
+			}
+		} else {
+			post.Categories = make([]utils.Category, 0)
+			if categoryID.Valid && categoryName.Valid {
+				post.Categories = append(post.Categories, utils.Category{
+					ID:   int(categoryID.Int64),
+					Name: categoryName.String,
+				})
+			}
+			postMap[post.ID] = post
+		}
+	}
+
+	var posts []utils.Post
+	for _, post := range postMap {
+		posts = append(posts, post)
+	}
+	return posts, nil
 }
