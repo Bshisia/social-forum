@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - Forum</title>
+    <link rel="stylesheet" href="../static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="logo-link">
+                <h1 class="logo">Forum</h1>
+            </a>
+            <button class="hamburger-btn">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="nav-right">
+                <button id="create-post-btn" class="btn btn-primary" onclick="window.location.href='/create'">
+                    <i class="fas fa-plus"></i> Create Post
+                </button>
+                {{if .IsLoggedIn}}
+                <button class="btn btn-outline notification-btn" onclick="window.location.href='/notifications'">
+                    <i class="fas fa-bell"></i>
+                    {{if gt .UnreadCount 0}}
+                    <span class="notification-dot">{{.UnreadCount}}</span>
+                    {{end}}
+                </button>
+                {{end}}
+                <button id="create-post-btn" class="btn btn-primary" onclick="window.location.href='#'">
+                    <i class="fas fa-user"></i> {{.Username}}
+                </button>
+                <button class="btn btn-primary" onclick="window.location.href='/signout'">
+                    <i class="fas fa-sign-out-alt"></i> Sign Out
+                </button>
+
+
+                <!-- Mobile Categories Section -->
+                <div class="mobile-menu-section">
+                    <button class="menu-toggle-btn">
+                        Categories <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="mobile-menu-content">
+                        <ul>
+                            <li><a href="/category?name=Tech">Tech</a></li>
+                            <li><a href="/category?name=Programming">Programming</a></li>
+                            <li><a href="/category?name=Business">Business</a></li>
+                            <li><a href="/category?name=Lifestyle">Lifestyle</a></li>
+                            <li><a href="/category?name=Football">Football</a></li>
+                            <li><a href="/category?name=Politics">Politics</a></li>
+                            <li><a href="/category?name=General%20News">General News</a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Mobile Filters Section -->
+                <div class="mobile-menu-section">
+                    <button class="menu-toggle-btn">
+                        Filters <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="mobile-menu-content">
+                        <ul>
+                            <li><a href="/created">Created Posts</a></li>
+                            <li><a href="/liked">Reacted Posts</a></li>
+                            <li><a href="/commented">Commented Posts</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <div class="mobile-menu-overlay"></div>
+
+    <main class="main-content">
+        <div class="page-header">
+            <h1 class="page-title">PROFILE</h1>
+        </div>
+
+        <div class="profile-container">
+            {{if .ErrorMessage}}
+            <div class="error-message">
+                {{.ErrorMessage}}
+            </div>
+            {{end}}
+            <div class="profile-header">
+                <div class="profile-pic-section">
+                    {{if .ProfilePic.Valid}}
+                    <img src="{{.ProfilePic.String}}" alt="" class="profile-pic">
+                    {{else}}
+                    <div class="profile-pic-placeholder">
+                        <i class="fas fa-user-circle"></i>
+                    </div>
+                    {{end}}
+                </div>
+                <div class="profile-info">
+                    <h1 class="profile-name">{{.Username}}</h1>
+                    <p class="profile-email">{{.Email}}</p>
+                </div>
+            </div>
+
+            {{if .IsOwnProfile}}
+            <div class="profile-actions">
+                <form id="profile-pic-form" action="/profile/{{.UserID}}" method="POST" enctype="multipart/form-data">
+                    <label for="profile_pic" class="change-photo-link">
+                        Change photo
+                    </label>
+                    <input type="file" id="profile_pic" name="profile_pic" accept="image/*" style="display: none">
+                </form>
+            </div>
+            {{end}}
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card" onclick="window.location.href='/created'" style="cursor: pointer;">
+                <i class="fas fa-pencil-alt"></i>
+                <h3>Posts Created</h3>
+                <span class="stat-number">{{.PostCount}}</span>
+                <div class="stat-link">
+                    <span>View Posts</span>
+                    <i class="fas fa-arrow-right"></i>
+                </div>
+            </div>
+            <div class="stat-card" onclick="window.location.href='/commented'" style="cursor: pointer;">
+                <i class="fas fa-comment"></i>
+                <h3>Comments Made</h3>
+                <span class="stat-number">{{.CommentCount}}</span>
+                <div class="stat-link">
+                    <span>View Comments</span>
+                    <i class="fas fa-arrow-right"></i>
+                </div>
+            </div>
+            <div class="stat-card" onclick="window.location.href='/liked'" style="cursor: pointer;">
+                <i class="fas fa-heart"></i>
+                <h3>Likes Given</h3>
+                <span class="stat-number">{{.LikesReceived}}</span>
+                <div class="stat-link">
+                    <span>View Liked Posts</span>
+                    <i class="fas fa-arrow-right"></i>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        document.getElementById('profile_pic').addEventListener('change', function () {
+            document.getElementById('profile-pic-form').submit();
+        });
+    </script>
+    <script src="../static/like.js"></script>
+</body>
+
+</html>
