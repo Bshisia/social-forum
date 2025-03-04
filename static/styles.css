@@ -34,6 +34,21 @@ body::before {
   z-index: -1;
 }
 
+.main-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(auto, 600px) 300px;
+  gap: 30px;
+  max-width: 1400px;
+  margin: 20px auto;
+  padding: 0 20px;
+}
+
+.main-content {
+  max-width: 600px;  /* Fixed width for content */
+  margin: 20px auto; /* Center content with auto margins */
+  padding: 0 15px;   /* Add some padding on sides */
+}
+
 /* Mobile-first navbar styling */
 .navbar {
   background-image: url('images/MuchaTseBle.jpeg');
@@ -267,23 +282,19 @@ body::before {
   border: 1px solid var(--border-color);
   color: var(--text-color);
 }
-
 .main-content {
+  width: 100%;
   max-width: 600px;
-  margin: 20px auto;
-  padding: 0 15px;
 }
-
 .post-card {
-  background-color: rgb(75, 72, 72);
+  background-color: rgba(75, 72, 72, 0.8);
   background-image: url('images/MuchaTseBle.jpeg');
-
+  background-blend-mode: multiply;
   border: 1px solid var(--border-color);
   border-radius: 16px;
   margin-bottom: 20px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  width: 100%;
 }
 
 .post-card:hover {
@@ -478,6 +489,37 @@ body::before {
 
 .post-card {
   animation: fadeIn 0.3s ease-out;
+}
+
+@media (max-width: 1200px) {
+  .main-layout {
+      grid-template-columns: 1fr;
+  }
+
+  .categories-filter-container,
+  .users-filter-container {
+      display: none; /* Hide sidebars on mobile */
+  }
+
+  .main-content {
+      padding: 0 15px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .main-layout {
+      grid-template-columns: 1fr;
+      gap: 20px;
+  }
+
+  .categories-filter-container,
+  .users-filter-container {
+      display: none;
+  }
+
+  .main-content {
+      padding: 0 15px;
+  }
 }
 
 /* Responsive adjustments */
@@ -882,28 +924,71 @@ body::before {
   }
 }
 
-/* Floating Categories Container */
-.categories-filter-container {
-  background-color: rgba(75, 72, 72, 0.8);
-  /* Darker background */
-  background-blend-mode: multiply;
-  /* This helps blend the background color with the image */
-
-  position: fixed;
-  top: 150px;
-  left: 300px;
-  width: 250px;
-  background-image: url('images/MuchaTseBle.jpeg');
-  background-size: 100% 100%;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  padding: 15px;
-  z-index: 50;
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
+.categories-filter-container::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
+.categories-filter-container a,
+.users-filter-container a {
+    text-decoration: none;
+    color: white;
+    font-size: 14px;
+    display: block;
+    padding: 10px;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+}
+
+.categories-filter-container a:hover,
+.users-filter-container a:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Section headings */
+.categories-filter-container h3,
+.users-filter-container h3 {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.categories-filter-container,
+.users-filter-container {
+    position: sticky;
+    top: 100px;
+    height: calc(100vh - 120px);
+    background-color: rgba(75, 72, 72, 0.8);
+    background-image: url('images/MuchaTseBle.jpeg');
+    background-blend-mode: multiply;
+    border-radius: 12px;
+    border: none; /* Remove the white border */
+    padding: 15px;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+/* Floating Categories Container */
+.categories-filter-container {
+  position: sticky;
+  top: 100px;
+  height: calc(100vh - 120px);
+  overflow-y: auto;
+  background-color: rgba(75, 72, 72, 0.8);
+  background-image: url('images/MuchaTseBle.jpeg');
+  background-blend-mode: multiply;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-right: 20px;
+  border: none; /* Remove the white border */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 
 .categories-filter-container h3 {
   font-size: 16px;
@@ -1200,22 +1285,18 @@ input[type="file"] {
 
 /* Add styles for users container */
 .users-filter-container {
-  position: fixed;
-  top: 150px;
-  right: 300px;
-  width: 250px;
+  position: sticky;
+  top: 100px;
+  height: fit-content;
+  overflow: hidden;
   background-color: rgba(75, 72, 72, 0.8);
-  /* Darker background */
   background-image: url('images/MuchaTseBle.jpeg');
   background-blend-mode: multiply;
-  background-size: 100% 100%;
-  border: 1px solid var(--border-color);
+  padding: 20px;
   border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  padding: 15px;
-  z-index: 50;
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-left: 20px;
+  border: none; /* Remove the white border */
 }
 
 .users-filter-container h3 {
