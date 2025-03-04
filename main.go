@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	"strings"
 
 	handlers "forum/authentication"
 	"forum/controllers"
@@ -12,9 +12,6 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 1 {
-		log.Fatal("Usage: go run main.go ")
-	}
 	// Initialize database
 	db, err := utils.InitialiseDB()
 	if err != nil {
@@ -22,44 +19,39 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize handlers with database
+	// Initialize handlers
 	handlers.InitDB(db)
 	utils.InitSessionManager(utils.GlobalDB)
 
+	// 1. Auth routes - keep these
 	http.HandleFunc("/auth/github", handlers.HandleGitHubLogin)
 	http.HandleFunc("/auth/github/callback", handlers.HandleGitHubCallback)
 	http.HandleFunc("/auth/google", handlers.HandleGoogleLogin)
 	http.HandleFunc("/auth/google/callback", handlers.HandleGoogleCallback)
-	http.HandleFunc("/signup", handlers.SignUpHandler)
 	http.HandleFunc("/signin", handlers.SignInHandler)
-	http.HandleFunc("/created", controllers.CreatedPosts)
-	http.HandleFunc("/liked", controllers.LikedPosts)
-	http.HandleFunc("/commented", controllers.CommentedPosts)
-	http.HandleFunc("/static/", handlers.ServeStatic)
+	http.HandleFunc("/signup", handlers.SignUpHandler)
 	http.HandleFunc("/signout", handlers.SignOutHandler(db))
 
-	// Initialize post handler
-	postHandler := controllers.NewPostHandler()
+	// 2. Static file serving
+	http.HandleFunc("/static/", handlers.ServeStatic)
 
-	// http.Handle("/post", postHandler)
-	http.Handle("/", postHandler) // Handle root for posts
+	// 3. API Routes
+	apiHandler := controllers.NewAPIHandler()
+	http.Handle("/api/", apiHandler)
+	http.HandleFunc("/api/user-status", controllers.GetUserStatus)
 
-	// Initialize profile handler
-	profileHandler := controllers.NewProfileHandler()
-	http.Handle("/profile/", profileHandler)
-
-	// Initialize category handler
-	categoryHandler := controllers.NewCategoryHandler()
-	http.Handle("/categories", categoryHandler)
-	http.Handle("/category", categoryHandler)
-
-	notificationHandler := controllers.NewNotificationHandler()
-	http.Handle("/notifications", notificationHandler)
+	// 4. SPA catch-all route - serve index.html for all other routes
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Skip for API and static routes
+		if strings.HasPrefix(r.URL.Path, "/api/") ||
+			strings.HasPrefix(r.URL.Path, "/static/") ||
+			strings.HasPrefix(r.URL.Path, "/auth/") {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, "templates/index.html")
+	})
 
 	fmt.Println("Server opened at port 8000...http://localhost:8000/")
-
-	err = http.ListenAndServe(":8000", nil)
-	if err != nil {
-		log.Fatalf("Server failed to start: %v", err)
-	}
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }
