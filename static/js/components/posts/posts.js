@@ -146,7 +146,7 @@ class PostsComponent{
             button.addEventListener('click', (e) => {
                 e.stopPropagation(); // Prevent post click
                 const postId = button.dataset.postId;
-                this.handleComment(postId);
+                this.handlePostClick(postId);
             });
         });
 
