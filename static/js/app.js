@@ -6,6 +6,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const postId = getPostIdFromUrl();
             const singlePost = new SinglePostComponent(postId);
             singlePost.mount();
+        },
+        '/create': () => {
+            const createPost = new CreatePostComponent();
+            createPost.mount();
         }
     };
 
