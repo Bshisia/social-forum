@@ -44,9 +44,10 @@ body::before {
 }
 
 .main-content {
-  max-width: 600px;  /* Fixed width for content */
-  margin: 20px auto; /* Center content with auto margins */
-  padding: 0 15px;   /* Add some padding on sides */
+  width: 100%;
+  max-width: 800px;
+  margin: 20px auto;
+  padding: 0 20px;
 }
 
 /* Mobile-first navbar styling */
@@ -1038,17 +1039,12 @@ body::before {
 /* create post page */
 .create-post-form {
   width: 100%;
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 24px;
-  background-color: rgba(75, 72, 72, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  box-sizing: border-box;
+  background-color: rgba(75, 72, 72, 0.8);
   background-image: url('images/MuchaTseBle.jpeg');
   background-blend-mode: multiply;
-
-
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .form-group {
@@ -2106,4 +2102,128 @@ input[type="file"] {
 
 .post-actions form button {
   height: 100%; /* Make button fill the form height */
+}
+
+/* Create Post Form Styles */
+.create-post-container {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.create-post-form {
+    width: 100%;
+    background-color: rgba(75, 72, 72, 0.8);
+    background-image: url('images/MuchaTseBle.jpeg');
+    background-blend-mode: multiply;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.create-post-form h2 {
+    color: white;
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    color: white;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group textarea {
+    width: 100%;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.form-group textarea {
+    min-height: 150px;
+    resize: vertical;
+}
+
+#post-categories {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+}
+
+#post-categories label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.image-upload-container {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.image-preview {
+    color: white;
+    padding: 20px;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+}
+.create-post-container h2 {
+  color: white;
+  text-align: center;
+  margin-bottom: 24px;
+  font-size: 24px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .create-post-container {
+        padding: 0 15px;
+    }
+
+    .create-post-form {
+        padding: 20px;
+    }
+
+    #post-categories {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .form-actions {
+        flex-direction: column;
+    }
+
+    .form-actions button {
+        width: 100%;
+    }
 }
