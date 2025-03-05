@@ -43,9 +43,16 @@ body::before {
   padding: 0 20px;
 }
 
+.main-layout.create-post-layout {
+  display: block;
+  max-width: 600px; /* Match post card width */
+  margin: 20px auto;
+  padding: 0 20px;
+}
+
 .main-content {
   width: 100%;
-  max-width: 800px;
+  max-width: 600px; /* Match post card width */
   margin: 20px auto;
   padding: 0 20px;
 }
@@ -283,10 +290,7 @@ body::before {
   border: 1px solid var(--border-color);
   color: var(--text-color);
 }
-.main-content {
-  width: 100%;
-  max-width: 600px;
-}
+
 .post-card {
   background-color: rgba(75, 72, 72, 0.8);
   background-image: url('images/MuchaTseBle.jpeg');
@@ -1046,7 +1050,6 @@ body::before {
   padding: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
-
 .form-group {
   width: 100%;
   margin-bottom: 20px;
@@ -2107,9 +2110,9 @@ input[type="file"] {
 /* Create Post Form Styles */
 .create-post-container {
   width: 100%;
-  max-width: 800px;
+  max-width: 600px; /* Match post card width */
   margin: 0 auto;
-  padding: 20px;
+  padding: 0;
 }
 
 .create-post-form {

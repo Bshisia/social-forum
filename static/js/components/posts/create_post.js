@@ -71,10 +71,24 @@ class CreatePostComponent {
         const usersNav = document.getElementById('users-nav');
         if (filterNav) filterNav.style.display = 'none';
         if (usersNav) usersNav.style.display = 'none';
-
+    
+        // Add class to main layout for create post page
+        const mainLayout = document.querySelector('.main-layout');
+        if (mainLayout) {
+            mainLayout.classList.add('create-post-layout');
+        }
+    
         // Render form
         this.mainContainer.innerHTML = this.render();
         this.attachEventListeners();
+    }
+    
+    // Add cleanup when component unmounts
+    unmount() {
+        const mainLayout = document.querySelector('.main-layout');
+        if (mainLayout) {
+            mainLayout.classList.remove('create-post-layout');
+        }
     }
 
     validateForm() {
