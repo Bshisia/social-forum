@@ -34,7 +34,7 @@ class PostsComponent{
     
         const postsHTML = this.posts.map(post => `
             <div class="post-container">
-                <div class="post-card">
+                 <div class="post-card" data-post-id="${post.ID}">
                     <div class="post-header">
                         <div class="post-avatar">
                             ${post.ProfilePic ? 
@@ -150,17 +150,56 @@ class PostsComponent{
             });
         });
 
-        // Infinite scroll
-        window.addEventListener('scroll', this.handleScroll);
+        
 
-        // Category filters
-        const categoryTags = document.querySelectorAll('.category-tag');
-        categoryTags.forEach(tag => {
-            tag.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.currentCategory = tag.textContent;
-                this.loadPosts();
+      
+    }
+
+    handlePostClick(postId) {
+        // Prevent default behavior if event object is passed
+        if (postId && postId.preventDefault) {
+            postId.preventDefault();
+            postId = postId.currentTarget.dataset.postId;
+        }
+
+        // Validate postId
+        if (!postId) {
+            console.error('No post ID provided');
+            return;
+        }
+
+        // Update URL without full page reload
+        const newUrl = `/?id=${postId}`;
+        window.history.pushState(
+            { postId: postId },
+            '',
+            newUrl
+        );
+
+        // Load the single post view
+        fetch(`/api/posts/single?id=${postId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                const singlePost = new SinglePostComponent(postId);
+                singlePost.post = data.post;
+                singlePost.comments = data.comments;
+                singlePost.mount();
+            })
+            .catch(error => {
+                console.error('Error loading post:', error);
+                this.mainContainer.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p>Error loading post</p>
+                        <button onclick="window.history.back()" class="btn btn-outline">
+                            <i class="fas fa-arrow-left"></i> Go Back
+                        </button>
+                    </div>`;
             });
-        });
     }
 }
