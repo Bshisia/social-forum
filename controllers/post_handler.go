@@ -50,15 +50,15 @@ func (ph *PostHandler) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 func (ph *PostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
-	case "/create":
-		switch r.Method {
-		case http.MethodGet:
-			ph.authMiddleware(ph.displayCreateForm).ServeHTTP(w, r)
-		case http.MethodPost:
-			ph.authMiddleware(ph.handleCreatePost).ServeHTTP(w, r)
-		default:
-			utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
-		}
+	// case "/create":
+	// 	switch r.Method {
+	// 	case http.MethodGet:
+	// 		ph.authMiddleware(ph.displayCreateForm).ServeHTTP(w, r)
+	// 	case http.MethodPost:
+	// 		ph.authMiddleware(ph.handleCreatePost).ServeHTTP(w, r)
+	// 	default:
+	// 		utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
+	// 	}
 	case "/react":
 		if r.Method == http.MethodPost {
 			ph.authMiddleware(ph.handleReactions).ServeHTTP(w, r)
