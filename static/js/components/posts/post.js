@@ -17,12 +17,18 @@ class SinglePostComponent {
             }
             
             const data = await response.json();
+            console.log('Post data:', data); // Debug logging
+            
             if (!data || !data.post) {
                 throw new Error('Invalid post data');
             }
 
             this.post = data.post;
             this.comments = data.comments || [];
+            
+            // Debug logging
+            console.log('Post categories:', this.post.Categories);
+            
             this.render();
             this.attachEventListeners();
         } catch (error) {
@@ -41,12 +47,14 @@ class SinglePostComponent {
                 </button>
             </div>`;
     }
-
     render() {
         if (!this.post) return;
         
         const template = `
             <div class="post-container">
+                <button class="back-button" onclick="window.history.back()">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
                 <div class="post-card">
                     <div class="post-header">
                         <div class="post-avatar">
@@ -60,6 +68,13 @@ class SinglePostComponent {
                         <div class="post-info">
                             <h3>${this.post.Username}</h3>
                             <span class="timestamp">${this.post.PostTime}</span>
+                        </div>
+                        <div class="post-categories-right">
+                            ${this.post.Categories ? 
+                                this.post.Categories.map(cat => 
+                                    `<span class="category-tag">${cat.Name}</span>`
+                                ).join('') : ''
+                            }
                         </div>
                     </div>
 
@@ -75,7 +90,6 @@ class SinglePostComponent {
                         ${this.renderActions()}
                     </div>
                 </div>
-
                 ${this.renderComments()}
             </div>`;
 
