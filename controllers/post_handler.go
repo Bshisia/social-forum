@@ -59,12 +59,12 @@ func (ph *PostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 	default:
 	// 		utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
 	// 	}
-	// case "/react":
-	// 	if r.Method == http.MethodPost {
-	// 		ph.authMiddleware(ph.handleReactions).ServeHTTP(w, r)
-	// 	} else {
-	// 		utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
-	// 	}
+	case "/react":
+		if r.Method == http.MethodPost {
+			ph.authMiddleware(ph.handleReactions).ServeHTTP(w, r)
+		} else {
+			utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
+		}
 	case "/":
 		if r.Method == http.MethodGet {
 			postIDStr := r.URL.Query().Get("id")
@@ -559,68 +559,94 @@ func (ph *PostHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// Add this helper method to fetch a single post
-func (ph *PostHandler) getPostByID(id int64) (*utils.Post, []utils.Comment, error) {
-	row := utils.GlobalDB.QueryRow(`
-        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, 
-               p.post_at, p.likes, p.dislikes, p.comments,
-               u.username, u.profile_pic
-        FROM posts p
-        JOIN users u ON p.user_id = u.id
-        WHERE p.id = ?
-    `, id)
-
-	var post utils.Post
-	var postTime time.Time
-
-	err := row.Scan(
-		&post.ID,
-		&post.UserID,
-		&post.Title,
-		&post.Content,
-		&post.ImagePath,
-		&postTime,
-		&post.Likes,
-		&post.Dislikes,
-		&post.Comments,
-		&post.Username,
-		&post.ProfilePic,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, nil, err
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-
-	post.PostTime = FormatTimeAgo(postTime.Local())
+func (ph *PostHandler) getCommentsForPost(postID int64) ([]utils.Comment, error) {
 	rows, err := utils.GlobalDB.Query(`
-	  SELECT c.id, c.user_id, c.content, c.comment_at, u.username, u.profile_pic, 
-	         (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND is_like = 1) as likes,
-	         (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND is_like = 0) as dislikes
-	  FROM comments c
-	  JOIN users u ON c.user_id = u.id
-	  WHERE c.post_id = ?
-	  ORDER BY c.comment_at DESC`, id)
+		SELECT c.id, c.post_id, c.user_id, c.content, c.comment_at, 
+			   u.username, u.profile_pic
+		FROM comments c
+		JOIN users u ON c.user_id = u.id
+		WHERE c.post_id = ?
+		ORDER BY c.comment_at ASC
+	`, postID)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer rows.Close()
 
 	var comments []utils.Comment
 	for rows.Next() {
-		var c utils.Comment
-		var t time.Time
-		err := rows.Scan(&c.ID, &c.UserID, &c.Content, &t, &c.Username, &c.ProfilePic, &c.Likes, &c.Dislikes)
-		if err != nil {
-			continue
+		var comment utils.Comment
+		var commentTime time.Time
+		if err := rows.Scan(
+			&comment.ID,
+			&comment.PostID,
+			&comment.UserID,
+			&comment.Content,
+			&commentTime,
+			&comment.Username,
+			&comment.ProfilePic,
+		); err != nil {
+			return nil, err
 		}
-		c.CommentTime = t.Local()
-		comments = append(comments, c)
+		comment.CommentTime = commentTime
+		fmt.Println(comment.CommentTime)
+		comments = append(comments, comment)
 	}
 
-	return &post, comments, nil
+	return comments, rows.Err()
+}
+
+// Add this helper method to fetch a single post
+func (ph *PostHandler) getPostByID(postID int64) (*utils.Post, []utils.Comment, error) {
+	// Get post with user info
+	var postTime time.Time
+	post := &utils.Post{}
+	err := utils.GlobalDB.QueryRow(`
+        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at, 
+               p.likes, p.dislikes, p.comments, u.username, u.profile_pic
+        FROM posts p
+        LEFT JOIN users u ON p.user_id = u.id
+        WHERE p.id = ?
+    `, postID).Scan(
+		&post.ID, &post.UserID, &post.Title, &post.Content, &post.ImagePath,
+		&postTime, &post.Likes, &post.Dislikes, &post.Comments,
+		&post.Username, &post.ProfilePic,
+	)
+
+	if err != nil {
+		return nil, nil, err
+	}
+	post.PostTime = FormatTimeAgo(postTime)
+
+
+	// Get categories for the post
+	rows, err := utils.GlobalDB.Query(`
+        SELECT c.id, c.name 
+        FROM categories c
+        JOIN post_categories pc ON c.id = pc.category_id
+        WHERE pc.post_id = ?
+    `, postID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	post.Categories = []utils.Category{}
+	for rows.Next() {
+		var cat utils.Category
+		if err := rows.Scan(&cat.ID, &cat.Name); err != nil {
+			return nil, nil, err
+		}
+		post.Categories = append(post.Categories, cat)
+	}
+
+	// Get comments
+	comments, err := ph.getCommentsForPost(postID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return post, comments, nil
 }
 
 func (ph *PostHandler) checkAuthStatus(r *http.Request) bool {
