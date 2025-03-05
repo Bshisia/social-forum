@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -37,6 +38,11 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		ah.handleCreatePost(w, r)
+	case "/api/posts/react":
+		if !ah.checkAuth(w, r) {
+			return
+		}
+		ah.handleReaction(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -226,41 +232,40 @@ func (ah *APIHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	postID, _ := result.LastInsertId()
 	processedCategories := make(map[string]bool)
 
-
 	for _, categoryName := range categories {
-        // Skip if category was already processed
-        if processedCategories[categoryName] {
-            continue
-        }
-        processedCategories[categoryName] = true
+		// Skip if category was already processed
+		if processedCategories[categoryName] {
+			continue
+		}
+		processedCategories[categoryName] = true
 
-        log.Printf("Processing category: %s", categoryName)
-        
-        categoryID, err := getCategoryIdByName(categoryName)
-        if err != nil {
-            log.Printf("Error getting category ID: %v", err)
-            w.WriteHeader(http.StatusInternalServerError)
-            json.NewEncoder(w).Encode(map[string]string{
-                "error": fmt.Sprintf("Category not found: %s", categoryName),
-            })
-            return
-        }
+		log.Printf("Processing category: %s", categoryName)
 
-        // Try to insert, ignore duplicate errors
-        _, err = tx.Exec(`
+		categoryID, err := getCategoryIdByName(categoryName)
+		if err != nil {
+			log.Printf("Error getting category ID: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": fmt.Sprintf("Category not found: %s", categoryName),
+			})
+			return
+		}
+
+		// Try to insert, ignore duplicate errors
+		_, err = tx.Exec(`
             INSERT OR IGNORE INTO post_categories (post_id, category_id) 
             VALUES (?, ?)
         `, postID, categoryID)
-        if err != nil {
-            log.Printf("Error inserting category: %v", err)
-            w.WriteHeader(http.StatusInternalServerError)
-            json.NewEncoder(w).Encode(map[string]string{
-                "error": fmt.Sprintf("Error adding category %s", categoryName),
-            })
-            return
-        }
-        log.Printf("Successfully added category %s with ID %d", categoryName, categoryID)
-    }
+		if err != nil {
+			log.Printf("Error inserting category: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": fmt.Sprintf("Error adding category %s", categoryName),
+			})
+			return
+		}
+		log.Printf("Successfully added category %s with ID %d", categoryName, categoryID)
+	}
 
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
@@ -279,10 +284,97 @@ func (ah *APIHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func getCategoryIdByName(categoryName string) (int64, error) {
-    var id int64
-    err := utils.GlobalDB.QueryRow("SELECT id FROM categories WHERE name = ?", categoryName).Scan(&id)
-    if err != nil {
-        return 0, fmt.Errorf("category not found: %s", categoryName)
+	var id int64
+	err := utils.GlobalDB.QueryRow("SELECT id FROM categories WHERE name = ?", categoryName).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("category not found: %s", categoryName)
+	}
+	return id, nil
+}
+func (ah *APIHandler) handleReaction(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    userID := r.Context().Value("userID").(string)
+
+    var req struct {
+        PostID int `json:"post_id"`
+        Like   int `json:"like"`
     }
-    return id, nil
+
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+        return
+    }
+
+    tx, err := utils.GlobalDB.Begin()
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
+        return
+    }
+    defer tx.Rollback()
+
+    // Check existing reaction
+    var existingReaction sql.NullInt64
+    err = tx.QueryRow(`
+        SELECT like FROM reaction 
+        WHERE user_id = ? AND post_id = ?
+    `, userID, req.PostID).Scan(&existingReaction)
+
+    if err == sql.ErrNoRows {
+        // New reaction - insert
+        _, err = tx.Exec(`
+            INSERT INTO reaction (user_id, post_id, like) 
+            VALUES (?, ?, ?)
+        `, userID, req.PostID, req.Like)
+    } else if err == nil {
+        if existingReaction.Int64 == int64(req.Like) {
+            // Remove existing reaction if same type
+            _, err = tx.Exec(`
+                DELETE FROM reaction 
+                WHERE user_id = ? AND post_id = ?
+            `, userID, req.PostID)
+            req.Like = -1 // Indicate reaction removed
+        } else {
+            // Update existing reaction
+            _, err = tx.Exec(`
+                UPDATE reaction 
+                SET like = ? 
+                WHERE user_id = ? AND post_id = ?
+            `, req.Like, userID, req.PostID)
+        }
+    }
+
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update reaction"})
+        return
+    }
+
+    if err := tx.Commit(); err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to commit transaction"})
+        return
+    }
+
+    // Get final counts
+    var likes, dislikes int
+    err = utils.GlobalDB.QueryRow(`
+        SELECT likes, dislikes 
+        FROM posts 
+        WHERE id = ?
+    `, req.PostID).Scan(&likes, &dislikes)
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get counts"})
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "success": true,
+        "likes": likes,
+        "dislikes": dislikes,
+        "userReaction": req.Like,
+    })
 }
