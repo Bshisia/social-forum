@@ -59,12 +59,12 @@ func (ph *PostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 	default:
 	// 		utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
 	// 	}
-	case "/react":
-		if r.Method == http.MethodPost {
-			ph.authMiddleware(ph.handleReactions).ServeHTTP(w, r)
-		} else {
-			utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
-		}
+	// case "/react":
+	// 	if r.Method == http.MethodPost {
+	// 		ph.authMiddleware(ph.handleReactions).ServeHTTP(w, r)
+	// 	} else {
+	// 		utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
+	// 	}
 	case "/":
 		if r.Method == http.MethodGet {
 			postIDStr := r.URL.Query().Get("id")
