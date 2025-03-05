@@ -99,15 +99,16 @@ func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	post, comments, err := ah.postHandler.getPostByID(postID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
+    if err != nil {
+        log.Printf("Error getting post: %v", err) // Add debug logging
+        http.Error(w, err.Error(), http.StatusNotFound)
+        return
+    }
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"post":     post,
-		"comments": comments,
-	})
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "post":     post,
+        "comments": comments,
+    })
 }
 
 func (ah *APIHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
