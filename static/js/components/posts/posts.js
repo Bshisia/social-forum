@@ -140,6 +140,15 @@ class PostsComponent{
             });
         });
 
+        const dislikeButtons = document.querySelectorAll('.dislike-btn');
+        dislikeButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent post click
+                const postId = button.dataset.postId;
+                this.handleDislike(postId);
+            });
+        });
+
         // Comment buttons
         const commentButtons = document.querySelectorAll('.comment-btn');
         commentButtons.forEach(button => {
@@ -149,9 +158,6 @@ class PostsComponent{
                 this.handlePostClick(postId);
             });
         });
-
-        
-
       
     }
 
@@ -201,5 +207,108 @@ class PostsComponent{
                         </button>
                     </div>`;
             });
+    }
+
+    handleLike(postId) {
+        fetch('/api/posts/react', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                post_id: parseInt(postId),
+                like: 1
+            }),
+            credentials: 'include'
+        })
+        .then(response => {
+            if (response.status === 401) {
+                window.location.href = '/signin';
+                return;
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to react to post');
+            }
+            
+            // Update UI
+            const likesElement = document.getElementById(`likes-${postId}`);
+            const dislikesElement = document.getElementById(`dislikes-${postId}`);
+            
+            if (likesElement) {
+                likesElement.textContent = data.likes;
+            }
+            if (dislikesElement) {
+                dislikesElement.textContent = data.dislikes;
+            }
+    
+            // Toggle active state based on server response
+            const likeButton = document.querySelector(`.like-btn[data-post-id="${postId}"]`);
+            const dislikeButton = document.querySelector(`.dislike-btn[data-post-id="${postId}"]`);
+            
+            if (likeButton) {
+                likeButton.classList.toggle('active', data.userReaction === 1);
+            }
+            if (dislikeButton) {
+                dislikeButton.classList.remove('active');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+    }
+
+
+    handleDislike(postId) {
+        fetch('/api/posts/react', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                post_id: parseInt(postId),
+                like: 0
+            }),
+            credentials: 'include'
+        })
+        .then(response => {
+            if (response.status === 401) {
+                window.location.href = '/signin';
+                return;
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to react to post');
+            }
+            
+            // Update UI
+            const likesElement = document.getElementById(`likes-${postId}`);
+            const dislikesElement = document.getElementById(`dislikes-${postId}`);
+            
+            if (likesElement) {
+                likesElement.textContent = data.likes;
+            }
+            if (dislikesElement) {
+                dislikesElement.textContent = data.dislikes;
+            }
+    
+            // Toggle active state based on server response
+            const likeButton = document.querySelector(`.like-btn[data-post-id="${postId}"]`);
+            const dislikeButton = document.querySelector(`.dislike-btn[data-post-id="${postId}"]`);
+            
+            if (dislikeButton) {
+                dislikeButton.classList.toggle('active', data.userReaction === 0);
+            }
+            if (likeButton) {
+                likeButton.classList.remove('active');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
     }
 }
