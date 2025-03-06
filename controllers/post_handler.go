@@ -589,7 +589,6 @@ func (ph *PostHandler) getCommentsForPost(postID int64) ([]utils.Comment, error)
 			return nil, err
 		}
 		comment.CommentTime = commentTime
-		fmt.Println(comment.CommentTime)
 		comments = append(comments, comment)
 	}
 
