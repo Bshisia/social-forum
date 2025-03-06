@@ -118,14 +118,6 @@ class CreatePostComponent {
         const form = e.target;
         const formData = new FormData(form);
     
-        // Log form data for debugging
-        const categories = [];
-        document.querySelectorAll('input[name="categories[]"]:checked').forEach(checkbox => {
-            categories.push(checkbox.value);
-            formData.append('categories[]', checkbox.value);
-        });
-        console.log('Sending categories:', categories);
-    
         fetch('/api/posts/create', {
             method: 'POST',
             body: formData,
@@ -140,7 +132,8 @@ class CreatePostComponent {
         })
         .then(data => {
             if (data.success) {
-                window.location.href = '/';
+                this.unmount(); // Clean up first
+                window.navigation.navigateTo('/');
             } else {
                 throw new Error(data.error || 'Failed to create post');
             }
@@ -151,6 +144,22 @@ class CreatePostComponent {
             this.mount();
         });
     }
+
+    unmount() {
+        // Show sidebars again
+        const filterNav = document.getElementById('filter-nav');
+        const usersNav = document.getElementById('users-nav');
+        if (filterNav) filterNav.style.display = '';
+        if (usersNav) usersNav.style.display = '';
+
+        // Remove create post layout class
+        const mainLayout = document.querySelector('.main-layout');
+        if (mainLayout) {
+            mainLayout.classList.remove('create-post-layout');
+        }
+    }
+
+
     attachEventListeners() {
         const form = document.getElementById('create-post-form');
         form.addEventListener('submit', this.handleSubmit.bind(this));
