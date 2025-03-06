@@ -5,6 +5,8 @@
   --accent-color: #0095f6;
   --border-color: #dbdbdb;
   --light-gray: #8e8e8e;
+  --navbar-height: 64px; /* Adjust this value based on your navbar height */
+
 }
 
 body {
@@ -14,8 +16,11 @@ body {
   background-attachment: fixed;
   color: var(--text-color);
   line-height: 1.6;
-  margin: 0;
-  padding: 0;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+    min-height: 100vh;
 }
 
 body::before {
@@ -39,8 +44,9 @@ body::before {
   grid-template-columns: 300px minmax(auto, 600px) 300px;
   gap: 30px;
   max-width: 1400px;
-  margin: 20px auto;
-  padding: 0 20px;
+  margin: 0 auto;
+  padding: var(--navbar-height) 20px 20px; /* Add top padding for navbar */
+  min-height: 100vh;
 }
 
 .main-layout.create-post-layout {
@@ -51,21 +57,26 @@ body::before {
 }
 
 .main-content {
+  margin: 0 auto;
   width: 100%;
-  max-width: 600px; /* Match post card width */
-  margin: 20px auto;
+  max-width: 600px;
   padding: 0 20px;
+  position: relative;
+  scrollbar-width: thin;
 }
+
 
 /* Mobile-first navbar styling */
 .navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
   background-image: url('images/MuchaTseBle.jpeg');
   padding: 12px 20px;
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
+
 
 .nav-container {
   display: flex;
@@ -296,10 +307,13 @@ body::before {
   background-image: url('images/MuchaTseBle.jpeg');
   background-blend-mode: multiply;
   border: 1px solid var(--border-color);
-  border-radius: 16px;
-  margin-bottom: 20px;
-  overflow: hidden;
   width: 100%;
+  max-height: 400px; /* Limit height */
+  object-fit: cover; /* Maintain aspect ratio */
+  display: block; /* Remove any extra spacing */
+  margin: 0; /* Remove any margins */
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .post-card:hover {
@@ -374,6 +388,7 @@ body::before {
   font-size: 15px;
   line-height: 1.5;
   color: white;
+  width: 100%;
 }
 
 .post-content p {
@@ -385,6 +400,19 @@ body::before {
   color: black;
 }
 
+.post-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+@-moz-document url-prefix() {
+  .post-image {
+      height: auto;
+      max-height: 400px;
+  }
+}
 .post-image {
   width: 100%;
   max-height: 600px;
@@ -963,18 +991,10 @@ body::before {
 
 .categories-filter-container,
 .users-filter-container {
-    position: sticky;
-    top: 100px;
-    height: calc(100vh - 120px);
-    background-color: rgba(75, 72, 72, 0.8);
-    background-image: url('images/MuchaTseBle.jpeg');
-    background-blend-mode: multiply;
-    border-radius: 12px;
-    border: none; /* Remove the white border */
-    padding: 15px;
+    position: fixed;
+    top: var(--navbar-height); /* Position below navbar */
+    height: calc(100vh - var(--navbar-height));
     overflow-y: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
 }
 
 /* Floating Categories Container */
@@ -1895,6 +1915,10 @@ input[type="file"] {
 .activity-link:hover {
   text-decoration: underline;
 }
+.posts-container {
+  margin-top: 20px; /* Add space between navbar and first post */
+}
+
 
 .no-activity {
   color: rgba(255, 255, 255, 0.5);

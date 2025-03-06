@@ -9,7 +9,7 @@ class NavbarComponent {
         const template = `
             <nav class="navbar">
                 <div class="nav-container">
-                navbar.mount(document.getElementById('navbar'));    <a href="/" class="logo-link">
+                    <a href="/" class="logo-link">
                         <h1 class="logo">Forum</h1>
                     </a>
                     <button class="hamburger-btn">
@@ -24,7 +24,7 @@ class NavbarComponent {
                     </div>
                 </div>
             </nav>`;
-
+    
         return template;
     }
 
