@@ -1,17 +1,86 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize router
-    const router = {
-        '/': () => loadPosts(),
-        '/post': () => {
-            const postId = getPostIdFromUrl();
-            const singlePost = new SinglePostComponent(postId);
-            singlePost.mount();
-        },
-        '/create': () => {
-            const createPost = new CreatePostComponent();
-            createPost.mount();
+window.navigation = {
+    navigateTo: (path, data = null) => {
+        if (path === window.location.pathname + window.location.search) {
+            // Don't push new state if URL hasn't changed
+            handleRoute();
+            return;
         }
-    };
+        window.history.pushState(data, '', path);
+        handleRoute();
+    },
+    reloadPage: () => {
+        handleRoute(); // Just re-handle current route instead of navigating
+    }
+};
+// Update router object with more specific routes
+const router = {
+    '/': () => {
+        // Show sidebars
+        const filterNav = document.getElementById('filter-nav');
+        const usersNav = document.getElementById('users-nav');
+        if (filterNav) filterNav.style.display = '';
+        if (usersNav) usersNav.style.display = '';
+        
+        loadPosts();
+    },
+    '/create': () => {
+        const createPost = new CreatePostComponent();
+        createPost.mount();
+    },
+    '/edit-post': (id) => {
+        if (!id) {
+            window.navigation.navigateTo('/');
+            return;
+        }
+        const editPost = new EditPostComponent(id);
+        editPost.mount();
+    },
+    'post': (id) => {
+        const singlePost = new SinglePostComponent(id);
+        singlePost.mount();
+    }
+};
+
+function handleRoute() {
+    const path = window.location.pathname;
+    const search = window.location.search;
+    const postId = new URLSearchParams(search).get('id');
+
+    console.log('Current path:', path);
+    console.log('PostId:', postId);
+
+    // Handle edit-post path with postId check
+    if (path === '/edit-post') {
+        if (!postId) {
+            window.location.href = '/'; // Use direct location change for invalid state
+            return;
+        }
+        if (router['/edit-post']) {
+            router['/edit-post'](postId);
+        }
+        return;
+    }
+
+    // Handle other routes
+    if (path === '/' && postId) {
+        router.post(postId);
+        return;
+    }
+
+    const route = router[path];
+    if (route) {
+        route();
+        return;
+    }
+
+    router['/']();
+}
+
+window.addEventListener('popstate', () => {
+    handleRoute();
+});
+
+document.addEventListener('DOMContentLoaded', () => {    
 
     // First get user status and users list
     Promise.all([
