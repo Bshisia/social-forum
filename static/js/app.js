@@ -38,21 +38,48 @@ const router = {
     'post': (id) => {
         const singlePost = new SinglePostComponent(id);
         singlePost.mount();
+    },
+    '/profile': (id) => {
+        const profile = new ProfileComponent(id);
+    document.getElementById('filter-nav').style.display = 'none';
+    document.getElementById('users-nav').style.display = 'none';
+    profile.mount();
     }
 };
 
 function handleRoute() {
     const path = window.location.pathname;
     const search = window.location.search;
-    const postId = new URLSearchParams(search).get('id');
+    const urlParams = new URLSearchParams(search);
+    const userId = urlParams.get('id');
 
-    console.log('Current path:', path);
-    console.log('PostId:', postId);
+    if (path === '/profile') {
+        fetch('/api/user-status')
+            .then(response => response.json())
+            .then(statusData => {
+                window.isLoggedIn = statusData.isLoggedIn;
+                window.currentUserID = statusData.currentUserID;
+                
+                // Use either URL userId or current user's ID
+                const profileId = userId || statusData.currentUserID;
+                
+                if (profileId) {
+                    const profile = new ProfileComponent(profileId);
+                    document.getElementById('filter-nav').style.display = 'none';
+                    document.getElementById('users-nav').style.display = 'none';
+                    profile.mount();
+                } else {
+                    window.location.href = '/';
+                }
+            })
+            .catch(() => window.location.href = '/');
+        return;
+    }
 
-    // Handle edit-post path with postId check
+    // Handle edit-post path
     if (path === '/edit-post') {
         if (!postId) {
-            window.location.href = '/'; // Use direct location change for invalid state
+            window.location.href = '/';
             return;
         }
         if (router['/edit-post']) {
@@ -61,18 +88,20 @@ function handleRoute() {
         return;
     }
 
-    // Handle other routes
+    // Check for single post view
     if (path === '/' && postId) {
         router.post(postId);
         return;
     }
 
+    // Handle other routes
     const route = router[path];
     if (route) {
         route();
         return;
     }
 
+    // Default route
     router['/']();
 }
 
