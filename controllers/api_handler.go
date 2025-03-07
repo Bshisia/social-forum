@@ -58,6 +58,16 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
             return
         }
         ah.handleDeletePost(w, r)
+    case "/api/comments/edit":
+        if !ah.checkAuth(w, r) {
+            return
+        }
+        ah.handleEditComment(w, r)
+    case "/api/comments/delete":
+        if !ah.checkAuth(w, r) {
+            return
+        }
+        ah.handleDeleteComment(w, r)
 	
 	default:
 		w.WriteHeader(http.StatusNotFound)
@@ -601,3 +611,130 @@ func (ah *APIHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) {
         "message": "Post deleted successfully",
     })
 }
+
+func (ah *APIHandler) handleEditComment(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    userID := r.Context().Value("userID").(string)
+
+    var req struct {
+        CommentID int    `json:"comment_id"`
+        Content   string `json:"content"`
+    }
+
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+        return
+    }
+
+    // Validate ownership
+    var ownerID string
+    err := utils.GlobalDB.QueryRow("SELECT user_id FROM comments WHERE id = ?", req.CommentID).Scan(&ownerID)
+    if err != nil || ownerID != userID {
+        w.WriteHeader(http.StatusForbidden)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Not authorized"})
+        return
+    }
+
+    // Update comment
+    _, err = utils.GlobalDB.Exec("UPDATE comments SET content = ? WHERE id = ?", req.Content, req.CommentID)
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update comment"})
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "success": true,
+        "message": "Comment updated successfully",
+    })
+}
+
+func (ah *APIHandler) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    userID := r.Context().Value("userID").(string)
+
+    var req struct {
+        CommentID int `json:"comment_id"`
+    }
+
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+        return
+    }
+
+    // Start transaction
+    tx, err := utils.GlobalDB.Begin()
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
+        return
+    }
+    defer tx.Rollback()
+
+    // Get post ID and verify ownership before deleting
+    var postID int
+    var ownerID string
+    err = tx.QueryRow("SELECT post_id, user_id FROM comments WHERE id = ?", req.CommentID).Scan(&postID, &ownerID)
+    if err == sql.ErrNoRows {
+        w.WriteHeader(http.StatusNotFound)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Comment not found"})
+        return
+    } else if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
+        return
+    }
+
+    if ownerID != userID {
+        w.WriteHeader(http.StatusForbidden)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Not authorized to delete this comment"})
+        return
+    }
+
+    // Delete comment reactions
+    _, err = tx.Exec("DELETE FROM comment_reaction WHERE comment_id = ?", req.CommentID)
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete comment reactions"})
+        return
+    }
+
+    // Delete comment
+    _, err = tx.Exec("DELETE FROM comments WHERE id = ?", req.CommentID)
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete comment"})
+        return
+    }
+
+    // Update post comment count
+    _, err = tx.Exec(`
+        UPDATE posts 
+        SET comments = (
+            SELECT COUNT(*) 
+            FROM comments 
+            WHERE post_id = ?
+        )
+        WHERE id = ?`, postID, postID)
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update comment count"})
+        return
+    }
+
+    if err := tx.Commit(); err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to commit transaction"})
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "success": true,
+        "message": "Comment deleted successfully",
+    })
+}
+
