@@ -1236,3 +1236,69 @@ func (ph *PostHandler) scanPosts(rows *sql.Rows) ([]utils.Post, error) {
 	}
 	return posts, nil
 }
+
+func (ph *PostHandler) getUserProfile(userID string) (*ProfileData, error) {
+    var profile ProfileData
+
+    // Validate userID
+    if userID == "" {
+        return nil, fmt.Errorf("invalid user ID")
+    }
+
+    // First check if user exists
+    var exists bool
+    err := utils.GlobalDB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", userID).Scan(&exists)
+    if err != nil {
+        return nil, fmt.Errorf("error checking user existence: %v", err)
+    }
+    if !exists {
+        return nil, fmt.Errorf("user not found")
+    }
+
+    // Get user profile data
+    err = utils.GlobalDB.QueryRow(`
+        SELECT username, email, COALESCE(profile_pic, '') as profile_pic
+        FROM users 
+        WHERE id = ?
+    `, userID).Scan(&profile.Username, &profile.Email, &profile.ProfilePic)
+    if err != nil {
+        return nil, fmt.Errorf("error getting user profile: %v", err)
+    }
+
+    // Get post count
+    err = utils.GlobalDB.QueryRow(`
+        SELECT COUNT(*) 
+        FROM posts 
+        WHERE user_id = ?
+    `, userID).Scan(&profile.PostCount)
+    if err != nil {
+        return nil, fmt.Errorf("error getting post count: %v", err)
+    }
+
+    // Get comment count
+    err = utils.GlobalDB.QueryRow(`
+        SELECT COUNT(*) 
+        FROM comments 
+        WHERE user_id = ?
+    `, userID).Scan(&profile.CommentCount)
+    if err != nil {
+        return nil, fmt.Errorf("error getting comment count: %v", err)
+    }
+
+    // Get likes received
+    err = utils.GlobalDB.QueryRow(`
+        SELECT COUNT(*) 
+        FROM reaction l
+        JOIN posts p ON l.post_id = p.id
+        WHERE p.user_id = ? AND l.like = 1
+    `, userID).Scan(&profile.LikesReceived)
+    if err != nil {
+        return nil, fmt.Errorf("error getting likes received: %v", err)
+    }
+
+    profile.UserID = userID
+    profile.IsLoggedIn = true // Set based on session
+    profile.IsOwnProfile = false // Set based on comparison with current user
+
+    return &profile, nil
+}
