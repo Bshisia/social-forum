@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -44,31 +45,42 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		ah.handleReaction(w, r)
 	case "/api/posts/comment":
-        if !ah.checkAuth(w, r) {
-            return
-        }
-        ah.handleComment(w, r)
+		if !ah.checkAuth(w, r) {
+			return
+		}
+		ah.handleComment(w, r)
 	case "/api/posts/edit":
-        if !ah.checkAuth(w, r) {
-            return
-        }
-        ah.handleEditPost(w, r)
-    case "/api/posts/delete":
-        if !ah.checkAuth(w, r) {
-            return
-        }
-        ah.handleDeletePost(w, r)
-    case "/api/comments/edit":
-        if !ah.checkAuth(w, r) {
-            return
-        }
-        ah.handleEditComment(w, r)
-    case "/api/comments/delete":
-        if !ah.checkAuth(w, r) {
-            return
-        }
-        ah.handleDeleteComment(w, r)
-	
+		if !ah.checkAuth(w, r) {
+			return
+		}
+		ah.handleEditPost(w, r)
+	case "/api/posts/delete":
+		if !ah.checkAuth(w, r) {
+			return
+		}
+		ah.handleDeletePost(w, r)
+	case "/api/comments/edit":
+		if !ah.checkAuth(w, r) {
+			return
+		}
+		ah.handleEditComment(w, r)
+	case "/api/comments/delete":
+		if !ah.checkAuth(w, r) {
+			return
+		}
+		ah.handleDeleteComment(w, r)
+	case "/api/users/profile":
+		if r.Method == "GET" {
+			ah.handleGetProfile(w, r)
+			return
+		}
+
+	case "/api/users/profile-pic":
+		if r.Method == "POST" {
+			ah.handleUpdateProfilePic(w, r)
+			return
+		}
+
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -125,16 +137,16 @@ func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	post, comments, err := ah.postHandler.getPostByID(postID)
-    if err != nil {
-        log.Printf("Error getting post: %v", err) // Add debug logging
-        http.Error(w, err.Error(), http.StatusNotFound)
-        return
-    }
+	if err != nil {
+		log.Printf("Error getting post: %v", err) // Add debug logging
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "post":     post,
-        "comments": comments,
-    })
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"post":     post,
+		"comments": comments,
+	})
 }
 
 func (ah *APIHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
@@ -317,401 +329,402 @@ func getCategoryIdByName(categoryName string) (int64, error) {
 	}
 	return id, nil
 }
+
 func (ah *APIHandler) handleReaction(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
-    userID := r.Context().Value("userID").(string)
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.Context().Value("userID").(string)
 
-    var req struct {
-        PostID int `json:"post_id"`
-        Like   int `json:"like"`
-    }
+	var req struct {
+		PostID int `json:"post_id"`
+		Like   int `json:"like"`
+	}
 
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
-        return
-    }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
 
-    tx, err := utils.GlobalDB.Begin()
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
-        return
-    }
-    defer tx.Rollback()
+	tx, err := utils.GlobalDB.Begin()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
 
-    // Check existing reaction
-    var existingReaction sql.NullInt64
-    err = tx.QueryRow(`
+	// Check existing reaction
+	var existingReaction sql.NullInt64
+	err = tx.QueryRow(`
         SELECT like FROM reaction 
         WHERE user_id = ? AND post_id = ?
     `, userID, req.PostID).Scan(&existingReaction)
 
-    if err == sql.ErrNoRows {
-        // New reaction - insert
-        _, err = tx.Exec(`
+	if err == sql.ErrNoRows {
+		// New reaction - insert
+		_, err = tx.Exec(`
             INSERT INTO reaction (user_id, post_id, like) 
             VALUES (?, ?, ?)
         `, userID, req.PostID, req.Like)
-    } else if err == nil {
-        if existingReaction.Int64 == int64(req.Like) {
-            // Remove existing reaction if same type
-            _, err = tx.Exec(`
+	} else if err == nil {
+		if existingReaction.Int64 == int64(req.Like) {
+			// Remove existing reaction if same type
+			_, err = tx.Exec(`
                 DELETE FROM reaction 
                 WHERE user_id = ? AND post_id = ?
             `, userID, req.PostID)
-            req.Like = -1 // Indicate reaction removed
-        } else {
-            // Update existing reaction
-            _, err = tx.Exec(`
+			req.Like = -1 // Indicate reaction removed
+		} else {
+			// Update existing reaction
+			_, err = tx.Exec(`
                 UPDATE reaction 
                 SET like = ? 
                 WHERE user_id = ? AND post_id = ?
             `, req.Like, userID, req.PostID)
-        }
-    }
+		}
+	}
 
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update reaction"})
-        return
-    }
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update reaction"})
+		return
+	}
 
-    if err := tx.Commit(); err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to commit transaction"})
-        return
-    }
+	if err := tx.Commit(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to commit transaction"})
+		return
+	}
 
-    // Get final counts
-    var likes, dislikes int
-    err = utils.GlobalDB.QueryRow(`
+	// Get final counts
+	var likes, dislikes int
+	err = utils.GlobalDB.QueryRow(`
         SELECT likes, dislikes 
         FROM posts 
         WHERE id = ?
     `, req.PostID).Scan(&likes, &dislikes)
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get counts"})
-        return
-    }
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get counts"})
+		return
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "success": true,
-        "likes": likes,
-        "dislikes": dislikes,
-        "userReaction": req.Like,
-    })
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":      true,
+		"likes":        likes,
+		"dislikes":     dislikes,
+		"userReaction": req.Like,
+	})
 }
 
 func (ah *APIHandler) handleComment(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
-    userID := r.Context().Value("userID").(string)
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.Context().Value("userID").(string)
 
-    var req struct {
-        PostID  int    `json:"post_id"`
-        Content string `json:"content"`
-    }
+	var req struct {
+		PostID  int    `json:"post_id"`
+		Content string `json:"content"`
+	}
 
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
-        return
-    }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
 
-    if req.Content == "" {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Comment cannot be empty"})
-        return
-    }
+	if req.Content == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Comment cannot be empty"})
+		return
+	}
 
-    // Insert comment
-    _, err := utils.GlobalDB.Exec(`
+	// Insert comment
+	_, err := utils.GlobalDB.Exec(`
         INSERT INTO comments (post_id, user_id, content) 
         VALUES (?, ?, ?)`,
-        req.PostID, userID, req.Content,
-    )
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to add comment"})
-        return
-    }
+		req.PostID, userID, req.Content,
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to add comment"})
+		return
+	}
 
-    // Update post comment count
-    _, err = utils.GlobalDB.Exec(`
+	// Update post comment count
+	_, err = utils.GlobalDB.Exec(`
         UPDATE posts SET comments = comments + 1 
         WHERE id = ?`, req.PostID)
-    if err != nil {
-        log.Printf("Error updating comment count: %v", err)
-    }
+	if err != nil {
+		log.Printf("Error updating comment count: %v", err)
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "success": true,
-        "message": "Comment added successfully",
-    })
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Comment added successfully",
+	})
 }
 
 func (ah *APIHandler) handleEditPost(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
-    userID := r.Context().Value("userID").(string)
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.Context().Value("userID").(string)
 
-    var req struct {
-        PostID  int64  `json:"post_id"`
-        Title   string `json:"title"`
-        Content string `json:"content"`
-    }
+	var req struct {
+		PostID  int64  `json:"post_id"`
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
 
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
-        return
-    }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
 
-    // Verify post exists and user owns it
-    var postOwnerID string
-    err := utils.GlobalDB.QueryRow("SELECT user_id FROM posts WHERE id = ?", req.PostID).Scan(&postOwnerID)
-    if err == sql.ErrNoRows {
-        w.WriteHeader(http.StatusNotFound)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
-        return
-    } else if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
-        return
-    }
+	// Verify post exists and user owns it
+	var postOwnerID string
+	err := utils.GlobalDB.QueryRow("SELECT user_id FROM posts WHERE id = ?", req.PostID).Scan(&postOwnerID)
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
+		return
+	} else if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
+		return
+	}
 
-    if postOwnerID != userID {
-        w.WriteHeader(http.StatusForbidden)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Not authorized to edit this post"})
-        return
-    }
+	if postOwnerID != userID {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Not authorized to edit this post"})
+		return
+	}
 
-    // Validate input
-    if req.Title == "" || req.Content == "" {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Title and content are required"})
-        return
-    }
+	// Validate input
+	if req.Title == "" || req.Content == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Title and content are required"})
+		return
+	}
 
-    // Update the post
-    result, err := utils.GlobalDB.Exec(
-        "UPDATE posts SET title = ?, content = ? WHERE id = ?",
-        req.Title, req.Content, req.PostID,
-    )
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update post"})
-        return
-    }
+	// Update the post
+	result, err := utils.GlobalDB.Exec(
+		"UPDATE posts SET title = ?, content = ? WHERE id = ?",
+		req.Title, req.Content, req.PostID,
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update post"})
+		return
+	}
 
-    rowsAffected, _ := result.RowsAffected()
-    if rowsAffected == 0 {
-        w.WriteHeader(http.StatusNotFound)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
-        return
-    }
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
+		return
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "success": true,
-        "message": "Post updated successfully",
-    })
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Post updated successfully",
+	})
 }
 
 func (ah *APIHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
-    userID := r.Context().Value("userID").(string)
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.Context().Value("userID").(string)
 
-    var req struct {
-        PostID int64 `json:"post_id"`
-    }
+	var req struct {
+		PostID int64 `json:"post_id"`
+	}
 
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
-        return
-    }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
 
-    // Verify post exists and user owns it
-    var postOwnerID string
-    err := utils.GlobalDB.QueryRow("SELECT user_id FROM posts WHERE id = ?", req.PostID).Scan(&postOwnerID)
-    if err == sql.ErrNoRows {
-        w.WriteHeader(http.StatusNotFound)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
-        return
-    } else if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
-        return
-    }
+	// Verify post exists and user owns it
+	var postOwnerID string
+	err := utils.GlobalDB.QueryRow("SELECT user_id FROM posts WHERE id = ?", req.PostID).Scan(&postOwnerID)
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
+		return
+	} else if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
+		return
+	}
 
-    if postOwnerID != userID {
-        w.WriteHeader(http.StatusForbidden)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Not authorized to delete this post"})
-        return
-    }
+	if postOwnerID != userID {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Not authorized to delete this post"})
+		return
+	}
 
-    // Start transaction
-    tx, err := utils.GlobalDB.Begin()
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
-        return
-    }
-    defer tx.Rollback()
+	// Start transaction
+	tx, err := utils.GlobalDB.Begin()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
 
-    // Delete related records first
-    _, err = tx.Exec("DELETE FROM post_categories WHERE post_id = ?", req.PostID)
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete post categories"})
-        return
-    }
+	// Delete related records first
+	_, err = tx.Exec("DELETE FROM post_categories WHERE post_id = ?", req.PostID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete post categories"})
+		return
+	}
 
-    _, err = tx.Exec("DELETE FROM reaction WHERE post_id = ?", req.PostID)
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete reactions"})
-        return
-    }
+	_, err = tx.Exec("DELETE FROM reaction WHERE post_id = ?", req.PostID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete reactions"})
+		return
+	}
 
-    _, err = tx.Exec("DELETE FROM comments WHERE post_id = ?", req.PostID)
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete comments"})
-        return
-    }
+	_, err = tx.Exec("DELETE FROM comments WHERE post_id = ?", req.PostID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete comments"})
+		return
+	}
 
-    // Finally delete the post
-    result, err := tx.Exec("DELETE FROM posts WHERE id = ?", req.PostID)
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete post"})
-        return
-    }
+	// Finally delete the post
+	result, err := tx.Exec("DELETE FROM posts WHERE id = ?", req.PostID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete post"})
+		return
+	}
 
-    if err := tx.Commit(); err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to commit transaction"})
-        return
-    }
+	if err := tx.Commit(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to commit transaction"})
+		return
+	}
 
-    rowsAffected, _ := result.RowsAffected()
-    if rowsAffected == 0 {
-        w.WriteHeader(http.StatusNotFound)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
-        return
-    }
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
+		return
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "success": true,
-        "message": "Post deleted successfully",
-    })
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Post deleted successfully",
+	})
 }
 
 func (ah *APIHandler) handleEditComment(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
-    userID := r.Context().Value("userID").(string)
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.Context().Value("userID").(string)
 
-    var req struct {
-        CommentID int    `json:"comment_id"`
-        Content   string `json:"content"`
-    }
+	var req struct {
+		CommentID int    `json:"comment_id"`
+		Content   string `json:"content"`
+	}
 
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
-        return
-    }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
 
-    // Validate ownership
-    var ownerID string
-    err := utils.GlobalDB.QueryRow("SELECT user_id FROM comments WHERE id = ?", req.CommentID).Scan(&ownerID)
-    if err != nil || ownerID != userID {
-        w.WriteHeader(http.StatusForbidden)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Not authorized"})
-        return
-    }
+	// Validate ownership
+	var ownerID string
+	err := utils.GlobalDB.QueryRow("SELECT user_id FROM comments WHERE id = ?", req.CommentID).Scan(&ownerID)
+	if err != nil || ownerID != userID {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Not authorized"})
+		return
+	}
 
-    // Update comment
-    _, err = utils.GlobalDB.Exec("UPDATE comments SET content = ? WHERE id = ?", req.Content, req.CommentID)
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update comment"})
-        return
-    }
+	// Update comment
+	_, err = utils.GlobalDB.Exec("UPDATE comments SET content = ? WHERE id = ?", req.Content, req.CommentID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update comment"})
+		return
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "success": true,
-        "message": "Comment updated successfully",
-    })
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Comment updated successfully",
+	})
 }
 
 func (ah *APIHandler) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
-    userID := r.Context().Value("userID").(string)
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.Context().Value("userID").(string)
 
-    var req struct {
-        CommentID int `json:"comment_id"`
-    }
+	var req struct {
+		CommentID int `json:"comment_id"`
+	}
 
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
-        return
-    }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
 
-    // Start transaction
-    tx, err := utils.GlobalDB.Begin()
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
-        return
-    }
-    defer tx.Rollback()
+	// Start transaction
+	tx, err := utils.GlobalDB.Begin()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
 
-    // Get post ID and verify ownership before deleting
-    var postID int
-    var ownerID string
-    err = tx.QueryRow("SELECT post_id, user_id FROM comments WHERE id = ?", req.CommentID).Scan(&postID, &ownerID)
-    if err == sql.ErrNoRows {
-        w.WriteHeader(http.StatusNotFound)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Comment not found"})
-        return
-    } else if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
-        return
-    }
+	// Get post ID and verify ownership before deleting
+	var postID int
+	var ownerID string
+	err = tx.QueryRow("SELECT post_id, user_id FROM comments WHERE id = ?", req.CommentID).Scan(&postID, &ownerID)
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Comment not found"})
+		return
+	} else if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
+		return
+	}
 
-    if ownerID != userID {
-        w.WriteHeader(http.StatusForbidden)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Not authorized to delete this comment"})
-        return
-    }
+	if ownerID != userID {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Not authorized to delete this comment"})
+		return
+	}
 
-    // Delete comment reactions
-    _, err = tx.Exec("DELETE FROM comment_reaction WHERE comment_id = ?", req.CommentID)
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete comment reactions"})
-        return
-    }
+	// Delete comment reactions
+	_, err = tx.Exec("DELETE FROM comment_reaction WHERE comment_id = ?", req.CommentID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete comment reactions"})
+		return
+	}
 
-    // Delete comment
-    _, err = tx.Exec("DELETE FROM comments WHERE id = ?", req.CommentID)
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete comment"})
-        return
-    }
+	// Delete comment
+	_, err = tx.Exec("DELETE FROM comments WHERE id = ?", req.CommentID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete comment"})
+		return
+	}
 
-    // Update post comment count
-    _, err = tx.Exec(`
+	// Update post comment count
+	_, err = tx.Exec(`
         UPDATE posts 
         SET comments = (
             SELECT COUNT(*) 
@@ -719,22 +732,94 @@ func (ah *APIHandler) handleDeleteComment(w http.ResponseWriter, r *http.Request
             WHERE post_id = ?
         )
         WHERE id = ?`, postID, postID)
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update comment count"})
-        return
-    }
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update comment count"})
+		return
+	}
 
-    if err := tx.Commit(); err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to commit transaction"})
-        return
-    }
+	if err := tx.Commit(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to commit transaction"})
+		return
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "success": true,
-        "message": "Comment deleted successfully",
-    })
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Comment deleted successfully",
+	})
 }
 
+func (ah *APIHandler) handleGetProfile(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userID := r.URL.Query().Get("id")
+	if userID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "User ID required"})
+		return
+	}
+
+	profile, err := ah.postHandler.getUserProfile(userID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"profile": profile,
+	})
+}
+
+func (ah *APIHandler) handleUpdateProfilePic(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userID := r.Context().Value("userID").(string)
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
+		return
+	}
+
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "File too large"})
+		return
+	}
+
+	file, header, err := r.FormFile("profile_pic")
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid file upload"})
+		return
+	}
+	defer file.Close()
+
+	// Process image using ImageHandler
+	imageHandler := NewImageHandler()
+	imagePath, err := imageHandler.ProcessImage(file, header)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Update database
+	_, err = utils.GlobalDB.Exec("UPDATE users SET profile_pic = ? WHERE id = ?", imagePath, userID)
+	if err != nil {
+		os.Remove(imagePath)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update profile picture"})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Profile picture updated successfully",
+		"path":    imagePath,
+	})
+}
