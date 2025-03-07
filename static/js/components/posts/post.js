@@ -128,44 +128,43 @@ class SinglePostComponent {
             <div class="comments-section">
                 <h3>Comments (${this.comments.length})</h3>
                 ${this.isLoggedIn ? `
-                    <form method="POST" class="comment-form">
+                    <form class="comment-form">
                         <input type="hidden" name="post_id" value="${this.post.ID}">
                         <textarea name="content" class="comment-input" placeholder="Write a comment..." required></textarea>
                         <button type="submit" class="submit-button">Post Comment</button>
                     </form>
                 ` : ''}
-                ${this.comments.map(comment => `
-                    <div class="comments-section">
-                        <div class="comment-header">
-                            ${comment.ProfilePic ? 
-                                `<img src="${comment.ProfilePic}" class="comment-avatar">` :
-                                `<div class="comment-avatar-placeholder">
-                                    <i class="fas fa-user"></i>
-                                </div>`
-                            }
-                            <div class="comment-author">
-                                <strong>${comment.Username}</strong>
-                                <span class="comment-time">${new Date(comment.CommentTime).toLocaleString()}</span>
+                <div class="comments-list">
+                    ${this.comments.map(comment => `
+                        <div class="comment" id="comment-${comment.ID}">
+                            <div class="comment-header">
+                                ${comment.ProfilePic ? 
+                                    `<img src="${comment.ProfilePic}" class="comment-avatar">` :
+                                    `<div class="comment-avatar-placeholder">
+                                        <i class="fas fa-user"></i>
+                                    </div>`
+                                }
+                                <div class="comment-author">
+                                    <strong>${comment.Username}</strong>
+                                    <span class="comment-time">${new Date(comment.CommentTime).toLocaleString()}</span>
+                                </div>
                             </div>
-                        </div>
-                        <div class="comment-content" id="comment-content-${comment.ID}">
-                            ${comment.Content}
-                        </div>
-                        ${comment.UserID === this.currentUserID ? `
-                            <div class="comment-actions">
-                                <button onclick="editComment('${comment.ID}')" class="edit-btn">
-                                    <i class="fas fa-edit"></i> Edit
-                                </button>
-                                <form class="delete-comment-form" method="POST" action="/deletecomment">
-                                    <input type="hidden" name="comment_id" value="${comment.ID}">
-                                    <button type="submit" class="delete-btn">
+                            <div class="comment-content" id="comment-content-${comment.ID}">
+                                ${comment.Content}
+                            </div>
+                            ${comment.UserID === this.currentUserID ? `
+                                <div class="comment-actions">
+                                    <button class="edit-btn" data-comment-id="${comment.ID}">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                    <button class="delete-btn" data-comment-id="${comment.ID}">
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
-                                </form>
-                            </div>
-                        ` : ''}
-                    </div>
-                `).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
             </div>`;
     }
 
@@ -196,6 +195,45 @@ class SinglePostComponent {
                     ${comment.Content}
                 </div>
             </div>`;
+    }
+
+    
+    editComment(commentId) {
+        const contentDiv = document.getElementById(`comment-content-${commentId}`);
+        if (!contentDiv) return;
+    
+        // Get exact comment text
+        const comment = this.comments.find(c => c.ID === parseInt(commentId));
+        if (!comment) return;
+        
+        // Create edit form with existing comment content
+        const formHTML = `
+            <form class="edit-comment-form">
+                <textarea class="comment-input" required>${comment.Content}</textarea>
+                <div class="edit-buttons">
+                    <button type="submit" class="save-btn">
+                        <i class="fas fa-check"></i> Save
+                    </button>
+                    <button type="button" class="cancel-btn">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </form>`;
+        
+        contentDiv.innerHTML = formHTML;
+        
+        const form = contentDiv.querySelector('form');
+        const cancelBtn = form.querySelector('.cancel-btn');
+        
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newContent = e.target.querySelector('textarea').value.trim();
+            this.handleCommentEdit(e, commentId, newContent);
+        });
+    
+        cancelBtn.addEventListener('click', () => {
+            contentDiv.innerHTML = comment.Content;
+        });
     }
 
     attachEventListeners() {
@@ -243,8 +281,24 @@ class SinglePostComponent {
                 }
             });
         }
-
-
+        document.querySelectorAll('.comment').forEach(comment => {
+            const editBtn = comment.querySelector('.edit-btn');
+            const deleteBtn = comment.querySelector('.delete-btn');
+            
+            if (editBtn) {
+                editBtn.addEventListener('click', () => {
+                    const commentId = editBtn.dataset.commentId;
+                    this.editComment(commentId);
+                });
+            }
+            
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', () => {
+                    const commentId = deleteBtn.dataset.commentId;
+                    this.deleteComment(commentId);
+                });
+            }
+        });
     }
 
     handleCommentSubmit(e) {
@@ -307,6 +361,85 @@ class SinglePostComponent {
             console.error('Error:', error);
             alert(error.message);
         });
+    }
+
+    async handleCommentEdit(e, commentId, content) {
+        e.preventDefault();
+        
+        try {
+            const response = await fetch('/api/comments/edit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    comment_id: parseInt(commentId),
+                    content: content
+                }),
+                credentials: 'include'
+            });
+    
+            const data = await response.json();
+            
+            if (data.success) {
+                await this.loadPost();
+            } else {
+                throw new Error(data.error || 'Failed to update comment');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert(error.message);
+            // Restore original content on error
+            document.getElementById(`comment-content-${commentId}`).innerHTML = content;
+        }
+    }
+
+    cancelEdit(commentId, content) {
+        const contentDiv = document.getElementById(`comment-content-${commentId}`);
+        if (contentDiv) {
+            contentDiv.innerHTML = content;
+        }
+    }
+
+    async deleteComment(commentId) {
+        // Single confirmation prompt
+        if (!confirm('Are you sure you want to delete this comment?')) {
+            return;
+        }
+    
+        // Immediately disable the delete button to prevent multiple clicks
+        const deleteBtn = document.querySelector(`button[data-comment-id="${commentId}"]`);
+        if (deleteBtn) {
+            deleteBtn.disabled = true;
+        }
+    
+        try {
+            const response = await fetch('/api/comments/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    comment_id: parseInt(commentId)
+                }),
+                credentials: 'include'
+            });
+    
+            const data = await response.json();
+            
+            if (data.success) {
+                await this.loadPost();
+            } else {
+                throw new Error(data.error || 'Failed to delete comment');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert(error.message);
+            // Re-enable the button if there was an error
+            if (deleteBtn) {
+                deleteBtn.disabled = false;
+            }
+        }
     }
 
     mount() {
