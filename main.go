@@ -28,12 +28,12 @@ func main() {
 	http.HandleFunc("/auth/github/callback", handlers.HandleGitHubCallback)
 	http.HandleFunc("/auth/google", handlers.HandleGoogleLogin)
 	http.HandleFunc("/auth/google/callback", handlers.HandleGoogleCallback)
-	http.HandleFunc("/signin", handlers.SignInHandler)
-	http.HandleFunc("/signup", handlers.SignUpHandler)
+	http.HandleFunc("/register", handlers.RegisterHandler)
+	http.HandleFunc("/login", handlers.LoginHandler)
 	http.HandleFunc("/signout", handlers.SignOutHandler(db))
 
 	// 2. Static file serving
-	http.HandleFunc("/static/", handlers.ServeStatic)
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	// 3. API Routes
 	apiHandler := controllers.NewAPIHandler()
