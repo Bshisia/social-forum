@@ -19,16 +19,19 @@ func InitialiseDB() (*sql.DB, error) {
 
 	// Create Users table
 	_, err = db.Exec(`
-
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY NOT NULL,
-            email TEXT UNIQUE,
-            username TEXT UNIQUE,
-            authoriser TEXT,
-            password TEXT,
-            profile_pic TEXT
+            nickname TEXT UNIQUE NOT NULL,
+            age INTEGER,
+            gender TEXT,
+            first_name TEXT,
+            last_name TEXT,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            profile_pic TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+        CREATE INDEX IF NOT EXISTS idx_users_nickname ON users(nickname);
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     `)
 	if err != nil {
