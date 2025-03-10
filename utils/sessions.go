@@ -44,7 +44,16 @@ func CreateSession(db *sql.DB, userID string) (string, error) {
 		return "", fmt.Errorf("failed to create session: %v", err)
 	}
 
-	log.Printf("Created new session for user %s", userID)
+	var username string
+	err = db.QueryRow(`
+		SELECT nickname FROM users 
+		WHERE id = ?
+	`, userID).Scan(&username)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve username: %v", err)
+	}
+
+	log.Printf("Created new session for user %s", username)
 	return SessionToken, nil
 }
 
