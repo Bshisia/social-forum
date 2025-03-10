@@ -2,28 +2,13 @@ package handlers
 
 import (
 	"database/sql"
-	"html/template"
-	"log"
+	"encoding/json"
+	"fmt"
+	"forum/utils"
 	"net/http"
 
-	"forum/utils"
-
-	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
 )
-
-type SignUpErrors struct {
-	NameError     string
-	EmailError    string
-	UsernameError string
-	PasswordError string
-	GeneralError  string
-}
-
-type SignUpData struct {
-	Errors   SignUpErrors
-	Email    string
-	UserName string
-}
 
 var GlobalDB *sql.DB
 
@@ -31,87 +16,72 @@ func InitDB(database *sql.DB) {
 	GlobalDB = database
 }
 
-func SignUpHandler(w http.ResponseWriter, r *http.Request) {
-	//Prevent logged-in users from signing up again
-	_, err := r.Cookie("session_token")
-	if err == nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+func RegisterHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid request method",
+			"success": false,
+		})
 		return
 	}
 
-	if r.Method == "GET" {
-		tmpl, err := template.ParseFiles("templates/signup.html")
-		if err != nil {
-			utils.RenderErrorPage(w, http.StatusNotFound, http.StatusText(http.StatusNotFound))
-			log.Printf("Error loading template: %v", err)
-			return
-		}
-		tmpl.Execute(w, &SignUpData{})
+	var user struct {
+		Nickname  string      `json:"nickname"`
+		Age       json.Number `json:"age"`
+		Gender    string      `json:"gender"`
+		FirstName string      `json:"firstName"`
+		LastName  string      `json:"lastName"`
+		Email     string      `json:"email"`
+		Password  string      `json:"password"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid request body",
+			"success": false,
+		})
 		return
 	}
 
-	if r.Method == "POST" {
-		data := SignUpData{
-			UserName: r.FormValue("username"),
-			Email:    r.FormValue("email"),
-		}
-		errors := SignUpErrors{}
-		hasError := false
-
-		if data.Email == "" {
-			errors.EmailError = "Email must be provided"
-			hasError = true
-		} else if !utils.ValidateEmail(data.Email) {
-			errors.EmailError = "Invalid email format"
-			hasError = true
-		}
-
-		if !utils.ValidateUsername(data.UserName) {
-			errors.UsernameError = "Username must be between 3 and 30 characters made of letters and numbers or letters only"
-			hasError = true
-		}
-
-		password := r.FormValue("password")
-		confirmPassword := r.FormValue("confirm-password")
-
-		if !utils.ValidatePassword(password) {
-			errors.PasswordError = "Password must be at least 8 characters, comprising of capital and small letters, numbers, and special characters"
-			hasError = true
-		} else if password != confirmPassword {
-			errors.PasswordError = "Passwords do not match"
-			hasError = true
-		}
-
-		if hasError {
-			data.Errors = errors
-			tmpl := template.Must(template.ParseFiles("templates/signup.html"))
-			tmpl.Execute(w, data)
-			return
-		}
-
-		hashedPassword, err := utils.HashPassword(password)
-		if err != nil {
-			errors.GeneralError = "Internal Server Error"
-			data.Errors = errors
-			tmpl := template.Must(template.ParseFiles("templates/signup.html"))
-			tmpl.Execute(w, data)
-			return
-		}
-
-		id := utils.GenerateId()
-
-		_, err = GlobalDB.Exec(`
-            INSERT INTO users (id, email, username, password)
-            VALUES (?, ?, ?, ?)
-        `, id, data.Email, data.UserName, hashedPassword)
-		if err != nil {
-			errors.GeneralError = "Username or email already exists"
-			data.Errors = errors
-			tmpl := template.Must(template.ParseFiles("templates/signup.html"))
-			tmpl.Execute(w, data)
-			return
-		}
+	// Hash the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Failed to hash password",
+			"success": false,
+		})
+		return
 	}
 
-	http.Redirect(w, r, "/signin", http.StatusSeeOther)
+	// Generate a unique ID for the user
+	userID := utils.GenerateId()
+
+	// Insert the user into the database
+	_, err = GlobalDB.Exec(`
+        INSERT INTO users (id, nickname, age, gender, first_name, last_name, email, password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, userID, user.Nickname, user.Age, user.Gender, user.FirstName, user.LastName, user.Email, hashedPassword)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": fmt.Sprintf("Failed to register user: %v", err),
+			"success": false,
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "User registered successfully",
+		"success": true,
+	})
 }
