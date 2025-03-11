@@ -218,3 +218,11 @@ function loadRegisterPage(container) {
             });
     });
 }
+
+function loadHomePage(container) {
+    const userName = localStorage.getItem('userName') || localStorage.getItem('userEmail') || 'Premium User';
+    
+    container.innerHTML = `
+        <h1> This is the homepage </h1>
+    `;
+}
