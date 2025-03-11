@@ -179,4 +179,42 @@ function loadRegisterPage(container) {
         <p id="registerMessage"></p>
         <p class="form-footer">Already have an account? <a href="#" onclick="event.preventDefault(); loadPage('login')">Login here</a></p>
     `;
+
+    // Add event listener for the registration form
+    document.getElementById('registerForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        // Send a POST request to the backend
+        fetch('/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                nickname: document.getElementById('nickname').value,
+                age: document.getElementById('age').value,
+                gender: document.getElementById('gender').value,
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+            }),
+        })
+            .then(response => response.json())
+            .then(data => {
+                const registerMessage = document.getElementById('registerMessage');
+                registerMessage.textContent = data.message;
+                registerMessage.style.color = data.success ? 'green' : 'red';
+                
+                // If registration successful, redirect to login
+                if (data.success) {
+                    setTimeout(() => {
+                        loadPage('login');
+                    }, 1500);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    });
 }
