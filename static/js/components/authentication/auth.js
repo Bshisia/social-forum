@@ -52,3 +52,33 @@ function logout() {
     updateNavigation(false);
     loadPage('login');
 }
+
+function loadPage(page) {
+    const contentDiv = document.getElementById('content');
+
+    // Clear existing content
+    contentDiv.innerHTML = '';
+
+    // Load the appropriate content based on the page
+    switch (page) {
+        case 'register':
+            loadRegisterPage(contentDiv);
+            history.pushState({}, '', '/register');
+            break;
+        case 'login':
+            loadLoginPage(contentDiv);
+            history.pushState({}, '', '/login');
+            break;
+        case 'home':
+            loadHomePage(contentDiv);
+            history.pushState({}, '', '/');
+            break;
+        case 'forgotPassword':
+            loadForgotPasswordPage(contentDiv);
+            history.pushState({}, '', '/forgotPassword');
+            break;
+        default:
+            contentDiv.innerHTML = '<h2>Page Not Found</h2>';
+            history.pushState({}, '', '/404');
+    }
+}
