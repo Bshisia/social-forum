@@ -91,10 +91,13 @@ function loadPage(page) {
 }
 
 function loadLoginPage(container) {
-    container.innerHTML = `
+    const mainContent = document.getElementById('main-content');
+    mainContent.innerHTML = `
         <h2>Login to Premium Forum</h2>
-        <form id="loginForm">
+        <form id="loginForm" class="auth-form">
+            <label for="email">Email</label>
             <input type="email" id="email" placeholder="Email" required> <br>
+            <label for="password">Password</label>
             <input type="password" id="password" placeholder="Password" required> <br>
             <a href="#" onclick="event.preventDefault(); loadPage('forgotPassword')">Forgot Password?</a> <br>
             <button type="submit">Login</button>
@@ -159,21 +162,29 @@ function loadLoginPage(container) {
 }
 
 function loadRegisterPage(container) {
-    container.innerHTML = `
+    const mainContent = document.getElementById('main-content');
+    mainContent.innerHTML = `
         <h2>Register for Premium Forum</h2>
         <p class="premium-description">Join our exclusive community to unlock all premium features.</p>
-        <form id="registerForm">
-            <input type="text" id="nickname" placeholder="Nickname" required>
-            <input type="number" id="age" placeholder="Age" required>
+        <form id="registerForm" class="auth-form">
+            <label for="nickname">Nickname</label>
+            <input type="text" id="nickname" placeholder="Nickname" required><br>
+            <label for="age">Age</label>
+            <input type="number" id="age" placeholder="Age" required><br>
+            <label for="gender">Gender</label>
             <select id="gender" required>
                 <option value="" disabled selected>Select Gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
-            </select>
-            <input type="text" id="firstName" placeholder="First Name" required>
-            <input type="text" id="lastName" placeholder="Last Name" required>
-            <input type="email" id="email" placeholder="Email" required>
-            <input type="password" id="password" placeholder="Password" required>
+            </select><br>
+            <label for="firstName">First Name</label>
+            <input type="text" id="firstName" placeholder="First Name" required><br>
+            <label for="lastName">Last Name</label>
+            <input type="text" id="lastName" placeholder="Last Name" required><br>
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="Email" required><br>
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Password" required><br>
             <button type="submit">Create Premium Account</button>
         </form>
         <p id="registerMessage"></p>
