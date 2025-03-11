@@ -157,3 +157,26 @@ function loadLoginPage(container) {
             });
     });
 }
+
+function loadRegisterPage(container) {
+    container.innerHTML = `
+        <h2>Register for Premium Forum</h2>
+        <p class="premium-description">Join our exclusive community to unlock all premium features.</p>
+        <form id="registerForm">
+            <input type="text" id="nickname" placeholder="Nickname" required>
+            <input type="number" id="age" placeholder="Age" required>
+            <select id="gender" required>
+                <option value="" disabled selected>Select Gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+            </select>
+            <input type="text" id="firstName" placeholder="First Name" required>
+            <input type="text" id="lastName" placeholder="Last Name" required>
+            <input type="email" id="email" placeholder="Email" required>
+            <input type="password" id="password" placeholder="Password" required>
+            <button type="submit">Create Premium Account</button>
+        </form>
+        <p id="registerMessage"></p>
+        <p class="form-footer">Already have an account? <a href="#" onclick="event.preventDefault(); loadPage('login')">Login here</a></p>
+    `;
+}
