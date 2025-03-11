@@ -12,13 +12,20 @@
 
 
     <body>
-        <div id="navbar"></div>
+        <nav>
+            <ul>
+                <li><a href="/register" onclick="event.preventDefault(); loadPage('register')">Register</a></li>
+                <li><a href="/login" onclick="event.preventDefault(); loadPage('login')">Login</a></li>
+            </ul>
+        </nav>
+        <div id="content">
+        </div>
         <div class="main-layout">
             <div id="filter-nav" class="categories-filter-container"></div>
             <main id="main-content"></main>
             <div id="users-nav" class="users-filter-container"></div>
         </div>
-        
+        <script src="/static/js/components/authentication/auth.js"></script>
         <script src="/static/js/components/navbar/navbar.js"></script>
         <script src="/static/js/components/posts/posts.js"></script>
         <script src="/static/js/components/posts/post.js"></script>
