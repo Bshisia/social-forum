@@ -226,3 +226,15 @@ function loadHomePage(container) {
         <h1> This is the homepage </h1>
     `;
 }
+
+// Update window.onload to check auth state
+window.onload = () => {
+    checkAuthState();
+    
+    // Redirect to appropriate page based on auth state
+    if (isAuthenticated) {
+        loadPage('home');
+    } else {
+        loadPage('login');
+    }
+}
