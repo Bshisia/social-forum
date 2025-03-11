@@ -41,3 +41,14 @@ function updateNavigation(authenticated) {
         `;
     }
 }
+
+// Add a logout function
+function logout() {
+    localStorage.removeItem('userId');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userName');
+    isAuthenticated = false;
+    currentUser = null;
+    updateNavigation(false);
+    loadPage('login');
+}
