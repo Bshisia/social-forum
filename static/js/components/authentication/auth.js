@@ -113,4 +113,47 @@ function loadLoginPage(container) {
         <p class="form-footer">Don't have an account? <a href="#" onclick="event.preventDefault(); loadPage('register')">Register here</a></p>
     `;
 
+    // Add event listener for the login form
+    document.getElementById('loginForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        fetch('/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+        })
+            .then(response => response.json())
+            .then(data => {
+                const loginMessage = document.getElementById('loginMessage');
+                loginMessage.textContent = data.message;
+                loginMessage.style.color = data.success ? 'green' : 'red';
+
+                // Store user data and update authentication state on successful login
+                if (data.success) {
+                    localStorage.setItem('userId', data.userId);
+                    localStorage.setItem('userEmail', email);
+                    if (data.nickname) {
+                        localStorage.setItem('userName', data.nickname);
+                    }
+                    
+                    isAuthenticated = true;
+                    currentUser = {
+                        id: data.userId,
+                        email: email,
+                        nickname: data.nickname
+                    };
+                    
+                    updateNavigation(true);
+                    loadPage('home');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    });
 }
