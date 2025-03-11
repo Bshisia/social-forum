@@ -89,3 +89,28 @@ function loadPage(page) {
             history.pushState({}, '', '/404');
     }
 }
+
+function loadLoginPage(container) {
+    container.innerHTML = `
+        <h2>Login to Premium Forum</h2>
+        <form id="loginForm">
+            <input type="email" id="email" placeholder="Email" required> <br>
+            <input type="password" id="password" placeholder="Password" required> <br>
+            <a href="#" onclick="event.preventDefault(); loadPage('forgotPassword')">Forgot Password?</a> <br>
+            <button type="submit">Login</button>
+        </form>
+        <div class="google-signin">
+            <a href="/auth/google" class="google-signin-btn">
+                <i class="fab fa-google"></i>
+                Sign in with Google
+            </a>
+            <a href="/auth/github" class="github-signin-btn">
+                <i class="fab fa-github"></i>
+                Sign in with GitHub
+            </a>
+        </div>
+        <p id="loginMessage"></p>
+        <p class="form-footer">Don't have an account? <a href="#" onclick="event.preventDefault(); loadPage('register')">Register here</a></p>
+    `;
+
+}
