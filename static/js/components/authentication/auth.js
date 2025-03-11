@@ -55,6 +55,13 @@ function logout() {
 
 function loadPage(page) {
     const contentDiv = document.getElementById('content');
+    
+    // Check authentication for restricted pages
+    const restrictedPages = ['home', 'posts', 'createPost', 'messages'];
+    if (restrictedPages.includes(page) && !checkAuthState()) {
+        history.pushState({}, '', '/login');
+        return;
+    }
 
     // Clear existing content
     contentDiv.innerHTML = '';
