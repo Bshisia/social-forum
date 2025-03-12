@@ -59,7 +59,7 @@ class ProfileComponent {
                         ${this.profile.ProfilePic ? 
                             `<img src="${this.profile.ProfilePic}" alt="" class="profile-pic">` :
                             `<div class="profile-pic-placeholder">
-                                <i class="fas fa-user-circle"></i>
+                                <i class="fas fa-user"></i>
                             </div>`
                         }
                     </div>

@@ -775,51 +775,77 @@ func (ah *APIHandler) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ah *APIHandler) handleUpdateProfilePic(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+    w.Header().Set("Content-Type", "application/json")
 
-	userID := r.Context().Value("userID").(string)
-	if userID == "" {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
-		return
-	}
+    // Check if user is authenticated
+    cookie, err := r.Cookie("session_token")
+    if err != nil {
+        w.WriteHeader(http.StatusUnauthorized)
+        json.NewEncoder(w).Encode(map[string]string{"error": "No session found"})
+        return
+    }
 
-	if err := r.ParseMultipartForm(20 << 20); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "File too large"})
-		return
-	}
+    // Get userID from session
+    userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+    if err != nil {
+        w.WriteHeader(http.StatusUnauthorized)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid session"})
+        return
+    }
 
-	file, header, err := r.FormFile("profile_pic")
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid file upload"})
-		return
-	}
-	defer file.Close()
+    // Check if userID is valid
+    if userID == "" {
+        w.WriteHeader(http.StatusUnauthorized)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid user"})
+        return
+    }
 
-	// Process image using ImageHandler
-	imageHandler := NewImageHandler()
-	imagePath, err := imageHandler.ProcessImage(file, header)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-		return
-	}
+    // Parse multipart form
+    if err := r.ParseMultipartForm(20 << 20); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"error": "File too large"})
+        return
+    }
 
-	// Update database
-	_, err = utils.GlobalDB.Exec("UPDATE users SET profile_pic = ? WHERE id = ?", imagePath, userID)
-	if err != nil {
-		os.Remove(imagePath)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update profile picture"})
-		return
-	}
+    // Get file from form
+    file, header, err := r.FormFile("profile_pic")
+    if err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid file upload"})
+        return
+    }
+    defer file.Close()
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "Profile picture updated successfully",
-		"path":    imagePath,
-	})
+    // Process image
+    imageHandler := NewImageHandler()
+    imagePath, err := imageHandler.ProcessImage(file, header)
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+        return
+    }
+
+    // Update database
+    result, err := utils.GlobalDB.Exec("UPDATE users SET profile_pic = ? WHERE id = ?", imagePath, userID)
+    if err != nil {
+        os.Remove(imagePath) // Clean up on error
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update profile picture"})
+        return
+    }
+
+    rowsAffected, err := result.RowsAffected()
+    if err != nil || rowsAffected == 0 {
+        os.Remove(imagePath) // Clean up if no update occurred
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update user profile"})
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "success": true,
+        "message": "Profile picture updated successfully",
+        "path": imagePath,
+    })
 }
