@@ -11,7 +11,7 @@ class UsersNavComponent {
                 <ul class="users-list">
                     ${this.users.map(user => `
                         <li class="user-item">
-                            <a href="/profile/${user.ID}" class="user-link">
+                            <a href="#" onclick="window.navigation.navigateTo('/profile?id=${user.ID}')" class="user-link">
                                 <div class="user-avatar">
                                     ${user.ProfilePic ? 
                                         `<img src="${user.ProfilePic}" alt="${user.UserName}'s avatar" class="user-avatar-img">` :
