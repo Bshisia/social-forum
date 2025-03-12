@@ -21,6 +21,9 @@ class ProfileComponent {
     
             const response = await fetch(`/api/users/profile?id=${this.userId}`);
             const data = await response.json();
+
+            console.log('Profile data:', data); // Debug log
+
             
             if (!response.ok || !data.success) {
                 throw new Error(data.error || 'Failed to load profile');
@@ -42,6 +45,9 @@ class ProfileComponent {
     }
 
     render() {
+        const profilePicPath = this.profile.ProfilePic && this.profile.ProfilePic.Valid ? 
+        this.profile.ProfilePic.String : null;
+
         const template = `
             <div class="page-header">
                 <h1 class="page-title">PROFILE</h1>
@@ -56,8 +62,8 @@ class ProfileComponent {
                 
                 <div class="profile-header">
                     <div class="profile-pic-section">
-                        ${this.profile.ProfilePic ? 
-                            `<img src="${this.profile.ProfilePic}" alt="" class="profile-pic">` :
+                        ${profilePicPath ? 
+                            `<img src="${profilePicPath}" alt="" class="profile-pic">` :
                             `<div class="profile-pic-placeholder">
                                 <i class="fas fa-user"></i>
                             </div>`

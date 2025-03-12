@@ -50,6 +50,10 @@ class SinglePostComponent {
     render() {
         if (!this.post) return;
         
+        // Handle profile pic path
+        const profilePicPath = this.post.ProfilePic && this.post.ProfilePic.Valid ? 
+            this.post.ProfilePic.String : null;
+        
         const template = `
             <div class="post-container">
                 <button class="back-button" onclick="window.history.back()">
@@ -58,8 +62,8 @@ class SinglePostComponent {
                 <div class="post-card">
                     <div class="post-header">
                         <div class="post-avatar">
-                            ${this.post.ProfilePic ? 
-                                `<img src="${this.post.ProfilePic}" alt="Profile Picture" class="post-avatar-img">` :
+                            ${profilePicPath ? 
+                                `<img src="${profilePicPath}" alt="Profile Picture" class="post-avatar-img">` :
                                 `<div class="post-avatar-placeholder">
                                     <i class="fas fa-user"></i>
                                 </div>`
@@ -135,35 +139,39 @@ class SinglePostComponent {
                     </form>
                 ` : ''}
                 <div class="comments-list">
-                    ${this.comments.map(comment => `
-                        <div class="comment" id="comment-${comment.ID}">
-                            <div class="comment-header">
-                                ${comment.ProfilePic ? 
-                                    `<img src="${comment.ProfilePic}" class="comment-avatar">` :
-                                    `<div class="comment-avatar-placeholder">
-                                        <i class="fas fa-user"></i>
-                                    </div>`
-                                }
-                                <div class="comment-author">
-                                    <strong>${comment.Username}</strong>
-                                    <span class="comment-time">${new Date(comment.CommentTime).toLocaleString()}</span>
+                    ${this.comments.map(comment => {
+                        const commentPicPath = comment.ProfilePic && comment.ProfilePic.Valid ? 
+                            comment.ProfilePic.String : null;
+                        
+                        return `
+                            <div class="comment" id="comment-${comment.ID}">
+                                <div class="comment-header">
+                                    ${commentPicPath ? 
+                                        `<img src="${commentPicPath}" class="comment-avatar">` :
+                                        `<div class="comment-avatar-placeholder">
+                                            <i class="fas fa-user"></i>
+                                        </div>`
+                                    }
+                                    <div class="comment-author">
+                                        <strong>${comment.Username}</strong>
+                                        <span class="comment-time">${new Date(comment.CommentTime).toLocaleString()}</span>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="comment-content" id="comment-content-${comment.ID}">
-                                ${comment.Content}
-                            </div>
-                            ${comment.UserID === this.currentUserID ? `
-                                <div class="comment-actions">
-                                    <button class="edit-btn" data-comment-id="${comment.ID}">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </button>
-                                    <button class="delete-btn" data-comment-id="${comment.ID}">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
+                                <div class="comment-content" id="comment-content-${comment.ID}">
+                                    ${comment.Content}
                                 </div>
-                            ` : ''}
-                        </div>
-                    `).join('')}
+                                ${comment.UserID === this.currentUserID ? `
+                                    <div class="comment-actions">
+                                        <button class="edit-btn" data-comment-id="${comment.ID}">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </button>
+                                        <button class="delete-btn" data-comment-id="${comment.ID}">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </div>
+                                ` : ''}
+                            </div>`;
+                    }).join('')}
                 </div>
             </div>`;
     }

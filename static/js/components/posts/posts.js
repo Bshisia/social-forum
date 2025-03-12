@@ -32,65 +32,70 @@ class PostsComponent {
             return `<div class="loading">Loading posts...</div>`;
         }
 
-        const postsHTML = this.posts.map(post => `
-            <div class="post-card" data-post-id="${post.ID}">
-                <div class="post-header">
-                    <div class="post-avatar">
-                        ${post.ProfilePic ?
-                `<img src="${post.ProfilePic}" alt="Profile Picture" class="post-avatar-img">` :
-                `<div class="post-avatar-placeholder">
-                                <i class="fas fa-user"></i>
-                            </div>`
-            }
+        const postsHTML = this.posts.map(post => {
+            const postPicPath = post.ProfilePic && post.ProfilePic.Valid ? 
+                post.ProfilePic.String : null;
+                
+            return `
+                <div class="post-card" data-post-id="${post.ID}">
+                    <div class="post-header">
+                        <div class="post-avatar">
+                            ${postPicPath ?
+                                `<img src="${postPicPath}" alt="Profile Picture" class="post-avatar-img">` :
+                                `<div class="post-avatar-placeholder">
+                                    <i class="fas fa-user"></i>
+                                </div>`
+                            }
+                        </div>
+                        <div class="post-info">
+                            <h3>${post.Username}</h3>
+                            <span class="timestamp">${post.PostTime}</span>
+                        </div>
+                        <div class="post-categories-right">
+                            ${post.Categories ?
+                                post.Categories.map(cat =>
+                                    `<span class="category-tag">${cat.Name}</span>`
+                                ).join('') : ''
+                            }
+                        </div>
                     </div>
-                    <div class="post-info">
-                        <h3>${post.Username}</h3>
-                        <span class="timestamp">${post.PostTime}</span>
-                    </div>
-                    <div class="post-categories-right">
-                        ${post.Categories ?
-                post.Categories.map(cat =>
-                    `<span class="category-tag">${cat.Name}</span>`
-                ).join('') : ''
-            }
-                    </div>
-                </div>
 
-                <div class="post-content">
-                    <h2>${post.Title}</h2>
-                    <p>${post.Content}</p>
-                    ${post.ImagePath ?
-                `<img src="${post.ImagePath}" alt="Post image" class="post-image">` :
-                ''}
-                </div>
+                    <div class="post-content">
+                        <h2>${post.Title}</h2>
+                        <p>${post.Content}</p>
+                        ${post.ImagePath ?
+                            `<img src="${post.ImagePath}" alt="Post image" class="post-image">` :
+                            ''}
+                    </div>
 
-                <div class="post-footer">
-                    <div class="post-actions">
-                        <button class="action-btn like-btn" data-post-id="${post.ID}">
-                            <i class="fas fa-thumbs-up"></i>
-                            <span class="count" id="likes-${post.ID}">${post.Likes}</span>
-                        </button>
-                        <button class="action-btn comment-btn" data-post-id="${post.ID}">
-                            <i class="fas fa-comment"></i>
-                            <span class="count" id="comments-${post.ID}">${post.Comments}</span>
-                        </button>
-                        <button class="action-btn dislike-btn" data-post-id="${post.ID}">
-                            <i class="fas fa-thumbs-down"></i>
-                            <span class="count" id="dislikes-${post.ID}">${post.Dislikes}</span>
-                        </button>
-                        
-           ${post.UserID === this.currentUserID ? `
-        <button class="btn btn-edit" data-post-id="${post.ID}">
-            <i class="fas fa-edit"></i> Edit
-        </button>
-        <button class="btn btn-delete" data-post-id="${post.ID}">
-            <i class="fas fa-trash"></i> Delete
-        </button>
-    ` : ''}
+                    <div class="post-footer">
+                        <div class="post-actions">
+                            <button class="action-btn like-btn" data-post-id="${post.ID}">
+                                <i class="fas fa-thumbs-up"></i>
+                                <span class="count" id="likes-${post.ID}">${post.Likes}</span>
+                            </button>
+                            <button class="action-btn comment-btn" data-post-id="${post.ID}">
+                                <i class="fas fa-comment"></i>
+                                <span class="count" id="comments-${post.ID}">${post.Comments}</span>
+                            </button>
+                            <button class="action-btn dislike-btn" data-post-id="${post.ID}">
+                                <i class="fas fa-thumbs-down"></i>
+                                <span class="count" id="dislikes-${post.ID}">${post.Dislikes}</span>
+                            </button>
+                            
+               ${post.UserID === this.currentUserID ? `
+            <button class="btn btn-edit" data-post-id="${post.ID}">
+                <i class="fas fa-edit"></i> Edit
+            </button>
+            <button class="btn btn-delete" data-post-id="${post.ID}">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        ` : ''}
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         return `
             <div class="posts-container">
