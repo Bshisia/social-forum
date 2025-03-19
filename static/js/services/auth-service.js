@@ -21,11 +21,21 @@ function checkAuthState() {
             email: userEmail,
             nickname: localStorage.getItem('userName')
         };
+        
+        // Update global window variables for backward compatibility
+        window.isLoggedIn = true;
+        window.currentUserID = userId;
+        
         return Promise.resolve(true);
     } else {
         // If not in localStorage, check with server
         return fetch('/api/user-status')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(statusData => {
                 if (statusData.isLoggedIn) {
                     isAuthenticated = true;
@@ -40,10 +50,19 @@ function checkAuthState() {
                     if (statusData.email) localStorage.setItem('userEmail', statusData.email);
                     if (statusData.nickname) localStorage.setItem('userName', statusData.nickname);
                     
+                    // Update global window variables for backward compatibility
+                    window.isLoggedIn = true;
+                    window.currentUserID = statusData.currentUserID;
+                    
                     return true;
                 } else {
                     isAuthenticated = false;
                     currentUser = null;
+                    
+                    // Update global window variables for backward compatibility
+                    window.isLoggedIn = false;
+                    window.currentUserID = null;
+                    
                     return false;
                 }
             })
@@ -51,9 +70,30 @@ function checkAuthState() {
                 console.error('Error checking auth state:', error);
                 isAuthenticated = false;
                 currentUser = null;
+                
+                // Update global window variables for backward compatibility
+                window.isLoggedIn = false;
+                window.currentUserID = null;
+                
                 return false;
             });
     }
+}
+
+/**
+ * Set the authentication state manually
+ * @param {boolean} isAuth - Whether the user is authenticated
+ * @param {Object} user - User information object
+ */
+function setAuthState(isAuth, user) {
+    isAuthenticated = isAuth;
+    currentUser = user;
+    
+    // Update global window variables for backward compatibility
+    window.isAuthenticated = isAuth;
+    window.currentUser = user;
+    window.isLoggedIn = isAuth;
+    window.currentUserID = user ? user.id : null;
 }
 
 /**
@@ -62,7 +102,11 @@ function checkAuthState() {
  */
 function logout() {
     return fetch('/signout', { method: 'POST' })
-        .then(() => {
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            
             // Clear local storage
             localStorage.removeItem('userId');
             localStorage.removeItem('userEmail');
@@ -71,6 +115,12 @@ function logout() {
             // Update auth state
             isAuthenticated = false;
             currentUser = null;
+            
+            // Update global window variables for backward compatibility
+            window.isLoggedIn = false;
+            window.currentUserID = null;
+            window.isAuthenticated = false;
+            window.currentUser = null;
             
             return true;
         })
@@ -99,6 +149,7 @@ function getCurrentUser() {
 // Export the authentication service
 export default {
     checkAuthState,
+    setAuthState,
     logout,
     getAuthStatus,
     getCurrentUser

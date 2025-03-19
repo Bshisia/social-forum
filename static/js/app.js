@@ -259,7 +259,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // If on auth page, handle route directly without loading navigation
     if (isOnAuthPage) {
-        handleRoute();
+        // For auth pages, we don't need to initialize the navbar
+        const route = router[currentPath];
+        if (route) {
+            route();
+        } else {
+            // If route not found, redirect to signin
+            window.navigation.navigateTo('/signin');
+        }
         return;
     }
     
@@ -325,7 +332,12 @@ function initializeApp() {
 function initializeOptionalComponents() {
     // Try to load users for the users nav
     fetch('/api/users')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
         .catch(() => [])
         .then(usersData => {
             // Initialize filter nav if element exists

@@ -44,6 +44,8 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		ah.handleReaction(w, r)
+		case "/api/user-status":  // Add this new endpoint
+		ah.handleUserStatus(w, r)
 	case "/api/posts/comment":
 		if !ah.checkAuth(w, r) {
 			return
@@ -68,6 +70,12 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !ah.checkAuth(w, r) {
 			return
 		}
+		case "/login":  // Add this new endpoint
+		ah.handleLogin(w, r)
+	case "/register":  // Add this new endpoint
+		ah.handleRegister(w, r)
+	case "/signout":  // Add this new endpoint
+		ah.handleSignout(w, r)
 		ah.handleDeleteComment(w, r)
 	case "/api/users/profile":
 		if r.Method == "GET" {
@@ -821,5 +829,335 @@ func (ah *APIHandler) handleUpdateProfilePic(w http.ResponseWriter, r *http.Requ
 		"success": true,
 		"message": "Profile picture updated successfully",
 		"path":    imagePath,
+	})
+}
+
+func (ah *APIHandler) handleUserStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		// No session cookie, user is not logged in
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"isLoggedIn": false,
+			"currentUserID": nil,
+			"unreadCount": 0,
+		})
+		return
+	}
+	
+	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+	if err != nil {
+		// Invalid session, user is not logged in
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"isLoggedIn": false,
+			"currentUserID": nil,
+			"unreadCount": 0,
+		})
+		return
+	}
+	
+	// User is logged in, get additional info
+	var email, nickname string
+	err = utils.GlobalDB.QueryRow("SELECT email, nickname FROM users WHERE id = ?", userID).Scan(&email, &nickname)
+	if err != nil {
+		// Error retrieving user info
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"isLoggedIn": true,
+			"currentUserID": userID,
+			"email": "",
+			"nickname": "",
+			"unreadCount": 0,
+		})
+		return
+	}
+	
+	// Get unread notifications count (if you have a notifications system)
+	var unreadCount int
+	err = utils.GlobalDB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read = 0", userID).Scan(&unreadCount)
+	if err != nil {
+		unreadCount = 0
+	}
+	
+	// Return user status
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"isLoggedIn": true,
+		"currentUserID": userID,
+		"email": email,
+		"nickname": nickname,
+		"unreadCount": unreadCount,
+	})
+}
+
+// handleLogin processes user login requests
+func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid request method",
+			"success": false,
+		})
+		return
+	}
+	
+	var credentials struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	
+	err := json.NewDecoder(r.Body).Decode(&credentials)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid request body",
+			"success": false,
+		})
+		return
+	}
+	
+	var storedPassword string
+	var userId string
+	var nickname string
+	err = utils.GlobalDB.QueryRow("SELECT id, password, nickname FROM users WHERE email = ?", credentials.Email).Scan(&userId, &storedPassword, &nickname)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "Invalid email or password",
+				"success": false,
+			})
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "Failed to query database",
+				"success": false,
+			})
+		}
+		return
+	}
+	
+	isValidPassword := utils.CheckPasswordsHash(storedPassword, credentials.Password)
+	if !isValidPassword {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid email or password",
+			"success": false,
+		})
+		return
+	}
+	
+	// Create a new session
+	sessionToken, err := utils.CreateSession(utils.GlobalDB, userId)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Failed to create session",
+			"success": false,
+		})
+		return
+	}
+	
+	// Set the session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   3600 * 24 * 7, // 1 week
+	})
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Login successful",
+		"success": true,
+		"userId": userId,
+		"nickname": nickname,
+	})
+}
+
+// handleRegister processes user registration requests
+func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid request method",
+			"success": false,
+		})
+		return
+	}
+	
+	var userData struct {
+		Nickname  string `json:"nickname"`
+		Age       int    `json:"age"`
+		Gender    string `json:"gender"`
+		FirstName string `json:"firstName"`
+		LastName  string `json:"lastName"`
+		Email     string `json:"email"`
+		Password  string `json:"password"`
+	}
+	
+	err := json.NewDecoder(r.Body).Decode(&userData)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid request body",
+			"success": false,
+		})
+		return
+	}
+	
+	// Validate input
+	if userData.Nickname == "" || userData.Email == "" || userData.Password == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Nickname, email, and password are required",
+			"success": false,
+		})
+		return
+	}
+	
+	// Check if email already exists
+	var count int
+	err = utils.GlobalDB.QueryRow("SELECT COUNT(*) FROM users WHERE email = ?", userData.Email).Scan(&count)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Failed to check email",
+			"success": false,
+		})
+		return
+	}
+	
+	if count > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Email already in use",
+			"success": false,
+		})
+		return
+	}
+	
+	// Check if nickname already exists
+	err = utils.GlobalDB.QueryRow("SELECT COUNT(*) FROM users WHERE nickname = ?", userData.Nickname).Scan(&count)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Failed to check nickname",
+			"success": false,
+		})
+		return
+	}
+	
+	if count > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Nickname already in use",
+			"success": false,
+		})
+		return
+	}
+	
+	// Hash password
+	hashedPassword, err := utils.HashPassword(userData.Password)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Failed to hash password",
+			"success": false,
+		})
+		return
+	}
+	
+	// Insert user
+	result, err := utils.GlobalDB.Exec(
+		"INSERT INTO users (nickname, age, gender, first_name, last_name, email, password) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		userData.Nickname, userData.Age, userData.Gender, userData.FirstName, userData.LastName, userData.Email, hashedPassword,
+	)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Failed to create user",
+			"success": false,
+		})
+		return
+	}
+	
+	userId, _ := result.LastInsertId()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Registration successful",
+		"success": true,
+		"userId": userId,
+	})
+}
+
+// handleSignout processes user logout requests
+func (ah *APIHandler) handleSignout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid request method",
+			"success": false,
+		})
+		return
+	}
+	
+	// Get session cookie
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		// No session to invalidate
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Already logged out",
+			"success": true,
+		})
+		return
+	}
+	
+	// Delete session from database
+	_, err = utils.GlobalDB.Exec("DELETE FROM sessions WHERE token = ?", cookie.Value)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Failed to delete session",
+			"success": false,
+		})
+		return
+	}
+	
+	// Clear the cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		MaxAge:   -1, // Delete the cookie
+	})
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Logged out successfully",
+		"success": true,
 	})
 }

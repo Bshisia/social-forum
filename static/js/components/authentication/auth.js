@@ -43,16 +43,6 @@ class AuthComponent {
                         <p>Don't have an account? <a href="/signup" onclick="event.preventDefault(); window.navigation.navigateTo('/signup')">Sign Up</a></p>
                     </div>
                 </form>
-                <div class="google-signin">
-                    <a href="/auth/google" class="google-signin-btn">
-                        <i class="fab fa-google"></i>
-                        Sign in with Google
-                    </a>
-                    <a href="/auth/github" class="github-signin-btn">
-                        <i class="fab fa-github"></i>
-                        Sign in with GitHub
-                    </a>
-                </div>
             </div>
         `;
     }
@@ -168,6 +158,8 @@ class AuthComponent {
                 }
                 
                 // Update global auth state
+                window.isLoggedIn = true;
+                window.currentUserID = data.userId;
                 window.isAuthenticated = true;
                 window.currentUser = {
                     id: data.userId,

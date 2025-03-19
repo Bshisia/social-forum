@@ -73,6 +73,12 @@ class NavbarComponent {
     }
 
     mount(element) {
+        // Add null check to prevent errors
+        if (!element) {
+            console.warn('Cannot mount NavbarComponent: element is null');
+            return;
+        }
+        
         element.innerHTML = this.render();
         this.attachEventListeners();
     }
