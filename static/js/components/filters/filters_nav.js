@@ -30,3 +30,4 @@ class FilterNavComponent {
         this.container.innerHTML = this.render();
     }
 }
+export default FilterNavComponent;

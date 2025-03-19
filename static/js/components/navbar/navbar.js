@@ -1,3 +1,5 @@
+import AuthService from '../../services/auth-service.js';
+
 class NavbarComponent {
     constructor(isLoggedIn, currentUserID, unreadCount) {
         this.isLoggedIn = isLoggedIn;
@@ -16,9 +18,11 @@ class NavbarComponent {
                         <i class="fas fa-bars"></i>
                     </button>
                     <div class="nav-right">
-                        <button id="create-post-btn" class="btn btn-primary" onclick="window.location.href='/create'">
-                            <i class="fas fa-plus"></i> Create Post
-                        </button>
+                        ${this.isLoggedIn ? `
+                            <button id="create-post-btn" class="btn btn-primary" onclick="window.navigation.navigateTo('/create')">
+                                <i class="fas fa-plus"></i> Create Post
+                            </button>
+                        ` : ''}
                         ${!this.isLoggedIn ? this.renderLoggedOutButtons() : this.renderLoggedInButtons()}
                         ${this.renderMobileMenu()}
                     </div>
@@ -30,24 +34,24 @@ class NavbarComponent {
 
     renderLoggedOutButtons() {
         return `
-            <button class="btn btn-outline" onclick="window.location.href='/signin'">
+            <button class="btn btn-outline" onclick="window.navigation.navigateTo('/signin')">
                 <i class="fas fa-sign-in-alt"></i> Login
             </button>
-            <button class="btn btn-primary" onclick="window.location.href='/signup'">
+            <button class="btn btn-primary" onclick="window.navigation.navigateTo('/signup')">
                 <i class="fas fa-user-plus"></i> Sign Up
             </button>`;
     }
 
     renderLoggedInButtons() {
         return `
-            <button class="btn btn-outline notification-btn" onclick="window.location.href='/notifications'">
+            <button class="btn btn-outline notification-btn" onclick="window.navigation.navigateTo('/notifications')">
                 <i class="fas fa-bell"></i>
                 ${this.unreadCount > 0 ? `<span class="notification-dot">${this.unreadCount}</span>` : ''}
             </button>
             <button class="btn btn-outline" onclick="window.navigation.navigateTo('/profile?id=${this.currentUserID}')">
                 <i class="fas fa-user"></i> Profile
             </button>
-            <button class="btn btn-primary" onclick="window.location.href='/signout'">
+            <button class="btn btn-primary" id="signout-btn">
                 <i class="fas fa-sign-out-alt"></i> Sign Out
             </button>`;
     }
@@ -60,13 +64,13 @@ class NavbarComponent {
                 </button>
                 <div class="mobile-menu-content">
                     <ul>
-                        <li><a href="/category?name=Tech">Tech</a></li>
-                        <li><a href="/category?name=Programming">Programming</a></li>
-                        <li><a href="/category?name=Business">Business</a></li>
-                        <li><a href="/category?name=Lifestyle">Lifestyle</a></li>
-                        <li><a href="/category?name=Football">Football</a></li>
-                        <li><a href="/category?name=Politics">Politics</a></li>
-                        <li><a href="/category?name=General%20News">General News</a></li>
+                        <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/?category=Tech')">Tech</a></li>
+                        <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/?category=Programming')">Programming</a></li>
+                        <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/?category=Business')">Business</a></li>
+                        <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/?category=Lifestyle')">Lifestyle</a></li>
+                        <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/?category=Football')">Football</a></li>
+                        <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/?category=Politics')">Politics</a></li>
+                        <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/?category=General%20News')">General News</a></li>
                     </ul>
                 </div>
             </div>`;
@@ -87,6 +91,7 @@ class NavbarComponent {
         const hamburgerBtn = document.querySelector('.hamburger-btn');
         const navRight = document.querySelector('.nav-right');
         const menuToggles = document.querySelectorAll('.menu-toggle-btn');
+        const signoutBtn = document.getElementById('signout-btn');
 
         if (hamburgerBtn && navRight) {
             hamburgerBtn.addEventListener('click', () => {
@@ -101,5 +106,17 @@ class NavbarComponent {
                 });
             }
         });
+
+        // Add sign out functionality
+        if (signoutBtn) {
+            signoutBtn.addEventListener('click', () => {
+                AuthService.signOut().then(() => {
+                    window.navigation.navigateTo('/signin');
+                });
+            });
+        }
     }
 }
+
+// Export the component
+export default NavbarComponent;

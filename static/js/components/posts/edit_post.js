@@ -178,3 +178,5 @@ class EditPostComponent {
         this.loadPost();
     }
 }
+
+export default EditPostComponent;

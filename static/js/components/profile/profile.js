@@ -161,3 +161,5 @@ class ProfileComponent {
         this.loadProfile();
     }
 }
+
+export default ProfileComponent;

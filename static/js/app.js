@@ -2,6 +2,18 @@
 import AuthService from './services/auth-service.js'; 
 import AuthComponent from './components/authentication/auth.js'; 
 
+// Import other components as needed
+import NavbarComponent from './components/navbar/navbar.js';
+// Uncomment these as you implement them
+import PostsComponent from './components/posts/posts.js';
+import SinglePostComponent from './components/posts/post.js';
+import CreatePostComponent from './components/posts/create_post.js';
+import EditPostComponent from './components/posts/edit_post.js';
+import ProfileComponent from './components/profile/profile.js';
+//import NotificationsComponent from './components/notifications/notifications.js';
+import FilterNavComponent from './components/filters/filters_nav.js';
+import UsersNavComponent from './components/users/users_nav.js';
+
 // Navigation helper
 window.navigation = { 
     navigateTo: (path, data = null) => { 
@@ -84,13 +96,7 @@ const router = {
                 return; 
             } 
             
-            if (typeof SinglePostComponent === 'function') {
-                const singlePost = new SinglePostComponent(id); 
-                singlePost.mount(); 
-            } else {
-                console.error('SinglePostComponent is not defined');
-                document.getElementById('main-content').innerHTML = '<h1>View Post</h1><p>Component not available</p>';
-            }
+            loadSinglePost(id);
         }); 
     }, 
     '/profile': (id) => { 
@@ -257,154 +263,202 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentPath = window.location.pathname;
     const isOnAuthPage = isAuthPage(currentPath);
     
-    // If on auth page, handle route directly without loading navigation
-    if (isOnAuthPage) {
-        // For auth pages, we don't need to initialize the navbar
-        const route = router[currentPath];
-        if (route) {
-            route();
+    // Check if user is authenticated
+    AuthService.checkAuthState().then(isAuth => {
+        if (isOnAuthPage) {
+            // If on auth page and already authenticated, redirect to home
+            if (isAuth) {
+                window.navigation.navigateTo('/');
+                return;
+            }
+            
+            // Otherwise, handle the auth route
+            const route = router[currentPath];
+            if (route) {
+                route();
+            } else {
+                // If route not found, redirect to signin
+                window.navigation.navigateTo('/signin');
+            }
         } else {
-            // If route not found, redirect to signin
-            window.navigation.navigateTo('/signin');
+            // For non-auth pages
+            if (!isAuth) {
+                // If not authenticated, redirect to signin
+                window.navigation.navigateTo('/signin');
+                return;
+            }
+            
+            // Initialize UI with user data
+            initializeUI();
         }
+    });
+}); 
+
+// Initialize UI with user data
+function initializeUI() {
+    const currentUser = AuthService.getCurrentUser();
+    
+    if (!currentUser) {
+        console.error('No current user found');
+        window.navigation.navigateTo('/signin');
         return;
     }
     
-    // For non-auth pages, initialize navigation and components
-    initializeApp();
-}); 
-
-// Initialize app with navigation and components
-function initializeApp() {
-    // Get user status first
-    fetch('/api/user-status')
-        .catch(() => ({ 
-            json: () => ({ 
-                isLoggedIn: false, 
-                currentUserID: null, 
-                unreadCount: 0 
-            }) 
-        }))
-        .then(response => response.json())
-        .then(statusData => {
-            // Set global auth state 
-            window.isLoggedIn = statusData.isLoggedIn; 
-            window.currentUserID = statusData.currentUserID; 
-            
-            if (statusData.isLoggedIn) { 
-                // Update AuthService state
-                AuthService.setAuthState(true, {
-                    id: statusData.currentUserID,
-                    email: statusData.email || '',
-                    nickname: statusData.nickname || ''
-                });
-                
-                // Store in localStorage for future checks 
-                localStorage.setItem('userId', statusData.currentUserID); 
-                if (statusData.email) localStorage.setItem('userEmail', statusData.email); 
-                if (statusData.nickname) localStorage.setItem('userName', statusData.nickname); 
-            }
-            
-            // Initialize navbar if element exists and we're not on an auth page
-            const navbarElement = document.getElementById('navbar');
-            if (navbarElement && typeof NavbarComponent === 'function') {
-                try {
-                    const navbar = new NavbarComponent( 
-                        statusData.isLoggedIn, 
-                        statusData.currentUserID, 
-                        statusData.unreadCount 
-                    ); 
-                    navbar.mount(navbarElement);
-                } catch (error) {
-                    console.error('Error mounting navbar:', error);
-                }
-            }
-            
-            // Try to initialize other components if they exist
-            initializeOptionalComponents();
-            
-            // Handle the route
-            handleRoute();
-        })
-        .catch(error => {
-            console.error('Error initializing application:', error);
-            showErrorMessage();
-        });
+    // Initialize navbar if element exists
+    const navbarElement = document.getElementById('navbar');
+    if (navbarElement) {
+        try {
+            const navbar = new NavbarComponent( 
+                true, // isLoggedIn
+                currentUser.id, 
+                0 // unreadCount - default to 0
+            ); 
+            navbar.mount(navbarElement);
+        } catch (error) {
+            console.error('Error mounting navbar:', error);
+        }
+    }
+    
+    // Try to initialize other components
+    initializeOptionalComponents();
+    
+    // Handle the current route
+    handleRoute();
 }
 
 // Initialize optional components if they exist
 function initializeOptionalComponents() {
-    // Try to load users for the users nav
-    fetch('/api/users')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .catch(() => [])
-        .then(usersData => {
-            // Initialize filter nav if element exists
-            const filterNavElement = document.getElementById('filter-nav');
-            if (filterNavElement && typeof FilterNavComponent === 'function') {
-                try {
-                    const filterNav = new FilterNavComponent(); 
-                    filterNav.mount(filterNavElement);
-                } catch (error) {
-                    console.error('Error mounting filter nav:', error);
-                }
-            }
-
-            // Initialize users nav if element exists
-            const usersNavElement = document.getElementById('users-nav');
-            if (usersNavElement && typeof UsersNavComponent === 'function' && Array.isArray(usersData)) {
+    // Only try to load users if we're logged in
+    if (!AuthService.getCurrentUser()) {
+        return;
+    }
+    
+    // Initialize filter nav if component exists
+    const filterNavElement = document.getElementById('filter-nav');
+    if (filterNavElement && typeof FilterNavComponent === 'function') {
+        try {
+            const filterNav = new FilterNavComponent(); 
+            filterNav.mount(filterNavElement);
+        } catch (error) {
+            console.error('Error mounting filter nav:', error);
+        }
+    }
+    
+    // Initialize users nav with mock data if API fails
+    const usersNavElement = document.getElementById('users-nav');
+    if (usersNavElement && typeof UsersNavComponent === 'function') {
+        // First try to load real users
+        loadUsers()
+            .then(usersData => {
                 try {
                     const usersNav = new UsersNavComponent(usersData); 
-                    usersNav.mount(usersNavElement);
+                    usersNav.mount();
                 } catch (error) {
                     console.error('Error mounting users nav:', error);
                 }
-            }
-        })
-        .catch(error => {
-            console.error('Error initializing optional components:', error);
-        });
+            })
+            .catch(error => {
+                console.error('Error loading users:', error);
+                // Use mock data if API fails
+                const mockUsers = [
+                    { ID: '1', UserName: 'User1', ProfilePic: '' },
+                    { ID: '2', UserName: 'User2', ProfilePic: '' }
+                ];
+                try {
+                    const usersNav = new UsersNavComponent(mockUsers);
+                    usersNav.mount();
+                } catch (error) {
+                    console.error('Error mounting users nav with mock data:', error);
+                }
+            });
+    }
 }
 
-// Show error message in main content
-function showErrorMessage() {
-    const mainContent = document.getElementById('main-content');
-    if (mainContent) {
-        mainContent.innerHTML = `
-            <div class="error-container">
-                <h1>Application Error</h1>
-                <p>There was a problem loading the application. Please try refreshing the page.</p>
-                <button onclick="window.location.reload()">Refresh Page</button>
-            </div>
-        `;
-    }
+// Load users with better error handling
+function loadUsers() {
+    return new Promise((resolve, reject) => {
+        fetch('/api/users', {
+            credentials: 'include' // Include cookies for auth
+        })
+            .then(response => {
+                if (!response.ok) {
+                    // If we get a 500 error, reject the promise
+                    console.warn(`Error loading users: ${response.status}`);
+                    reject(new Error(`Failed to load users: ${response.status}`));
+                    return null;
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data) {
+                    resolve(Array.isArray(data) ? data : []);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching users:', error);
+                reject(error);
+            });
+    });
 }
 
 function loadPosts() { 
     console.log('Loading posts...'); 
-    fetch('/api/posts') 
+    
+    // Show loading state
+    const mainContent = document.getElementById('main-content');
+    if (mainContent) {
+        mainContent.innerHTML = `
+            <div class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Loading posts...</p>
+            </div>
+        `;
+    }
+    
+    fetch('/api/posts', {
+        credentials: 'include' // Include cookies for auth
+    }) 
         .then(response => {
             if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+                // If API not implemented yet or returns error, show placeholder with mock data
+                console.warn(`Error loading posts: ${response.status}`);
+                return { 
+                    posts: [
+                        {
+                            id: 1,
+                            title: "Welcome to the Forum",
+                            content: "This is a placeholder post since the API returned an error. The backend might not be fully implemented yet.",
+                            author: "System",
+                            created_at: new Date().toISOString()
+                        },
+                        {
+                            id: 2,
+                            title: "Getting Started",
+                            content: "Here are some tips to get started with the forum. This is placeholder content.",
+                            author: "Admin",
+                            created_at: new Date().toISOString()
+                        }
+                    ]
+                };
             }
             return response.json();
         }) 
         .then(postsData => {
             console.log('Posts received:', postsData); 
+            
+            // Handle empty posts array
+            const posts = Array.isArray(postsData) ? postsData : 
+                          (postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
+            
             if (typeof PostsComponent === 'function') {
                 const postsComponent = new PostsComponent();
-                postsComponent.posts = postsData; 
-                postsComponent.isLoggedIn = window.isLoggedIn;
-                postsComponent.currentUserID = window.currentUserID; 
+                postsComponent.posts = posts; 
+                postsComponent.isLoggedIn = true; // We already checked auth
+                postsComponent.currentUserID = AuthService.getCurrentUser()?.id; 
                 postsComponent.mount(); 
             } else {
-                console.error('PostsComponent is not defined');
-                document.getElementById('main-content').innerHTML = '<h1>Posts</h1><p>Component not available</p>';
+                // Show placeholder if component not available
+                showPostsPlaceholder(posts);
             }
         }) 
         .catch(error => { 
@@ -415,30 +469,120 @@ function loadPosts() {
                     <div class="no-posts-message"> 
                         <i class="fas fa-exclamation-circle"></i> 
                         <p>Error loading posts. Please try again later.</p> 
+                        <button onclick="window.navigation.reloadPage()" class="btn btn-primary mt-3">
+                            <i class="fas fa-sync"></i> Retry
+                        </button>
                     </div>`; 
             }
         }); 
 } 
 
+// Show placeholder for posts when component not available
+function showPostsPlaceholder(posts) {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+    
+    if (posts.length === 0) {
+        mainContent.innerHTML = `
+            <div class="posts-container">
+                <h1>Posts</h1>
+                <div class="no-posts-message">
+                    <i class="fas fa-info-circle"></i>
+                    <p>No posts available. Be the first to create a post!</p>
+                    <button onclick="window.navigation.navigateTo('/create')" class="btn btn-primary mt-3">
+                        <i class="fas fa-plus"></i> Create Post
+                    </button>
+                </div>
+            </div>
+        `;
+    } else {
+        let postsHtml = `
+            <div class="posts-container">
+                <h1>Posts</h1>
+                <div class="posts-list">
+        `;
+        
+        // Create simple post cards
+        posts.forEach(post => {
+            postsHtml += `
+                <div class="post-card">
+                    <h3>${post.title || 'Untitled Post'}</h3>
+                    <p>${post.content?.substring(0, 100) || 'No content'}${post.content?.length > 100 ? '...' : ''}</p>
+                    <div class="post-footer">
+                        <span>By: ${post.author || 'Anonymous'}</span>
+                        <button onclick="window.navigation.navigateTo('/?id=${post.id}')" class="btn btn-sm">
+                            Read More
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        postsHtml += `
+                </div>
+            </div>
+        `;
+        
+        mainContent.innerHTML = postsHtml;
+    }
+}
+
 function loadSinglePost(postId) { 
     console.log('Loading single post:', postId);
-    fetch(`/api/posts/single?id=${postId}`) 
+    
+    // Show loading state
+    const mainContent = document.getElementById('main-content');
+    if (mainContent) {
+        mainContent.innerHTML = `
+            <div class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Loading post...</p>
+            </div>
+        `;
+    }
+    
+    fetch(`/api/posts/single?id=${postId}`, {
+        credentials: 'include' // Include cookies for auth
+    }) 
         .then(response => {
             if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+                // If API not implemented yet or returns error, show placeholder with mock data
+                console.warn(`Error loading post: ${response.status}`);
+                return { 
+                    post: { 
+                        id: postId, 
+                        title: 'Sample Post', 
+                        content: 'This is a placeholder for post content since the API returned an error.',
+                        author: 'System',
+                        created_at: new Date().toISOString()
+                    },
+                    comments: [
+                        {
+                            id: 1,
+                            content: "This is a sample comment.",
+                            author: "User1",
+                            created_at: new Date().toISOString()
+                        }
+                    ]
+                };
             }
             return response.json();
         }) 
         .then(data => { 
             console.log('Post data received:', data);
+            
+            // Handle missing data
+            const post = data.post || { id: postId, title: 'Post not found', content: 'The requested post could not be loaded.' };
+            const comments = Array.isArray(data.comments) ? data.comments : [];
+            
             if (typeof SinglePostComponent === 'function') {
                 const singlePost = new SinglePostComponent(postId); 
-                singlePost.post = data.post; 
-                singlePost.comments = data.comments; 
+                singlePost.post = post; 
+                singlePost.comments = comments; 
                 singlePost.mount(); 
             } else {
-                console.error('SinglePostComponent is not defined');
-                document.getElementById('main-content').innerHTML = '<h1>Post</h1><p>Component not available</p>';
+                // Show placeholder if component not available
+                showSinglePostPlaceholder(post, comments);
             }
         }) 
         .catch(error => { 
@@ -448,11 +592,82 @@ function loadSinglePost(postId) {
                 mainContent.innerHTML = ` 
                     <div class="error-message"> 
                         <i class="fas fa-exclamation-circle"></i> 
-                        <p>Error loading post. The post may not exist or you may not have permission to view it.</p> 
+                        <p>Error loading post. The post may not exist or you may not have permission to view it.</p>
+                        <div class="mt-3">
+                            <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
+                                <i class="fas fa-arrow-left"></i> Back to Posts
+                            </button>
+                            <button onclick="window.navigation.reloadPage()" class="btn btn-primary">
+                                <i class="fas fa-sync"></i> Retry
+                            </button>
+                        </div>
                     </div>`; 
             }
         }); 
 } 
+
+// Show placeholder for single post when component not available
+function showSinglePostPlaceholder(post, comments) {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+    
+    let html = `
+        <div class="single-post-container">
+            <div class="post-header">
+                <h1>${post.title || 'Untitled Post'}</h1>
+                <div class="post-meta">
+                    <span>By: ${post.author || 'Anonymous'}</span>
+                    <span>Posted: ${post.created_at || 'Unknown date'}</span>
+                </div>
+            </div>
+            <div class="post-content">
+                ${post.content || 'No content available'}
+            </div>
+            <div class="post-actions">
+                <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
+                    <i class="fas fa-arrow-left"></i> Back to Posts
+                </button>
+            </div>
+            <div class="comments-section">
+                <h3>Comments (${comments.length})</h3>
+    `;
+    
+    if (comments.length === 0) {
+        html += `
+                <div class="no-comments-message">
+                    <p>No comments yet. Be the first to comment!</p>
+                </div>
+        `;
+    } else {
+        html += `<div class="comments-list">`;
+        comments.forEach(comment => {
+            html += `
+                <div class="comment-card">
+                    <div class="comment-header">
+                        <span class="comment-author">${comment.author || 'Anonymous'}</span>
+                        <span class="comment-date">${comment.created_at || 'Unknown date'}</span>
+                    </div>
+                    <div class="comment-content">
+                        ${comment.content || 'No content'}
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div>`;
+    }
+    
+    html += `
+                <div class="comment-form">
+                    <h4>Add a Comment</h4>
+                    <textarea placeholder="Write your comment here..." rows="3"></textarea>
+                    <button class="btn btn-primary mt-2">Submit Comment</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    mainContent.innerHTML = html;
+}
 
 function getPostIdFromUrl() { 
     const urlParams = new URLSearchParams(window.location.search); 
@@ -461,7 +676,13 @@ function getPostIdFromUrl() {
 
 // Add helper method to AuthService to set auth state from outside
 AuthService.setAuthState = function(isAuth, user) {
+    this.isAuthenticated = isAuth;
+    this.currentUser = user;
+    
+    // Also set window variables for backward compatibility
     window.isAuthenticated = isAuth;
+    window.isLoggedIn = isAuth;
+    window.currentUserID = user ? user.id : null;
     window.currentUser = user;
 };
 

@@ -178,3 +178,5 @@ class CreatePostComponent {
         });
     }
 }
+
+export default CreatePostComponent;

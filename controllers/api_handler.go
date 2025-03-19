@@ -44,8 +44,10 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		ah.handleReaction(w, r)
-		case "/api/user-status":  // Add this new endpoint
+	case "/api/user-status":
 		ah.handleUserStatus(w, r)
+	case "/api/validate-session":
+		ah.handleValidateSession(w, r)
 	case "/api/posts/comment":
 		if !ah.checkAuth(w, r) {
 			return
@@ -70,11 +72,11 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !ah.checkAuth(w, r) {
 			return
 		}
-		case "/login":  // Add this new endpoint
+	case "/login": // Add this new endpoint
 		ah.handleLogin(w, r)
-	case "/register":  // Add this new endpoint
+	case "/register": // Add this new endpoint
 		ah.handleRegister(w, r)
-	case "/signout":  // Add this new endpoint
+	case "/signout": // Add this new endpoint
 		ah.handleSignout(w, r)
 		ah.handleDeleteComment(w, r)
 	case "/api/users/profile":
@@ -834,58 +836,58 @@ func (ah *APIHandler) handleUpdateProfilePic(w http.ResponseWriter, r *http.Requ
 
 func (ah *APIHandler) handleUserStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	cookie, err := r.Cookie("session_token")
 	if err != nil {
 		// No session cookie, user is not logged in
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"isLoggedIn": false,
+			"isLoggedIn":    false,
 			"currentUserID": nil,
-			"unreadCount": 0,
+			"unreadCount":   0,
 		})
 		return
 	}
-	
+
 	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
 	if err != nil {
 		// Invalid session, user is not logged in
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"isLoggedIn": false,
+			"isLoggedIn":    false,
 			"currentUserID": nil,
-			"unreadCount": 0,
+			"unreadCount":   0,
 		})
 		return
 	}
-	
+
 	// User is logged in, get additional info
 	var email, nickname string
 	err = utils.GlobalDB.QueryRow("SELECT email, nickname FROM users WHERE id = ?", userID).Scan(&email, &nickname)
 	if err != nil {
 		// Error retrieving user info
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"isLoggedIn": true,
+			"isLoggedIn":    true,
 			"currentUserID": userID,
-			"email": "",
-			"nickname": "",
-			"unreadCount": 0,
+			"email":         "",
+			"nickname":      "",
+			"unreadCount":   0,
 		})
 		return
 	}
-	
+
 	// Get unread notifications count (if you have a notifications system)
 	var unreadCount int
 	err = utils.GlobalDB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read = 0", userID).Scan(&unreadCount)
 	if err != nil {
 		unreadCount = 0
 	}
-	
+
 	// Return user status
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"isLoggedIn": true,
+		"isLoggedIn":    true,
 		"currentUserID": userID,
-		"email": email,
-		"nickname": nickname,
-		"unreadCount": unreadCount,
+		"email":         email,
+		"nickname":      nickname,
+		"unreadCount":   unreadCount,
 	})
 }
 
@@ -900,12 +902,12 @@ func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	var credentials struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
-	
+
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -916,13 +918,19 @@ func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
+	// Debug: Log received credentials (password masked for security)
+	log.Printf("Login attempt - Email: %s", credentials.Email)
+
 	var storedPassword string
 	var userId string
 	var nickname string
 	err = utils.GlobalDB.QueryRow("SELECT id, password, nickname FROM users WHERE email = ?", credentials.Email).Scan(&userId, &storedPassword, &nickname)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			// Debug: Log email not found
+			log.Printf("Login failed - Email not found: %s", credentials.Email)
+
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -930,6 +938,9 @@ func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 				"success": false,
 			})
 		} else {
+			// Debug: Log database error
+			log.Printf("Login error - Database error: %v", err)
+
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -939,9 +950,23 @@ func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	
+
+	// Debug: Log stored password hash (first 10 chars only for security)
+	hashPreview := ""
+	if len(storedPassword) > 10 {
+		hashPreview = storedPassword[:10] + "..."
+	} else {
+		hashPreview = storedPassword
+	}
+	log.Printf("Login debug - User found: %s, Stored password hash preview: %s", userId, hashPreview)
+
 	isValidPassword := utils.CheckPasswordsHash(storedPassword, credentials.Password)
+
+	// Debug: Log password check result
+	log.Printf("Login debug - Password check result: %v", isValidPassword)
+
 	if !isValidPassword {
+		log.Printf("Login failed - Invalid password for user: %s", userId)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -950,10 +975,13 @@ func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	// Create a new session
 	sessionToken, err := utils.CreateSession(utils.GlobalDB, userId)
 	if err != nil {
+		// Debug: Log session creation error
+		log.Printf("Login error - Failed to create session: %v", err)
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -962,7 +990,7 @@ func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	// Set the session cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
@@ -973,12 +1001,15 @@ func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   3600 * 24 * 7, // 1 week
 	})
-	
+
+	// Debug: Log successful login
+	log.Printf("Login successful - User: %s, Nickname: %s", userId, nickname)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Login successful",
-		"success": true,
-		"userId": userId,
+		"message":  "Login successful",
+		"success":  true,
+		"userId":   userId,
 		"nickname": nickname,
 	})
 }
@@ -994,7 +1025,7 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	var userData struct {
 		Nickname  string `json:"nickname"`
 		Age       int    `json:"age"`
@@ -1004,9 +1035,12 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		Email     string `json:"email"`
 		Password  string `json:"password"`
 	}
-	
+
 	err := json.NewDecoder(r.Body).Decode(&userData)
 	if err != nil {
+		// Debug: Log decoding error
+		log.Printf("Registration error - Failed to decode request body: %v", err)
+		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1015,9 +1049,17 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
+	// Debug: Log registration attempt
+	log.Printf("Registration attempt - Email: %s, Nickname: %s", 
+		userData.Email, userData.Nickname)
+
 	// Validate input
 	if userData.Nickname == "" || userData.Email == "" || userData.Password == "" {
+		// Debug: Log validation failure
+		log.Printf("Registration validation failed - Nickname: %s, Email: %s", 
+			userData.Nickname, userData.Email)
+		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1026,11 +1068,14 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	// Check if email already exists
 	var count int
 	err = utils.GlobalDB.QueryRow("SELECT COUNT(*) FROM users WHERE email = ?", userData.Email).Scan(&count)
 	if err != nil {
+		// Debug: Log database error
+		log.Printf("Registration error - Failed to check email: %v", err)
+		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1039,8 +1084,11 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	if count > 0 {
+		// Debug: Log email already exists
+		log.Printf("Registration failed - Email already exists: %s", userData.Email)
+		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1049,10 +1097,13 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	// Check if nickname already exists
 	err = utils.GlobalDB.QueryRow("SELECT COUNT(*) FROM users WHERE nickname = ?", userData.Nickname).Scan(&count)
 	if err != nil {
+		// Debug: Log database error
+		log.Printf("Registration error - Failed to check nickname: %v", err)
+		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1061,8 +1112,11 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	if count > 0 {
+		// Debug: Log nickname already exists
+		log.Printf("Registration failed - Nickname already exists: %s", userData.Nickname)
+		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1071,10 +1125,13 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	// Hash password
 	hashedPassword, err := utils.HashPassword(userData.Password)
 	if err != nil {
+		// Debug: Log password hashing error
+		log.Printf("Registration error - Failed to hash password: %v", err)
+		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1083,13 +1140,25 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
+	// Debug: Log hashed password (first 10 chars only for security)
+	hashPreview := ""
+	if len(hashedPassword) > 10 {
+		hashPreview = hashedPassword[:10] + "..."
+	} else {
+		hashPreview = hashedPassword
+	}
+	log.Printf("Registration debug - Password hash preview: %s", hashPreview)
+
 	// Insert user
 	result, err := utils.GlobalDB.Exec(
 		"INSERT INTO users (nickname, age, gender, first_name, last_name, email, password) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		userData.Nickname, userData.Age, userData.Gender, userData.FirstName, userData.LastName, userData.Email, hashedPassword,
 	)
 	if err != nil {
+		// Debug: Log database error
+		log.Printf("Registration error - Failed to create user: %v", err)
+		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1098,14 +1167,18 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	userId, _ := result.LastInsertId()
 	
+	// Debug: Log successful registration
+	log.Printf("Registration successful - User ID: %d, Email: %s, Nickname: %s", 
+		userId, userData.Email, userData.Nickname)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Registration successful",
 		"success": true,
-		"userId": userId,
+		"userId":  userId,
 	})
 }
 
@@ -1120,7 +1193,7 @@ func (ah *APIHandler) handleSignout(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	// Get session cookie
 	cookie, err := r.Cookie("session_token")
 	if err != nil {
@@ -1132,7 +1205,7 @@ func (ah *APIHandler) handleSignout(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	// Delete session from database
 	_, err = utils.GlobalDB.Exec("DELETE FROM sessions WHERE token = ?", cookie.Value)
 	if err != nil {
@@ -1144,7 +1217,7 @@ func (ah *APIHandler) handleSignout(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	// Clear the cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
@@ -1154,10 +1227,63 @@ func (ah *APIHandler) handleSignout(w http.ResponseWriter, r *http.Request) {
 		Secure:   r.TLS != nil,
 		MaxAge:   -1, // Delete the cookie
 	})
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Logged out successfully",
 		"success": true,
+	})
+}
+
+// handleValidateSession checks if the current session is valid
+func (ah *APIHandler) handleValidateSession(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		// No session cookie, session is invalid
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid": false,
+		})
+		return
+	}
+
+	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+	if err != nil {
+		// Invalid session
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid": false,
+		})
+		return
+	}
+
+	// Get user information
+	var email, nickname string
+	err = utils.GlobalDB.QueryRow("SELECT email, nickname FROM users WHERE id = ?", userID).Scan(&email, &nickname)
+	if err != nil {
+		// Error retrieving user info, but session is still valid
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":    true,
+			"userId":   userID,
+			"email":    "",
+			"nickname": "",
+		})
+		return
+	}
+
+	// Get unread notifications count (if you have a notifications system)
+	var unreadCount int
+	err = utils.GlobalDB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read = 0", userID).Scan(&unreadCount)
+	if err != nil {
+		unreadCount = 0
+	}
+
+	// Session is valid
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"valid":       true,
+		"userId":      userID,
+		"email":       email,
+		"nickname":    nickname,
+		"unreadCount": unreadCount,
 	})
 }

@@ -1,42 +1,25 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
-
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Forum</title>
-    <link rel="stylesheet" href="../static/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>Real-Time Forum</title>
+    <link rel="stylesheet" href="../static/styles.css">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
+<body>
+    <!-- Navbar will be dynamically inserted here -->
+    <div id="navbar"></div>
+    
+    <div class="main-layout">
+        <div id="filter-nav" class="categories-filter-container"></div>
+        <main id="main-content"></main>
+        <div id="users-nav" class="users-filter-container"></div>
+    </div>
 
-
-
-    <body>
-        <nav>
-            <ul>
-                <li><a href="/register" onclick="event.preventDefault(); loadPage('register')">Register</a></li>
-                <li><a href="/login" onclick="event.preventDefault(); loadPage('login')">Login</a></li>
-            </ul>
-        </nav>
-        <div id="content">
-        </div>
-        <div class="main-layout">
-            <div id="filter-nav" class="categories-filter-container"></div>
-            <main id="main-content"></main>
-            <div id="users-nav" class="users-filter-container"></div>
-        </div>
-        <script src="/static/js/components/authentication/auth.js"></script>
-        <script src="/static/js/components/navbar/navbar.js"></script>
-        <script src="/static/js/components/posts/posts.js"></script>
-        <script src="/static/js/components/posts/post.js"></script>
-        <script src="/static/js/components/posts/create_post.js"></script>
-        <script src="/static/js/components/posts/edit_post.js"></script>
-        <script src="/static/js/components/profile/profile.js"></script>
-        <script src="/static/js/components/filters/filters_nav.js"></script>
-        <script src="/static/js/components/users/users_nav.js"></script>
-        
-        <script src="/static/js/app.js"></script>
-    </body>
-
-
+    <!-- Load app.js as a module -->
+    <script type="module" src="/static/js/app.js"></script>
+</body>
 </html>
+</qodoArtifact>

@@ -1,3 +1,5 @@
+import AuthService from '../../services/auth-service.js';
+
 class AuthComponent {
     constructor(type = 'signin') {
         this.type = type; // 'signin' or 'signup'
@@ -34,6 +36,10 @@ class AuthComponent {
                     <div class="form-group">
                         <label for="password">Password</label>
                         <input type="password" id="password" name="password" required>
+                        <div class="visibility-toggle">
+                            <input type="checkbox" id="show-password">
+                            <label for="show-password">Show password</label>
+                        </div>
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">Sign In</button>
@@ -58,7 +64,7 @@ class AuthComponent {
                     </div>
                     <div class="form-group">
                         <label for="age">Age</label>
-                        <input type="number" id="age" name="age" required>
+                        <input type="number" id="age" name="age" min="13" max="120" required>
                     </div>
                     <div class="form-group">
                         <label for="gender">Gender</label>
@@ -83,6 +89,14 @@ class AuthComponent {
                     <div class="form-group">
                         <label for="password">Password</label>
                         <input type="password" id="password" name="password" required>
+                        <div class="visibility-toggle">
+                            <input type="checkbox" id="show-password-signup">
+                            <label for="show-password-signup">Show password</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirm-password">Confirm Password</label>
+                        <input type="password" id="confirm-password" name="confirm-password" required>
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">Sign Up</button>
@@ -99,17 +113,57 @@ class AuthComponent {
     attachEventListeners() {
         if (this.type === 'signin') {
             const form = document.getElementById('signin-form');
+            const showPasswordCheckbox = document.getElementById('show-password');
+            
             if (form) {
                 form.addEventListener('submit', this.handleSignIn.bind(this));
             } else {
                 console.error('Signin form not found in the DOM');
             }
+            
+            if (showPasswordCheckbox) {
+                showPasswordCheckbox.addEventListener('change', function() {
+                    const passwordInput = document.getElementById('password');
+                    passwordInput.type = this.checked ? 'text' : 'password';
+                });
+            }
         } else {
             const form = document.getElementById('signup-form');
+            const showPasswordCheckbox = document.getElementById('show-password-signup');
+            
             if (form) {
                 form.addEventListener('submit', this.handleSignUp.bind(this));
             } else {
                 console.error('Signup form not found in the DOM');
+            }
+            
+            if (showPasswordCheckbox) {
+                showPasswordCheckbox.addEventListener('change', function() {
+                    const passwordInput = document.getElementById('password');
+                    passwordInput.type = this.checked ? 'text' : 'password';
+                });
+            }
+            
+            // Add password confirmation validation
+            const passwordInput = document.getElementById('password');
+            const confirmPasswordInput = document.getElementById('confirm-password');
+            
+            if (passwordInput && confirmPasswordInput) {
+                confirmPasswordInput.addEventListener('input', function() {
+                    if (passwordInput.value !== this.value) {
+                        this.setCustomValidity('Passwords do not match');
+                    } else {
+                        this.setCustomValidity('');
+                    }
+                });
+                
+                passwordInput.addEventListener('input', function() {
+                    if (confirmPasswordInput.value && confirmPasswordInput.value !== this.value) {
+                        confirmPasswordInput.setCustomValidity('Passwords do not match');
+                    } else {
+                        confirmPasswordInput.setCustomValidity('');
+                    }
+                });
             }
         }
     }
@@ -120,6 +174,9 @@ class AuthComponent {
         const password = document.getElementById('password').value;
         const messageElement = document.getElementById('signin-message');
 
+        // Debug: Log login attempt
+        console.log('Login attempt:', { email, password: password.replace(/./g, '*') });
+
         if (!messageElement) {
             console.error('Signin message element not found');
             return;
@@ -129,6 +186,7 @@ class AuthComponent {
         messageElement.textContent = 'Signing in...';
         messageElement.style.color = 'blue';
 
+        // Send the request with email and password to match backend expectations
         fetch('/login', {
             method: 'POST',
             headers: {
@@ -137,6 +195,9 @@ class AuthComponent {
             body: JSON.stringify({ email, password }),
         })
         .then(response => {
+            // Debug: Log response status
+            console.log('Login response status:', response.status);
+            
             if (!response.ok) {
                 if (response.status === 401) {
                     throw new Error('Invalid email or password');
@@ -146,6 +207,9 @@ class AuthComponent {
             return response.json();
         })
         .then(data => {
+            // Debug: Log response data
+            console.log('Login response data:', data);
+            
             messageElement.textContent = data.message || 'Login successful';
             messageElement.style.color = data.success ? 'green' : 'red';
 
@@ -157,15 +221,12 @@ class AuthComponent {
                     localStorage.setItem('userName', data.nickname);
                 }
                 
-                // Update global auth state
-                window.isLoggedIn = true;
-                window.currentUserID = data.userId;
-                window.isAuthenticated = true;
-                window.currentUser = {
+                // Update auth state
+                AuthService.setAuthState(true, {
                     id: data.userId,
                     email: email,
                     nickname: data.nickname
-                };
+                });
                 
                 // Navigate to home page
                 setTimeout(() => {
@@ -174,7 +235,7 @@ class AuthComponent {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            console.error('Login error:', error);
             messageElement.textContent = error.message || 'An error occurred during sign in. Please try again.';
             messageElement.style.color = 'red';
         });
@@ -189,6 +250,16 @@ class AuthComponent {
             return;
         }
 
+        // Validate passwords match
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        
+        if (password !== confirmPassword) {
+            messageElement.textContent = 'Passwords do not match';
+            messageElement.style.color = 'red';
+            return;
+        }
+
         // Show loading state
         messageElement.textContent = 'Creating account...';
         messageElement.style.color = 'blue';
@@ -200,8 +271,14 @@ class AuthComponent {
             firstName: document.getElementById('firstName').value,
             lastName: document.getElementById('lastName').value,
             email: document.getElementById('email').value,
-            password: document.getElementById('password').value,
+            password: password,
         };
+
+        // Debug: Log registration data
+        console.log('Registration data:', {
+            ...userData,
+            password: userData.password.replace(/./g, '*')
+        });
 
         fetch('/register', {
             method: 'POST',
@@ -211,12 +288,20 @@ class AuthComponent {
             body: JSON.stringify(userData),
         })
         .then(response => {
+            // Debug: Log response status
+            console.log('Registration response status:', response.status);
+            
             if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+                return response.json().then(data => {
+                    throw new Error(data.message || `HTTP error! Status: ${response.status}`);
+                });
             }
             return response.json();
         })
         .then(data => {
+            // Debug: Log response data
+            console.log('Registration response data:', data);
+            
             messageElement.textContent = data.message || 'Registration successful';
             messageElement.style.color = data.success ? 'green' : 'red';
             
@@ -228,7 +313,7 @@ class AuthComponent {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            console.error('Registration error:', error);
             messageElement.textContent = error.message || 'An error occurred during registration. Please try again.';
             messageElement.style.color = 'red';
         });

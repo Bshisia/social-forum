@@ -1,122 +1,143 @@
-class PostsComponent {
-    constructor() {
-        // Store posts data
-        this.posts = [];
+class PostsComponent {constructor() {
+    this.posts = [];
+    this.isLoggedIn = false;
+    this.currentUserID = null;
+    this.container = null;
+    this.filterCategory = null;
+}
 
-        // Store component state
-        this.isLoading = false;
-        this.error = null;
-        this.currentFilter = 'all'; // all, liked, commented
-        this.currentCategory = null;
-
-        // Store user state
-        this.isLoggedIn = false;
-        this.currentUserID = '';
-
-        // Pagination/Infinite scroll
-        this.page = 1;
-        this.hasMore = true;
-
-        // Store DOM element references
-        this.mainContainer = document.getElementById('main-content');
-        this.postsContainer = null;
-
-        // Bind methods
-        // this.handleScroll = this.handleScroll.bind(this);
-        // this.handlePostClick = this.handlePostClick.bind(this);
-        // this.handleLike = this.handleLike.bind(this);
-        // this.handleComment = this.handleComment.bind(this);
+mount(container = document.getElementById('main-content')) {
+    this.container = container;
+    if (!this.container) {
+        console.error('Cannot mount PostsComponent: container element not found');
+        return;
     }
-    render() {
-        if (this.isLoading) {
-            return `<div class="loading">Loading posts...</div>`;
-        }
+    
+    // Get filter category from URL if present
+    const urlParams = new URLSearchParams(window.location.search);
+    this.filterCategory = urlParams.get('category');
+    
+    // Get authentication state if not provided
+    if (!this.isLoggedIn) {
+        const currentUser = AuthService.getCurrentUser();
+        this.isLoggedIn = !!currentUser;
+        this.currentUserID = currentUser ? currentUser.id : null;
+    }
+    
+    this.render();
+    this.attachEventListeners();
+}
 
-        const postsHTML = this.posts.map(post => `
-            <div class="post-card" data-post-id="${post.ID}">
-                <div class="post-header">
-                    <div class="post-avatar">
-                        ${post.ProfilePic ?
-                `<img src="${post.ProfilePic}" alt="Profile Picture" class="post-avatar-img">` :
-                `<div class="post-avatar-placeholder">
-                                <i class="fas fa-user"></i>
-                            </div>`
-            }
-                    </div>
-                    <div class="post-info">
-                        <h3>${post.Username}</h3>
-                        <span class="timestamp">${post.PostTime}</span>
-                    </div>
-                    <div class="post-categories-right">
-                        ${post.Categories ?
-                post.Categories.map(cat =>
-                    `<span class="category-tag">${cat.Name}</span>`
-                ).join('') : ''
-            }
-                    </div>
-                </div>
+render() {
+    // Filter posts by category if needed
+    const filteredPosts = this.filterCategory 
+        ? this.posts.filter(post => post.category === this.filterCategory)
+        : this.posts;
+        
+    if (filteredPosts.length === 0) {
+        this.renderEmptyState();
+    } else {
+        this.renderPosts(filteredPosts);
+    }
+}
 
-                <div class="post-content">
-                    <h2>${post.Title}</h2>
-                    <p>${post.Content}</p>
-                    ${post.ImagePath ?
-                `<img src="${post.ImagePath}" alt="Post image" class="post-image">` :
-                ''}
-                </div>
+renderEmptyState() {
+    const categoryText = this.filterCategory 
+        ? `in category "${this.filterCategory}"` 
+        : '';
+        
+    this.container.innerHTML = `
+        <div class="posts-container">
+            <div class="posts-header">
+                <h1>Posts ${categoryText}</h1>
+                ${this.isLoggedIn ? `
+                    <button class="btn btn-primary create-post-btn" onclick="window.navigation.navigateTo('/create')">
+                        <i class="fas fa-plus"></i> Create Post
+                    </button>
+                ` : ''}
+            </div>
+            <div class="no-posts-message">
+                <i class="fas fa-info-circle"></i>
+                <p>No posts available ${categoryText}. ${this.isLoggedIn ? 'Be the first to create a post!' : 'Please sign in to create a post.'}</p>
+                ${this.isLoggedIn ? `
+                    <button onclick="window.navigation.navigateTo('/create')" class="btn btn-primary mt-3">
+                        <i class="fas fa-plus"></i> Create Post
+                    </button>
+                ` : `
+                    <button onclick="window.navigation.navigateTo('/signin')" class="btn btn-primary mt-3">
+                        <i class="fas fa-sign-in-alt"></i> Sign In
+                    </button>
+                `}
+            </div>
+        </div>
+    `;
+}
 
+renderPosts(posts) {
+    let postsHtml = `
+        <div class="posts-container">
+            <div class="posts-header">
+                <h1>Posts ${this.filterCategory ? `in ${this.filterCategory}` : ''}</h1>
+                ${this.isLoggedIn ? `
+                    <button class="btn btn-primary create-post-btn" onclick="window.navigation.navigateTo('/create')">
+                        <i class="fas fa-plus"></i> Create Post
+                    </button>
+                ` : ''}
+            </div>
+            <div class="posts-list">
+    `;
+    
+    // Create post cards
+    posts.forEach(post => {
+        const isAuthor = this.isLoggedIn && this.currentUserID === post.author_id;
+        
+        postsHtml += `
+            <div class="post-card">
+                ${post.category ? `<div class="post-category">${post.category}</div>` : ''}
+                <h3 class="post-title">${post.title || 'Untitled Post'}</h3>
+                <p class="post-excerpt">${post.content?.substring(0, 150) || 'No content'}${post.content?.length > 150 ? '...' : ''}</p>
                 <div class="post-footer">
+                    <div class="post-meta">
+                        <span class="post-author">By: ${post.author || 'Anonymous'}</span>
+                        <span class="post-date">${this.formatDate(post.created_at)}</span>
+                    </div>
                     <div class="post-actions">
-                        <button class="action-btn like-btn" data-post-id="${post.ID}">
-                            <i class="fas fa-thumbs-up"></i>
-                            <span class="count" id="likes-${post.ID}">${post.Likes}</span>
+                        <button onclick="window.navigation.navigateTo('/?id=${post.id}')" class="btn btn-sm btn-outline">
+                            Read More
                         </button>
-                        <button class="action-btn comment-btn" data-post-id="${post.ID}">
-                            <i class="fas fa-comment"></i>
-                            <span class="count" id="comments-${post.ID}">${post.Comments}</span>
-                        </button>
-                        <button class="action-btn dislike-btn" data-post-id="${post.ID}">
-                            <i class="fas fa-thumbs-down"></i>
-                            <span class="count" id="dislikes-${post.ID}">${post.Dislikes}</span>
-                        </button>
-                        
-           ${post.UserID === this.currentUserID ? `
-        <button class="btn btn-edit" data-post-id="${post.ID}">
-            <i class="fas fa-edit"></i> Edit
-        </button>
-        <button class="btn btn-delete" data-post-id="${post.ID}">
-            <i class="fas fa-trash"></i> Delete
-        </button>
-    ` : ''}
+                        ${isAuthor ? `
+                            <button onclick="window.navigation.navigateTo('/edit-post?id=${post.id}')" class="btn btn-sm">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        ` : ''}
                     </div>
                 </div>
             </div>
-        `).join('');
+        `;
+    });
+    
+    postsHtml += `
+            </div>
+        </div>
+    `;
+    
+    this.container.innerHTML = postsHtml;
+}
 
-        return `
-            <div class="posts-container">
-                ${this.posts.length ? postsHTML :
-                `<div class="no-posts-message">
-                        <i class="fas fa-inbox"></i>
-                        <p>No posts available</p>
-                    </div>`
-            }
-            </div>`;
+formatDate(dateString) {
+    if (!dateString) return 'Unknown date';
+    
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+        });
+    } catch (e) {
+        return dateString;
     }
-
-    mount() {
-        // First get user status
-        fetch('/api/user-status')
-            .then(response => response.json())
-            .then(data => {
-                this.isLoggedIn = data.isLoggedIn;
-                this.currentUserID = data.currentUserID;
-
-                // Then render and attach listeners
-                this.mainContainer.innerHTML = this.render();
-                this.attachEventListeners();
-            })
-            .catch(error => console.error('Error:', error));
-    }
+}
 
     attachEventListeners() {
         // Post click handler
@@ -388,3 +409,5 @@ class PostsComponent {
         });
     }
 }
+
+export default PostsComponent;

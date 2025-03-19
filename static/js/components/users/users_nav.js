@@ -32,3 +32,5 @@ class UsersNavComponent {
         this.container.innerHTML = this.render();
     }
 }
+
+export default UsersNavComponent;

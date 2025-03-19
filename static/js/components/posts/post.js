@@ -444,7 +444,9 @@ class SinglePostComponent {
 
     mount() {
         this.loadPost();
-    }    
+    } 
 
 
 }
+
+export default SinglePostComponent;
