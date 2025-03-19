@@ -88,14 +88,18 @@ class NavbarComponent {
         const navRight = document.querySelector('.nav-right');
         const menuToggles = document.querySelectorAll('.menu-toggle-btn');
 
-        hamburgerBtn?.addEventListener('click', () => {
-            navRight.classList.toggle('active');
-        });
+        if (hamburgerBtn && navRight) {
+            hamburgerBtn.addEventListener('click', () => {
+                navRight.classList.toggle('active');
+            });
+        }
 
         menuToggles.forEach(toggle => {
-            toggle.addEventListener('click', () => {
-                toggle.nextElementSibling.classList.toggle('active');
-            });
+            if (toggle && toggle.nextElementSibling) {
+                toggle.addEventListener('click', () => {
+                    toggle.nextElementSibling.classList.toggle('active');
+                });
+            }
         });
     }
 }

@@ -308,12 +308,16 @@ function initializeApp() {
             // Initialize navbar if element exists and we're not on an auth page
             const navbarElement = document.getElementById('navbar');
             if (navbarElement && typeof NavbarComponent === 'function') {
-                const navbar = new NavbarComponent( 
-                    statusData.isLoggedIn, 
-                    statusData.currentUserID, 
-                    statusData.unreadCount 
-                ); 
-                navbar.mount(navbarElement); 
+                try {
+                    const navbar = new NavbarComponent( 
+                        statusData.isLoggedIn, 
+                        statusData.currentUserID, 
+                        statusData.unreadCount 
+                    ); 
+                    navbar.mount(navbarElement);
+                } catch (error) {
+                    console.error('Error mounting navbar:', error);
+                }
             }
             
             // Try to initialize other components if they exist
@@ -343,15 +347,23 @@ function initializeOptionalComponents() {
             // Initialize filter nav if element exists
             const filterNavElement = document.getElementById('filter-nav');
             if (filterNavElement && typeof FilterNavComponent === 'function') {
-                const filterNav = new FilterNavComponent(); 
-                filterNav.mount(filterNavElement); 
+                try {
+                    const filterNav = new FilterNavComponent(); 
+                    filterNav.mount(filterNavElement);
+                } catch (error) {
+                    console.error('Error mounting filter nav:', error);
+                }
             }
 
             // Initialize users nav if element exists
             const usersNavElement = document.getElementById('users-nav');
             if (usersNavElement && typeof UsersNavComponent === 'function' && Array.isArray(usersData)) {
-                const usersNav = new UsersNavComponent(usersData); 
-                usersNav.mount(usersNavElement); 
+                try {
+                    const usersNav = new UsersNavComponent(usersData); 
+                    usersNav.mount(usersNavElement);
+                } catch (error) {
+                    console.error('Error mounting users nav:', error);
+                }
             }
         })
         .catch(error => {
