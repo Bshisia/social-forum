@@ -1,127 +1,143 @@
-let isAuthenticated = false;
-let currentUser = null;
-
-// Check if user is logged in on page load
-function checkAuthState() {
-    const userId = localStorage.getItem('userId');
-    const userEmail = localStorage.getItem('userEmail');
-    
-    if (userId && userEmail) {
-        isAuthenticated = true;
-        currentUser = {
-            id: userId,
-            email: userEmail
-        };
-        updateNavigation(true);
-        return true;
-    } else {
-        isAuthenticated = false;
-        currentUser = null;
-        updateNavigation(false);
-        return false;
+class AuthComponent {
+    constructor(type = 'signin') {
+        this.type = type; // 'signin' or 'signup'
+        this.container = null;
     }
-}
 
-// Update navigation based on authentication status
-function updateNavigation(authenticated) {
-    const nav = document.querySelector('nav ul');
-    
-    if (authenticated) {
-        nav.innerHTML = `
-            <li><a href="/" onclick="event.preventDefault(); loadPage('home')">Home</a></li>
-            <li><a href="/posts" onclick="event.preventDefault(); loadPage('posts')">Posts</a></li>
-            <li><a href="/createPost" onclick="event.preventDefault(); loadPage('createPost')">Create Post</a></li>
-            <li><a href="/messages" onclick="event.preventDefault(); loadPage('messages')">Messages</a></li>
-            <li><a href="#" onclick="event.preventDefault(); logout()">Logout</a></li>
+    mount(container = document.getElementById('main-content')) {
+        this.container = container;
+        if (!this.container) {
+            console.error('Cannot mount AuthComponent: container element not found');
+            return;
+        }
+        this.render();
+        this.attachEventListeners();
+    }
+
+    render() {
+        if (this.type === 'signin') {
+            this.renderSignIn();
+        } else {
+            this.renderSignUp();
+        }
+    }
+
+    renderSignIn() {
+        this.container.innerHTML = `
+            <div class="auth-container">
+                <h2>Sign In</h2>
+                <form id="signin-form" class="auth-form">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Sign In</button>
+                    </div>
+                    <div id="signin-message" class="auth-message"></div>
+                    <div class="auth-links">
+                        <p>Don't have an account? <a href="/signup" onclick="event.preventDefault(); window.navigation.navigateTo('/signup')">Sign Up</a></p>
+                    </div>
+                </form>
+                <div class="google-signin">
+                    <a href="/auth/google" class="google-signin-btn">
+                        <i class="fab fa-google"></i>
+                        Sign in with Google
+                    </a>
+                    <a href="/auth/github" class="github-signin-btn">
+                        <i class="fab fa-github"></i>
+                        Sign in with GitHub
+                    </a>
+                </div>
+            </div>
         `;
-    } else {
-        nav.innerHTML = `
-            <li><a href="/register" onclick="event.preventDefault(); loadPage('register')">Register</a></li>
-            <li><a href="/login" onclick="event.preventDefault(); loadPage('login')">Login</a></li>
+    }
+
+    renderSignUp() {
+        this.container.innerHTML = `
+            <div class="auth-container">
+                <h2>Sign Up</h2>
+                <form id="signup-form" class="auth-form">
+                    <div class="form-group">
+                        <label for="nickname">Nickname</label>
+                        <input type="text" id="nickname" name="nickname" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="age">Age</label>
+                        <input type="number" id="age" name="age" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="gender">Gender</label>
+                        <select id="gender" name="gender" required>
+                            <option value="" disabled selected>Select Gender</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="firstName">First Name</label>
+                        <input type="text" id="firstName" name="firstName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="lastName">Last Name</label>
+                        <input type="text" id="lastName" name="lastName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Sign Up</button>
+                    </div>
+                    <div id="signup-message" class="auth-message"></div>
+                    <div class="auth-links">
+                        <p>Already have an account? <a href="/signin" onclick="event.preventDefault(); window.navigation.navigateTo('/signin')">Sign In</a></p>
+                    </div>
+                </form>
+            </div>
         `;
     }
-}
 
-// Add a logout function
-function logout() {
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('userName');
-    isAuthenticated = false;
-    currentUser = null;
-    updateNavigation(false);
-    loadPage('login');
-}
-
-function loadPage(page) {
-    const contentDiv = document.getElementById('content');
-    
-    // Check authentication for restricted pages
-    const restrictedPages = ['home', 'posts', 'createPost', 'messages'];
-    if (restrictedPages.includes(page) && !checkAuthState()) {
-        history.pushState({}, '', '/login');
-        return;
+    attachEventListeners() {
+        if (this.type === 'signin') {
+            const form = document.getElementById('signin-form');
+            if (form) {
+                form.addEventListener('submit', this.handleSignIn.bind(this));
+            } else {
+                console.error('Signin form not found in the DOM');
+            }
+        } else {
+            const form = document.getElementById('signup-form');
+            if (form) {
+                form.addEventListener('submit', this.handleSignUp.bind(this));
+            } else {
+                console.error('Signup form not found in the DOM');
+            }
+        }
     }
 
-    // Clear existing content
-    contentDiv.innerHTML = '';
-
-    // Load the appropriate content based on the page
-    switch (page) {
-        case 'register':
-            loadRegisterPage(contentDiv);
-            history.pushState({}, '', '/register');
-            break;
-        case 'login':
-            loadLoginPage(contentDiv);
-            history.pushState({}, '', '/login');
-            break;
-        case 'home':
-            loadHomePage(contentDiv);
-            history.pushState({}, '', '/');
-            break;
-        case 'forgotPassword':
-            loadForgotPasswordPage(contentDiv);
-            history.pushState({}, '', '/forgotPassword');
-            break;
-        default:
-            contentDiv.innerHTML = '<h2>Page Not Found</h2>';
-            history.pushState({}, '', '/404');
-    }
-}
-
-function loadLoginPage(container) {
-    const mainContent = document.getElementById('main-content');
-    mainContent.innerHTML = `
-        <h2>Login to Premium Forum</h2>
-        <form id="loginForm" class="auth-form">
-            <label for="email">Email</label>
-            <input type="email" id="email" placeholder="Email" required> <br>
-            <label for="password">Password</label>
-            <input type="password" id="password" placeholder="Password" required> <br>
-            <a href="#" onclick="event.preventDefault(); loadPage('forgotPassword')">Forgot Password?</a> <br>
-            <button type="submit">Login</button>
-        </form>
-        <div class="google-signin">
-            <a href="/auth/google" class="google-signin-btn">
-                <i class="fab fa-google"></i>
-                Sign in with Google
-            </a>
-            <a href="/auth/github" class="github-signin-btn">
-                <i class="fab fa-github"></i>
-                Sign in with GitHub
-            </a>
-        </div>
-        <p id="loginMessage"></p>
-        <p class="form-footer">Don't have an account? <a href="#" onclick="event.preventDefault(); loadPage('register')">Register here</a></p>
-    `;
-
-    // Add event listener for the login form
-    document.getElementById('loginForm').addEventListener('submit', function (event) {
+    handleSignIn(event) {
         event.preventDefault();
-
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
+        const messageElement = document.getElementById('signin-message');
+
+        if (!messageElement) {
+            console.error('Signin message element not found');
+            return;
+        }
+
+        // Show loading state
+        messageElement.textContent = 'Signing in...';
+        messageElement.style.color = 'blue';
 
         fetch('/login', {
             method: 'POST',
@@ -130,122 +146,102 @@ function loadLoginPage(container) {
             },
             body: JSON.stringify({ email, password }),
         })
-            .then(response => response.json())
-            .then(data => {
-                const loginMessage = document.getElementById('loginMessage');
-                loginMessage.textContent = data.message;
-                loginMessage.style.color = data.success ? 'green' : 'red';
-
-                // Store user data and update authentication state on successful login
-                if (data.success) {
-                    localStorage.setItem('userId', data.userId);
-                    localStorage.setItem('userEmail', email);
-                    if (data.nickname) {
-                        localStorage.setItem('userName', data.nickname);
-                    }
-                    
-                    isAuthenticated = true;
-                    currentUser = {
-                        id: data.userId,
-                        email: email,
-                        nickname: data.nickname
-                    };
-                    
-                    updateNavigation(true);
-                    loadPage('home');
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('Invalid email or password');
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    });
-}
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            messageElement.textContent = data.message || 'Login successful';
+            messageElement.style.color = data.success ? 'green' : 'red';
 
-function loadRegisterPage(container) {
-    const mainContent = document.getElementById('main-content');
-    mainContent.innerHTML = `
-        <h2>Register for Premium Forum</h2>
-        <p class="premium-description">Join our exclusive community to unlock all premium features.</p>
-        <form id="registerForm" class="auth-form">
-            <label for="nickname">Nickname</label>
-            <input type="text" id="nickname" placeholder="Nickname" required><br>
-            <label for="age">Age</label>
-            <input type="number" id="age" placeholder="Age" required><br>
-            <label for="gender">Gender</label>
-            <select id="gender" required>
-                <option value="" disabled selected>Select Gender</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-            </select><br>
-            <label for="firstName">First Name</label>
-            <input type="text" id="firstName" placeholder="First Name" required><br>
-            <label for="lastName">Last Name</label>
-            <input type="text" id="lastName" placeholder="Last Name" required><br>
-            <label for="email">Email</label>
-            <input type="email" id="email" placeholder="Email" required><br>
-            <label for="password">Password</label>
-            <input type="password" id="password" placeholder="Password" required><br>
-            <button type="submit">Create Premium Account</button>
-        </form>
-        <p id="registerMessage"></p>
-        <p class="form-footer">Already have an account? <a href="#" onclick="event.preventDefault(); loadPage('login')">Login here</a></p>
-    `;
+            if (data.success) {
+                // Store user data in localStorage
+                localStorage.setItem('userId', data.userId);
+                localStorage.setItem('userEmail', email);
+                if (data.nickname) {
+                    localStorage.setItem('userName', data.nickname);
+                }
+                
+                // Update global auth state
+                window.isAuthenticated = true;
+                window.currentUser = {
+                    id: data.userId,
+                    email: email,
+                    nickname: data.nickname
+                };
+                
+                // Navigate to home page
+                setTimeout(() => {
+                    window.navigation.navigateTo('/');
+                }, 500);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            messageElement.textContent = error.message || 'An error occurred during sign in. Please try again.';
+            messageElement.style.color = 'red';
+        });
+    }
 
-    // Add event listener for the registration form
-    document.getElementById('registerForm').addEventListener('submit', function (event) {
+    handleSignUp(event) {
         event.preventDefault();
+        const messageElement = document.getElementById('signup-message');
+        
+        if (!messageElement) {
+            console.error('Signup message element not found');
+            return;
+        }
 
-        // Send a POST request to the backend
+        // Show loading state
+        messageElement.textContent = 'Creating account...';
+        messageElement.style.color = 'blue';
+        
+        const userData = {
+            nickname: document.getElementById('nickname').value,
+            age: document.getElementById('age').value,
+            gender: document.getElementById('gender').value,
+            firstName: document.getElementById('firstName').value,
+            lastName: document.getElementById('lastName').value,
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+        };
+
         fetch('/register', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                nickname: document.getElementById('nickname').value,
-                age: document.getElementById('age').value,
-                gender: document.getElementById('gender').value,
-                firstName: document.getElementById('firstName').value,
-                lastName: document.getElementById('lastName').value,
-                email: document.getElementById('email').value,
-                password: document.getElementById('password').value,
-            }),
+            body: JSON.stringify(userData),
         })
-            .then(response => response.json())
-            .then(data => {
-                const registerMessage = document.getElementById('registerMessage');
-                registerMessage.textContent = data.message;
-                registerMessage.style.color = data.success ? 'green' : 'red';
-                
-                // If registration successful, redirect to login
-                if (data.success) {
-                    setTimeout(() => {
-                        loadPage('login');
-                    }, 1500);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    });
-}
-
-function loadHomePage(container) {
-    const userName = localStorage.getItem('userName') || localStorage.getItem('userEmail') || 'Premium User';
-    
-    container.innerHTML = `
-        <h1> This is the homepage </h1>
-    `;
-}
-
-// Update window.onload to check auth state
-window.onload = () => {
-    checkAuthState();
-    
-    // Redirect to appropriate page based on auth state
-    if (isAuthenticated) {
-        loadPage('home');
-    } else {
-        loadPage('login');
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            messageElement.textContent = data.message || 'Registration successful';
+            messageElement.style.color = data.success ? 'green' : 'red';
+            
+            if (data.success) {
+                // Redirect to signin page after successful registration
+                setTimeout(() => {
+                    window.navigation.navigateTo('/signin');
+                }, 1500);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            messageElement.textContent = error.message || 'An error occurred during registration. Please try again.';
+            messageElement.style.color = 'red';
+        });
     }
 }
+
+// Export the component
+export default AuthComponent;
