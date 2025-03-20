@@ -166,107 +166,214 @@ func (ah *APIHandler) checkAuth(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+// Update the handlePosts function to include profile pictures correctly
 func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		log.Printf("Invalid method for posts endpoint: %s", r.Method)
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+    w.Header().Set("Content-Type", "application/json")
 
-	log.Printf("Handling GET request for posts")
+    // Query posts with user information including profile pictures
+    query := `
+        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+               u.nickname, u.profile_pic,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        ORDER BY p.post_at DESC
+    `
 
-	// Get all posts from the database
-	query := `
-		SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
-			   u.nickname, u.profile_pic,
-			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
-			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
-			   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments
-		FROM posts p
-		JOIN users u ON p.user_id = u.id
-		ORDER BY p.post_at DESC
-	`
+    rows, err := utils.GlobalDB.Query(query)
+    if err != nil {
+        log.Printf("Error querying posts: %v", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get posts"})
+        return
+    }
+    defer rows.Close()
 
-	log.Printf("Executing posts query")
-	rows, err := utils.GlobalDB.Query(query)
-	if err != nil {
-		log.Printf("Error querying posts: %v", err)
-		http.Error(w, "Failed to get posts", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
+    var posts []utils.Post
+    for rows.Next() {
+        var post utils.Post
+        var postTime string
+        var profilePic sql.NullString
 
-	var posts []utils.Post
-	postCount := 0
-	for rows.Next() {
-		postCount++
-		log.Printf("Processing post #%d", postCount)
+        err := rows.Scan(
+            &post.ID, &post.Title, &post.Content, &post.ImagePath, &postTime, &post.UserID,
+            &post.Username, &profilePic, &post.Likes, &post.Dislikes, &post.Comments,
+        )
+        if err != nil {
+            log.Printf("Error scanning post row: %v", err)
+            continue
+        }
 
-		var post utils.Post
-		var postTime string
-		var profilePic sql.NullString
+        // Format the time
+        post.PostTime = postTime
 
-		err := rows.Scan(
-			&post.ID, &post.Title, &post.Content, &post.ImagePath, &postTime, &post.UserID,
-			&post.Username, &profilePic, &post.Likes, &post.Dislikes, &post.Comments,
-		)
-		if err != nil {
-			log.Printf("Error scanning post row: %v", err)
-			continue // Skip this post but continue with others
-		}
+        // Handle profile picture
+        if profilePic.Valid {
+            post.ProfilePic = profilePic.String
+        } else {
+            post.ProfilePic = ""
+        }
 
-		// Debug: Log the post data after scanning
-		log.Printf("Post scanned from DB: ID=%d, Title=%s, UserID=%s, Username=%s, Likes=%d, Dislikes=%d, Comments=%d",
-			post.ID, post.Title, post.UserID, post.Username, post.Likes, post.Dislikes, post.Comments)
+        // Get categories for this post
+        categories, err := ah.postHandler.getPostCategories(int64(post.ID))
+        if err != nil {
+            log.Printf("Error getting categories for post %d: %v", post.ID, err)
+            // Continue anyway, just with empty categories
+            post.Categories = []utils.Category{}
+        } else {
+            post.Categories = categories
+        }
 
-		// Format the time
-		post.PostTime = postTime
-		log.Printf("Post time: %s", postTime)
+        posts = append(posts, post)
+    }
 
-		// Handle null profile pic
-		if profilePic.Valid {
-			post.ProfilePic = profilePic.String
-			log.Printf("Profile pic path: %s", profilePic.String)
-		} else {
-			post.ProfilePic = "" // Default empty string for NULL profile_pic
-			log.Printf("No profile pic found")
-		}
+    // If no posts were found, return an empty array rather than nil
+    if posts == nil {
+        posts = []utils.Post{}
+    }
 
-		// Get categories for this post
-		log.Printf("Fetching categories for post ID: %d", post.ID)
-		categories, err := ah.postHandler.getPostCategories(int64(post.ID))
-		if err != nil {
-			log.Printf("Error getting categories for post %d: %v", post.ID, err)
-			// Continue anyway, just with empty categories
-			post.Categories = []utils.Category{}
-		} else {
-			log.Printf("Found %d categories for post %d", len(categories), post.ID)
-			post.Categories = categories
-		}
+    json.NewEncoder(w).Encode(posts)
+}
 
-		posts = append(posts, post)
-	}
+// Update the handleSinglePost function to include profile pictures correctly
+func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
 
-	// If no posts were found, return an empty array rather than nil
-	if posts == nil {
-		log.Printf("No posts found, returning empty array")
-		posts = []utils.Post{}
-	} else {
-		log.Printf("Found %d posts total", len(posts))
-	}
+    // Get post ID from query parameter
+    postIDStr := r.URL.Query().Get("id")
+    if postIDStr == "" {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Post ID is required"})
+        return
+    }
 
-	// Return posts as JSON
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+    postID, err := strconv.Atoi(postIDStr)
+    if err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Invalid post ID"})
+        return
+    }
 
-	// Debug: Log the final posts array before sending
-	for i, post := range posts {
-		log.Printf("Post %d: ID=%d, Title=%s, UserID=%s, Username=%s, Categories=%v",
-			i, post.ID, post.Title, post.UserID, post.Username, getCategoryNames(post.Categories))
-	}
+    // Query post with user information including profile picture
+    query := `
+        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+               u.nickname, u.profile_pic,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        WHERE p.id = ?
+    `
 
-	log.Printf("Sending %d posts to client", len(posts))
-	json.NewEncoder(w).Encode(posts)
+    var post utils.Post
+    var postTime string
+    var profilePic sql.NullString
+
+    err = utils.GlobalDB.QueryRow(query, postID).Scan(
+        &post.ID, &post.Title, &post.Content, &post.ImagePath, &postTime, &post.UserID,
+        &post.Username, &profilePic, &post.Likes, &post.Dislikes, &post.Comments,
+    )
+    if err != nil {
+        if err == sql.ErrNoRows {
+            w.WriteHeader(http.StatusNotFound)
+            json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
+        } else {
+            log.Printf("Error querying post: %v", err)
+            w.WriteHeader(http.StatusInternalServerError)
+            json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get post"})
+        }
+        return
+    }
+
+    // Format the time
+    post.PostTime = postTime
+
+    // Handle profile picture
+    if profilePic.Valid {
+        post.ProfilePic = profilePic.String
+    } else {
+        post.ProfilePic = ""
+    }
+
+    // Get categories for this post
+    categories, err := ah.postHandler.getPostCategories(int64(post.ID))
+    if err != nil {
+        log.Printf("Error getting categories for post %d: %v", post.ID, err)
+        // Continue anyway, just with empty categories
+        post.Categories = []utils.Category{}
+    } else {
+        post.Categories = categories
+    }
+
+    // Get comments for this post
+    commentsQuery := `
+        SELECT c.id, c.content, c.comment_at, c.user_id, u.nickname, u.profile_pic,
+               (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND likes = 1) as likes,
+               (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND likes = 0) as dislikes
+        FROM comments c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.post_id = ?
+        ORDER BY c.comment_at ASC
+    `
+
+    commentsRows, err := utils.GlobalDB.Query(commentsQuery, postID)
+    if err != nil {
+        log.Printf("Error querying comments: %v", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get comments"})
+        return
+    }
+    defer commentsRows.Close()
+
+    var comments []utils.Comment
+    for commentsRows.Next() {
+        var comment utils.Comment
+        var commentTime string
+        var commentProfilePic sql.NullString
+
+        err := commentsRows.Scan(
+            &comment.ID, &comment.Content, &commentTime, &comment.UserID, &comment.Username, 
+            &commentProfilePic, &comment.Likes, &comment.Dislikes,
+        )
+        if err != nil {
+            log.Printf("Error scanning comment row: %v", err)
+            continue
+        }
+
+        // Format the time
+        t, err := time.Parse(time.RFC3339, commentTime)
+        if err != nil {
+            log.Printf("Error parsing comment time: %v", err)
+            comment.CommentTime = time.Now()
+        } else {
+            comment.CommentTime = t
+        }
+
+        // Handle profile picture
+        if commentProfilePic.Valid {
+            comment.ProfilePic = commentProfilePic.String
+        } else {
+            comment.ProfilePic = ""
+        }
+
+        comments = append(comments, comment)
+    }
+
+    // If no comments were found, return an empty array rather than nil
+    if comments == nil {
+        comments = []utils.Comment{}
+    }
+
+    // Return post and comments
+    response := map[string]interface{}{
+        "post":     post,
+        "comments": comments,
+    }
+
+    json.NewEncoder(w).Encode(response)
 }
 
 // Helper function to extract category names for logging
@@ -278,135 +385,6 @@ func getCategoryNames(categories []utils.Category) []string {
 	return names
 }
 
-func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	postid := r.URL.Query().Get("id")
-	if postid == "" {
-		http.Error(w, "Post ID required", http.StatusBadRequest)
-		return
-	}
-
-	log.Printf("Single post request for ID: %s", postid)
-
-	postID, err := strconv.ParseInt(postid, 10, 64)
-	if err != nil {
-		log.Printf("Invalid post ID format: %s - Error: %v", postid, err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid post ID"})
-		return
-	}
-
-	// Query for the post
-	postQuery := `
-		SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
-			   u.nickname, u.profile_pic,
-			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
-			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
-			   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments
-		FROM posts p
-		JOIN users u ON p.user_id = u.id
-		WHERE p.id = ?
-	`
-
-	var post utils.Post
-	var postTime string
-	var profilePic sql.NullString
-
-	err = utils.GlobalDB.QueryRow(postQuery, postID).Scan(
-		&post.ID, &post.Title, &post.Content, &post.ImagePath, &postTime, &post.UserID,
-		&post.Username, &profilePic, &post.Likes, &post.Dislikes, &post.Comments,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Printf("Post not found: %d", postID)
-			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
-			return
-		}
-		log.Printf("Error querying post %d: %v", postID, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
-		return
-	}
-
-	// Format the time
-	post.PostTime = postTime
-
-	// Handle null profile pic
-	if profilePic.Valid {
-		post.ProfilePic = profilePic.String
-	} else {
-		post.ProfilePic = ""
-	}
-
-	// Get categories for this post
-	categories, err := ah.postHandler.getPostCategories(postID)
-	if err != nil {
-		log.Printf("Error getting categories for post %d: %v", post.ID, err)
-		// Continue anyway, just with empty categories
-		post.Categories = []utils.Category{}
-	} else {
-		post.Categories = categories
-	}
-
-	commentsQuery := `
-		SELECT c.id, c.content, c.user_id, u.nickname, u.profile_pic, c.comment_at,
-			   (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND likes = 1) as likes,
-			   (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND likes = 0) as dislikes
-		FROM comments c
-		JOIN users u ON c.user_id = u.id
-		WHERE c.post_id = ?
-		ORDER BY c.comment_at ASC
-	`
-
-	rows, err := utils.GlobalDB.Query(commentsQuery, postID)
-	if err != nil {
-		log.Printf("Error querying comments for post %d: %v", postID, err)
-		// Return post without comments
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"post":     post,
-			"comments": []utils.Comment{},
-		})
-		return
-	}
-	defer rows.Close()
-
-	var comments []utils.Comment
-	for rows.Next() {
-		var comment utils.Comment
-		var commentAt time.Time
-		var commentProfilePic sql.NullString
-
-		err := rows.Scan(
-			&comment.ID, &comment.Content, &comment.UserID, &comment.Username,
-			&commentProfilePic, &commentAt, &comment.Likes, &comment.Dislikes,
-		)
-		if err != nil {
-			log.Printf("Error scanning comment row: %v", err)
-			continue
-		}
-
-		comment.PostID = int(post.ID)
-		comment.CommentTime = commentAt
-
-		// Handle null profile pic
-		if commentProfilePic.Valid {
-			comment.ProfilePic = commentProfilePic
-		} else {
-			comment.ProfilePic.Valid = false
-		}
-
-		comments = append(comments, comment)
-	}
-
-	log.Printf("Returning post ID %d with %d comments", post.ID, len(comments))
-
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"post":     post,
-		"comments": comments,
-	})
-}
 
 func (ah *APIHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

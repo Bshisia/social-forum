@@ -83,9 +83,25 @@ class SinglePostComponent {
         
         // Create avatar HTML based on profile picture
         let avatarHtml = '';
-        if (profilePic && profilePic.Valid) {
+        
+        // Debug profile picture data
+        console.log('Profile picture data in single post:', profilePic);
+        
+        // Check all possible profile picture formats
+        if (profilePic && typeof profilePic === 'object' && profilePic.Valid) {
+            console.log('Using ProfilePic.Valid format in single post');
             avatarHtml = `<img src="${profilePic.String}" alt="Profile Picture" class="post-avatar-img">`;
+        } else if (profilePic && typeof profilePic === 'string' && profilePic) {
+            console.log('Using ProfilePic string format in single post');
+            avatarHtml = `<img src="${profilePic}" alt="Profile Picture" class="post-avatar-img">`;
+        } else if (this.post.profile_pic && typeof this.post.profile_pic === 'object' && this.post.profile_pic.Valid) {
+            console.log('Using profile_pic.Valid format in single post');
+            avatarHtml = `<img src="${this.post.profile_pic.String}" alt="Profile Picture" class="post-avatar-img">`;
+        } else if (this.post.profile_pic && typeof this.post.profile_pic === 'string' && this.post.profile_pic) {
+            console.log('Using profile_pic string format in single post');
+            avatarHtml = `<img src="${this.post.profile_pic}" alt="Profile Picture" class="post-avatar-img">`;
         } else {
+            console.log('Using placeholder avatar in single post');
             avatarHtml = `
                 <div class="post-avatar-placeholder">
                     <i class="fas fa-user"></i>
@@ -196,8 +212,14 @@ class SinglePostComponent {
             
             // Create avatar HTML based on profile picture
             let avatarHtml = '';
-            if (profilePic && profilePic.Valid) {
+            if (profilePic && typeof profilePic === 'object' && profilePic.Valid) {
                 avatarHtml = `<img src="${profilePic.String}" class="comment-avatar">`;
+            } else if (profilePic && typeof profilePic === 'string' && profilePic) {
+                avatarHtml = `<img src="${profilePic}" class="comment-avatar">`;
+            } else if (comment.profile_pic && typeof comment.profile_pic === 'object' && comment.profile_pic.Valid) {
+                avatarHtml = `<img src="${comment.profile_pic.String}" class="comment-avatar">`;
+            } else if (comment.profile_pic && typeof comment.profile_pic === 'string' && comment.profile_pic) {
+                avatarHtml = `<img src="${comment.profile_pic}" class="comment-avatar">`;
             } else {
                 avatarHtml = `
                     <div class="comment-avatar-placeholder">

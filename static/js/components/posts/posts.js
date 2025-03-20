@@ -99,23 +99,41 @@ class PostsComponent {
             const title = post.Title || post.title || 'Untitled Post';
             const content = post.Content || post.content || 'No content';
             const author = post.Username || post.username || post.Author || post.author || 'Anonymous';
-            const authorId = post.UserID || post.userId || post.user_id || '';
+            const authorId = post.UserID || post.userId || post.user_id || post.userID || '';
             const postDate = post.PostTime || post.postTime || post.created_at || '';
             const categories = post.Categories || post.categories || [];
             const likes = post.Likes || post.likes || 0;
             const dislikes = post.Dislikes || post.dislikes || 0;
             const comments = post.Comments || post.comments || 0;
-            const profilePic = post.ProfilePic || post.profilePic || null;
             const imagePath = post.ImagePath || post.imagePath || '';
             
             // Debug: Log the extracted fields
             console.log('Extracted fields:', { postId, title, content, author, authorId, postDate });
             
+            // Handle profile picture with better debugging
+            console.log('Profile picture data:', post.profilePic || post.ProfilePic);
+            
             // Create avatar HTML based on profile picture
             let avatarHtml = '';
-            if (profilePic && profilePic.Valid) {
-                avatarHtml = `<img src="${profilePic.String}" alt="Profile Picture" class="post-avatar-img">`;
+            
+            // Check all possible profile picture formats - IMPORTANT: Check lowercase first
+            if (post.profilePic && typeof post.profilePic === 'string' && post.profilePic) {
+                console.log('Using profilePic string format (lowercase)');
+                avatarHtml = `<img src="${post.profilePic}" alt="Profile Picture" class="post-avatar-img">`;
+            } else if (post.ProfilePic && typeof post.ProfilePic === 'object' && post.ProfilePic.Valid) {
+                console.log('Using ProfilePic.Valid format');
+                avatarHtml = `<img src="${post.ProfilePic.String}" alt="Profile Picture" class="post-avatar-img">`;
+            } else if (post.ProfilePic && typeof post.ProfilePic === 'string' && post.ProfilePic) {
+                console.log('Using ProfilePic string format');
+                avatarHtml = `<img src="${post.ProfilePic}" alt="Profile Picture" class="post-avatar-img">`;
+            } else if (post.profile_pic && typeof post.profile_pic === 'object' && post.profile_pic.Valid) {
+                console.log('Using profile_pic.Valid format');
+                avatarHtml = `<img src="${post.profile_pic.String}" alt="Profile Picture" class="post-avatar-img">`;
+            } else if (post.profile_pic && typeof post.profile_pic === 'string' && post.profile_pic) {
+                console.log('Using profile_pic string format');
+                avatarHtml = `<img src="${post.profile_pic}" alt="Profile Picture" class="post-avatar-img">`;
             } else {
+                console.log('Using placeholder avatar');
                 avatarHtml = `
                     <div class="post-avatar-placeholder">
                         <i class="fas fa-user"></i>

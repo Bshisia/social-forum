@@ -1,83 +1,81 @@
 package utils
 
 import (
-	"database/sql"
 	"time"
 )
 
 type User struct {
-	ID         string         `json:"id"`
-	Nickname   string         `json:"nickname"`
-	Age        int            `json:"age"`
-	Gender     string         `json:"gender"`
-	FirstName  string         `json:"firstName"`
-	LastName   string         `json:"lastName"`
-	Email      string         `json:"email"`
-	Password   string         `json:"-"` // Don't include in JSON responses
-	CreatedAt  time.Time      `json:"createdAt"`
-	UpdatedAt  time.Time      `json:"updatedAt"`
-	ImageURL   sql.NullString `json:"-"`        // Internal field to handle NULL values
-	ProfilePic string         `json:"imageUrl"` // This will be populated from ImageURL if valid
+	ID         string    `json:"id"`
+	Nickname   string    `json:"nickname"`
+	Age        int       `json:"age"`
+	Gender     string    `json:"gender"`
+	FirstName  string    `json:"firstName"`
+	LastName   string    `json:"lastName"`
+	Email      string    `json:"email"`
+	Password   string    `json:"-"` // Don't include in JSON responses
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+	ProfilePic string    `json:"profilePic"` // Changed from sql.NullString to string
 }
 
 type Post struct {
-	ID         int64      `json:"ID"`         // Use uppercase ID to match frontend expectations
-	Title      string     `json:"Title"`      // Use uppercase Title to match frontend expectations
-	Content    string     `json:"Content"`    // Use uppercase Content to match frontend expectations
-	ImagePath  string     `json:"ImagePath"`  // Use uppercase ImagePath to match frontend expectations
-	PostTime   string     `json:"PostTime"`   // Store formatted time string
-	UserID     string     `json:"UserID"`     // Use uppercase UserID to match frontend expectations
-	Username   string     `json:"Username"`   // Use uppercase Username to match frontend expectations
-	ProfilePic string     `json:"ProfilePic"` // Add ProfilePic field
-	Likes      int        `json:"Likes"`      // Use uppercase Likes to match frontend expectations
-	Dislikes   int        `json:"Dislikes"`   // Use uppercase Dislikes to match frontend expectations
-	Comments   int        `json:"Comments"`   // Use uppercase Comments to match frontend expectations
-	Categories []Category `json:"Categories"` // Use uppercase Categories to match frontend expectations
+	ID         int64      `json:"id"`
+	Title      string     `json:"title"`
+	Content    string     `json:"content"`
+	ImagePath  string     `json:"imagePath"`
+	PostTime   string     `json:"postTime"` // Store formatted time string
+	UserID     string     `json:"userID"`
+	Username   string     `json:"username"`
+	ProfilePic string     `json:"profilePic"` // Add ProfilePic field
+	Likes      int        `json:"likes"`
+	Dislikes   int        `json:"dislikes"`
+	Comments   int        `json:"comments"`
+	Categories []Category `json:"categories"`
 }
 
 type Comment struct {
-	ID          int
-	PostID      int
-	UserID      string
-	Username    string
-	Content     string
-	CommentTime time.Time
-	Likes       int
-	Dislikes    int
-	ProfilePic  sql.NullString
+	ID          int       `json:"id"`
+	PostID      int       `json:"postID"`
+	UserID      string    `json:"userID"`
+	Username    string    `json:"username"`
+	Content     string    `json:"content"`
+	CommentTime time.Time `json:"commentTime"`
+	Likes       int       `json:"likes"`
+	Dislikes    int       `json:"dislikes"`
+	ProfilePic  string    `json:"profilePic"` // Changed from sql.NullString to string
 }
 
 type Category struct {
-	ID   int
-	Name string
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 type Session struct {
-	ID        string
-	UserID    string // Changed to string to match User.ID
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	ID        string    `json:"id"`
+	UserID    string    `json:"userID"` // Changed to string to match User.ID
+	CreatedAt time.Time `json:"createdAt"`
+	ExpiresAt time.Time `json:"expiresAt"`
 }
 type ErrorPageData struct {
-	Code    int
-	Message string
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
 type PageData struct {
-	IsLoggedIn    bool
-	Posts         []Post
-	CurrentUserID string
-	Users         []User
-	UnreadCount   int
+	IsLoggedIn    bool   `json:"isLoggedIn"`
+	Posts         []Post `json:"posts"`
+	CurrentUserID string `json:"currentUserID"`
+	Users         []User `json:"users"`
+	UnreadCount   int    `json:"unreadCount"`
 }
 
 type Notification struct {
-	ID                 int
-	Type               string
-	PostID             int
-	ActorName          string
-	ActorProfilePic    sql.NullString
-	CreatedAt          time.Time
-	CreatedAtFormatted string
-	IsRead             bool
+	ID                 int       `json:"id"`
+	Type               string    `json:"type"`
+	PostID             int       `json:"postID"`
+	ActorName          string    `json:"actorName"`
+	ActorProfilePic    string    `json:"actorProfilePic"` // Changed from sql.NullString to string
+	CreatedAt          time.Time `json:"createdAt"`
+	CreatedAtFormatted string    `json:"createdAtFormatted"`
+	IsRead             bool      `json:"isRead"`
 }

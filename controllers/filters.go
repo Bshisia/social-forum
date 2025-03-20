@@ -83,7 +83,7 @@ func getAllUsers() ([]utils.User, error) {
 	var users []utils.User
 	for rows.Next() {
 		var user utils.User
-		err := rows.Scan(&user.ID, &user.Nickname, &user.ImageURL)
+		err := rows.Scan(&user.ID, &user.Nickname, &user.ProfilePic)
 		if err != nil {
 			return nil, err
 		}
