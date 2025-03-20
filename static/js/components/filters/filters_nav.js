@@ -14,7 +14,7 @@ class FilterNavComponent {
     render() {
         return `
             <div class="categories-filter-container">
-                <a href="/" class="filter-link" data-route="/">All posts</a>
+                <a href="/" class="filter-link" data-filter="all">All posts</a>
                 <h3>Filter Posts by:</h3>
                 <ul>
                     <li><a href="/created" class="filter-link" data-filter="created">Created Posts</a></li>
@@ -51,6 +51,7 @@ class FilterNavComponent {
         const path = window.location.pathname;
         const searchParams = new URLSearchParams(window.location.search);
         const categoryName = searchParams.get('name');
+        const postId = searchParams.get('id');
         
         if (categoryName) {
             this.highlightActiveFilter(categoryName);
@@ -60,12 +61,9 @@ class FilterNavComponent {
             this.highlightActiveFilterByType('liked');
         } else if (path === '/commented') {
             this.highlightActiveFilterByType('commented');
-        } else if (path === '/') {
-            // Highlight "All posts" link
-            const allPostsLink = this.container.querySelector('.filter-link[data-route="/"]');
-            if (allPostsLink) {
-                allPostsLink.classList.add('active');
-            }
+        } else if (path === '/' && !postId) {
+            // Highlight "All posts" link when on home page without post ID
+            this.highlightActiveFilterByType('all');
         }
     }
     
@@ -79,22 +77,81 @@ class FilterNavComponent {
                 e.preventDefault();
                 
                 // Get the route, category, or filter type
-                const route = link.dataset.route;
-                const category = link.dataset.category;
                 const filter = link.dataset.filter;
+                const category = link.dataset.category;
                 
                 if (category) {
                     // Handle category filter
                     this.handleCategoryFilter(category);
+                } else if (filter === 'all') {
+                    // Handle All Posts filter
+                    this.handleAllPostsFilter();
                 } else if (filter) {
                     // Handle user-specific filters (created, liked, commented)
                     this.handleUserFilter(filter);
-                } else if (route) {
-                    // Handle route navigation
-                    window.navigation.navigateTo(route);
                 }
             });
         });
+    }
+    
+    handleAllPostsFilter() {
+        console.log('Loading all posts');
+        
+        // Update URL without full page reload
+        window.history.pushState({}, '', '/');
+        
+        // Show loading state
+        const mainContent = document.getElementById('main-content');
+        if (mainContent) {
+            mainContent.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p>Loading all posts...</p>
+                </div>
+            `;
+        }
+        
+        // Fetch all posts
+        fetch('/api/posts', {
+            credentials: 'include' // Include cookies for auth
+        })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        // Unauthorized, redirect to login
+                        window.navigation.navigateTo('/signin');
+                        throw new Error('Please sign in to view posts');
+                    }
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('All posts data:', data);
+                
+                // Create and mount posts component with all posts
+                const postsComponent = new PostsComponent();
+                postsComponent.posts = data;
+                postsComponent.mount();
+                
+                // Highlight the active filter
+                this.highlightActiveFilterByType('all');
+            })
+            .catch(error => {
+                console.error('Error loading all posts:', error);
+                
+                if (mainContent) {
+                    mainContent.innerHTML = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <p>Error loading posts: ${error.message}</p>
+                            <button onclick="window.location.reload()" class="btn btn-outline">
+                                <i class="fas fa-sync"></i> Reload
+                            </button>
+                        </div>
+                    `;
+                }
+            });
     }
     
     handleUserFilter(filterType) {
