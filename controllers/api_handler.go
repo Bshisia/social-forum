@@ -71,6 +71,21 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		ah.handleEditPost(w, r)
+	case "/api/posts/created":
+		if !ah.checkAuth(w, r) {
+			return
+		}
+		ah.handleCreatedPosts(w, r)
+	case "/api/posts/liked":
+		if !ah.checkAuth(w, r) {
+			return
+		}
+		ah.handleLikedPosts(w, r)
+	case "/api/posts/commented":
+		if !ah.checkAuth(w, r) {
+			return
+		}
+		ah.handleCommentedPosts(w, r)
 	case "/api/posts/delete":
 		if !ah.checkAuth(w, r) {
 			return
@@ -1730,4 +1745,341 @@ func (ah *APIHandler) handleValidateSession(w http.ResponseWriter, r *http.Reque
 		"nickname":    nickname,
 		"unreadCount": unreadCount,
 	})
+}
+
+func (ah *APIHandler) handleCreatedPosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		// No session cookie, session is invalid
+		log.Printf("Session validation: No cookie found - Error: %v", err)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid": false,
+			"error": "No session cookie found",
+		})
+		return
+	}
+
+	// Log cookie details for debugging
+	cookiePreview := ""
+	if len(cookie.Value) > 10 {
+		cookiePreview = cookie.Value[:10] + "..."
+	} else {
+		cookiePreview = cookie.Value
+	}
+	log.Printf("Session validation: Found cookie: %s", cookiePreview)
+
+	// Get current user ID from session
+	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+	if err != nil {
+		// Invalid session
+		log.Printf("Session validation failed: %v", err)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid": false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	log.Printf("Getting posts created by user: %s", userID)
+
+	// Query posts created by this user
+	query := `
+        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+               u.nickname, u.profile_pic,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        WHERE p.user_id = ?
+        ORDER BY p.post_at DESC
+    `
+
+	rows, err := utils.GlobalDB.Query(query, userID)
+	if err != nil {
+		log.Printf("Error querying created posts: %v", err)
+		http.Error(w, "Failed to get posts", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var posts []utils.Post
+	for rows.Next() {
+		var post utils.Post
+		var postTime string
+		var profilePic sql.NullString
+
+		err := rows.Scan(
+			&post.ID, &post.Title, &post.Content, &post.ImagePath, &postTime, &post.UserID,
+			&post.Username, &profilePic, &post.Likes, &post.Dislikes, &post.Comments,
+		)
+		if err != nil {
+			log.Printf("Error scanning post row: %v", err)
+			continue
+		}
+
+		// Format the time
+		post.PostTime = postTime
+
+		// Handle null profile pic
+		if profilePic.Valid {
+			post.ProfilePic = profilePic.String
+		} else {
+			post.ProfilePic = ""
+		}
+
+		// Get categories for this post
+		categories, err := ah.postHandler.getPostCategories(int64(post.ID))
+		if err != nil {
+			log.Printf("Error getting categories for post %d: %v", post.ID, err)
+			post.Categories = []utils.Category{}
+		} else {
+			post.Categories = categories
+		}
+
+		posts = append(posts, post)
+	}
+
+	// If no posts were found, return an empty array rather than nil
+	if posts == nil {
+		posts = []utils.Post{}
+	}
+
+	log.Printf("Found %d posts created by user %s", len(posts), userID)
+
+	// Return posts as JSON
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(posts)
+}
+
+// handleLikedPosts returns posts liked by the current user
+func (ah *APIHandler) handleLikedPosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get current user ID from session
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		// No session cookie, session is invalid
+		log.Printf("Session validation: No cookie found - Error: %v", err)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid": false,
+			"error": "No session cookie found",
+		})
+		return
+	}
+
+	// Log cookie details for debugging
+	cookiePreview := ""
+	if len(cookie.Value) > 10 {
+		cookiePreview = cookie.Value[:10] + "..."
+	} else {
+		cookiePreview = cookie.Value
+	}
+	log.Printf("Session validation: Found cookie: %s", cookiePreview)
+
+	// Get current user ID from session
+	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+	if err != nil {
+		// Invalid session
+		log.Printf("Session validation failed: %v", err)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid": false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	log.Printf("Getting posts liked by user: %s", userID)
+
+	// Query posts liked by this user
+	query := `
+        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+               u.nickname, u.profile_pic,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        JOIN reaction r ON p.id = r.post_id
+        WHERE r.user_id = ? AND r.like = 1
+        GROUP BY p.id
+        ORDER BY p.post_at DESC
+    `
+
+	rows, err := utils.GlobalDB.Query(query, userID)
+	if err != nil {
+		log.Printf("Error querying liked posts: %v", err)
+		http.Error(w, "Failed to get posts", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var posts []utils.Post
+	for rows.Next() {
+		var post utils.Post
+		var postTime string
+		var profilePic sql.NullString
+
+		err := rows.Scan(
+			&post.ID, &post.Title, &post.Content, &post.ImagePath, &postTime, &post.UserID,
+			&post.Username, &profilePic, &post.Likes, &post.Dislikes, &post.Comments,
+		)
+		if err != nil {
+			log.Printf("Error scanning post row: %v", err)
+			continue
+		}
+
+		// Format the time
+		post.PostTime = postTime
+
+		// Handle null profile pic
+		if profilePic.Valid {
+			post.ProfilePic = profilePic.String
+		} else {
+			post.ProfilePic = ""
+		}
+
+		// Get categories for this post
+		categories, err := ah.postHandler.getPostCategories(int64(post.ID))
+		if err != nil {
+			log.Printf("Error getting categories for post %d: %v", post.ID, err)
+			post.Categories = []utils.Category{}
+		} else {
+			post.Categories = categories
+		}
+
+		posts = append(posts, post)
+	}
+
+	// If no posts were found, return an empty array rather than nil
+	if posts == nil {
+		posts = []utils.Post{}
+	}
+
+	log.Printf("Found %d posts liked by user %s", len(posts), userID)
+
+	// Return posts as JSON
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(posts)
+}
+
+// handleCommentedPosts returns posts commented on by the current user
+func (ah *APIHandler) handleCommentedPosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get current user ID from session
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		// No session cookie, session is invalid
+		log.Printf("Session validation: No cookie found - Error: %v", err)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid": false,
+			"error": "No session cookie found",
+		})
+		return
+	}
+
+	// Log cookie details for debugging
+	cookiePreview := ""
+	if len(cookie.Value) > 10 {
+		cookiePreview = cookie.Value[:10] + "..."
+	} else {
+		cookiePreview = cookie.Value
+	}
+	log.Printf("Session validation: Found cookie: %s", cookiePreview)
+
+	// Get current user ID from session
+	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+	if err != nil {
+		// Invalid session
+		log.Printf("Session validation failed: %v", err)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid": false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	log.Printf("Getting posts commented on by user: %s", userID)
+
+	// Query posts commented on by this user
+	query := `
+        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+               u.nickname, u.profile_pic,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        JOIN comments c ON p.id = c.post_id
+        WHERE c.user_id = ?
+        GROUP BY p.id
+        ORDER BY p.post_at DESC
+    `
+
+	rows, err := utils.GlobalDB.Query(query, userID)
+	if err != nil {
+		log.Printf("Error querying commented posts: %v", err)
+		http.Error(w, "Failed to get posts", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var posts []utils.Post
+	for rows.Next() {
+		var post utils.Post
+		var postTime string
+		var profilePic sql.NullString
+
+		err := rows.Scan(
+			&post.ID, &post.Title, &post.Content, &post.ImagePath, &postTime, &post.UserID,
+			&post.Username, &profilePic, &post.Likes, &post.Dislikes, &post.Comments,
+		)
+		if err != nil {
+			log.Printf("Error scanning post row: %v", err)
+			continue
+		}
+
+		// Format the time
+		post.PostTime = postTime
+
+		// Handle null profile pic
+		if profilePic.Valid {
+			post.ProfilePic = profilePic.String
+		} else {
+			post.ProfilePic = ""
+		}
+
+		// Get categories for this post
+		categories, err := ah.postHandler.getPostCategories(int64(post.ID))
+		if err != nil {
+			log.Printf("Error getting categories for post %d: %v", post.ID, err)
+			post.Categories = []utils.Category{}
+		} else {
+			post.Categories = categories
+		}
+
+		posts = append(posts, post)
+	}
+
+	// If no posts were found, return an empty array rather than nil
+	if posts == nil {
+		posts = []utils.Post{}
+	}
+
+	log.Printf("Found %d posts commented on by user %s", len(posts), userID)
+
+	// Return posts as JSON
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(posts)
 }

@@ -17,6 +17,9 @@ export {
     loadPosts,
     loadSinglePost,
     loadCategoryPosts,
+    loadCreatedPosts,
+    loadLikedPosts,
+    loadCommentedPosts,
     getPostIdFromUrl,
     handleRoute,
     handlePostClick
@@ -72,6 +75,42 @@ const router = {
             
             // Load posts for the selected category
             loadCategoryPosts(categoryName);
+        });
+    },
+    '/created': () => {
+        // Check authentication before showing created posts
+        AuthService.checkAuthState().then(isAuth => {
+            if (!isAuth) {
+                window.navigation.navigateTo('/signin');
+                return;
+            }
+            
+            // Load posts created by the current user
+            loadCreatedPosts();
+        });
+    },
+    '/liked': () => {
+        // Check authentication before showing liked posts
+        AuthService.checkAuthState().then(isAuth => {
+            if (!isAuth) {
+                window.navigation.navigateTo('/signin');
+                return;
+            }
+            
+            // Load posts liked by the current user
+            loadLikedPosts();
+        });
+    },
+    '/commented': () => {
+        // Check authentication before showing commented posts
+        AuthService.checkAuthState().then(isAuth => {
+            if (!isAuth) {
+                window.navigation.navigateTo('/signin');
+                return;
+            }
+            
+            // Load posts commented on by the current user
+            loadCommentedPosts();
         });
     },
     '/create': () => { 
@@ -240,6 +279,24 @@ function handleRoute() {
             return;
         }
         router['/category'](categoryName);
+        return;
+    }
+    
+    // Handle created posts path
+    if (path === '/created') {
+        router['/created']();
+        return;
+    }
+    
+    // Handle liked posts path
+    if (path === '/liked') {
+        router['/liked']();
+        return;
+    }
+    
+    // Handle commented posts path
+    if (path === '/commented') {
+        router['/commented']();
         return;
     }
 
@@ -506,28 +563,300 @@ function loadPosts() {
         }); 
 } 
 
+// Function to load posts created by the current user
+function loadCreatedPosts() {
+    console.log('Loading created posts...');
+    
+    // Show loading state
+    const mainContent = document.getElementById('main-content');
+    if (mainContent) {
+        mainContent.innerHTML = `
+            <div class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Loading your created posts...</p>
+            </div>
+        `;
+    }
+    
+    fetch('/api/posts/created', {
+        credentials: 'include' // Include cookies for auth
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    // Unauthorized, redirect to login
+                    window.navigation.navigateTo('/signin');
+                    throw new Error('Please sign in to view your posts');
+                }
+                throw new Error(`Failed to load created posts: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(postsData => {
+            console.log('Created posts received:', postsData);
+            
+            // Handle empty posts array or null data
+            const posts = Array.isArray(postsData) ? postsData : 
+                        (postsData && postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
+            
+            if (typeof PostsComponent === 'function') {
+                const postsComponent = new PostsComponent();
+                postsComponent.posts = posts;
+                postsComponent.isLoggedIn = true; // We already checked auth
+                postsComponent.currentUserID = AuthService.getCurrentUser()?.id;
+                
+                // Add a title to the main content before mounting posts
+                if (mainContent) {
+                    mainContent.innerHTML = `
+                        <h2 class="filter-title">Posts You Created</h2>
+                        <div id="posts-container"></div>
+                    `;
+                    
+                    // Mount posts to the posts container
+                    postsComponent.mount(document.getElementById('posts-container'));
+                } else {
+                    // Fallback to mounting directly to main content
+                    postsComponent.mount();
+                }
+                
+                // Highlight the active filter in the sidebar
+                highlightActiveFilter('created');
+            } else {
+                // Show proper empty state or posts list
+                showProperPostsState(posts, 'Posts You Created');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading created posts:', error);
+            const mainContent = document.getElementById('main-content');
+            if (mainContent) {
+                mainContent.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p>Error loading your created posts: ${error.message}</p>
+                        <div class="mt-3">
+                            <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
+                                <i class="fas fa-home"></i> All Posts
+                            </button>
+                            <button onclick="window.navigation.reloadPage()" class="btn btn-primary">
+                                <i class="fas fa-sync"></i> Retry
+                            </button>
+                        </div>
+                    </div>`;
+            }
+        });
+}
+
+// Function to load posts liked by the current user
+function loadLikedPosts() {
+    console.log('Loading liked posts...');
+    
+    // Show loading state
+    const mainContent = document.getElementById('main-content');
+    if (mainContent) {
+        mainContent.innerHTML = `
+            <div class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Loading posts you reacted to...</p>
+            </div>
+        `;
+    }
+    
+    fetch('/api/posts/liked', {
+        credentials: 'include' // Include cookies for auth
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    // Unauthorized, redirect to login
+                    window.navigation.navigateTo('/signin');
+                    throw new Error('Please sign in to view your liked posts');
+                }
+                throw new Error(`Failed to load liked posts: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(postsData => {
+            console.log('Liked posts received:', postsData);
+            
+            // Handle empty posts array or null data
+            const posts = Array.isArray(postsData) ? postsData : 
+                        (postsData && postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
+            
+            if (typeof PostsComponent === 'function') {
+                const postsComponent = new PostsComponent();
+                postsComponent.posts = posts;
+                postsComponent.isLoggedIn = true; // We already checked auth
+                postsComponent.currentUserID = AuthService.getCurrentUser()?.id;
+                
+                // Add a title to the main content before mounting posts
+                if (mainContent) {
+                    mainContent.innerHTML = `
+                        <h2 class="filter-title">Posts You Reacted To</h2>
+                        <div id="posts-container"></div>
+                    `;
+                    
+                    // Mount posts to the posts container
+                    postsComponent.mount(document.getElementById('posts-container'));
+                } else {
+                    // Fallback to mounting directly to main content
+                    postsComponent.mount();
+                }
+                
+                // Highlight the active filter in the sidebar
+                highlightActiveFilter('liked');
+            } else {
+                // Show proper empty state or posts list
+                showProperPostsState(posts, 'Posts You Reacted To');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading liked posts:', error);
+            const mainContent = document.getElementById('main-content');
+            if (mainContent) {
+                mainContent.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p>Error loading posts you reacted to: ${error.message}</p>
+                        <div class="mt-3">
+                            <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
+                                <i class="fas fa-home"></i> All Posts
+                            </button>
+                            <button onclick="window.navigation.reloadPage()" class="btn btn-primary">
+                                <i class="fas fa-sync"></i> Retry
+                            </button>
+                        </div>
+                    </div>`;
+            }
+        });
+}
+
+// Function to load posts commented on by the current user
+function loadCommentedPosts() {
+    console.log('Loading commented posts...');
+    
+    // Show loading state
+    const mainContent = document.getElementById('main-content');
+    if (mainContent) {
+        mainContent.innerHTML = `
+            <div class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Loading posts you commented on...</p>
+            </div>
+        `;
+    }
+    
+    fetch('/api/posts/commented', {
+        credentials: 'include' // Include cookies for auth
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    // Unauthorized, redirect to login
+                    window.navigation.navigateTo('/signin');
+                    throw new Error('Please sign in to view your commented posts');
+                }
+                throw new Error(`Failed to load commented posts: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(postsData => {
+            console.log('Commented posts received:', postsData);
+            
+            // Handle empty posts array or null data
+            const posts = Array.isArray(postsData) ? postsData : 
+                        (postsData && postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
+            
+            if (typeof PostsComponent === 'function') {
+                const postsComponent = new PostsComponent();
+                postsComponent.posts = posts;
+                postsComponent.isLoggedIn = true; // We already checked auth
+                postsComponent.currentUserID = AuthService.getCurrentUser()?.id;
+                
+                // Add a title to the main content before mounting posts
+                if (mainContent) {
+                    mainContent.innerHTML = `
+                        <h2 class="filter-title">Posts You Commented On</h2>
+                        <div id="posts-container"></div>
+                    `;
+                    
+                    // Mount posts to the posts container
+                    postsComponent.mount(document.getElementById('posts-container'));
+                } else {
+                    // Fallback to mounting directly to main content
+                    postsComponent.mount();
+                }
+                
+                // Highlight the active filter in the sidebar
+                highlightActiveFilter('commented');
+            } else {
+                // Show proper empty state or posts list
+                showProperPostsState(posts, 'Posts You Commented On');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading commented posts:', error);
+            const mainContent = document.getElementById('main-content');
+            if (mainContent) {
+                mainContent.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p>Error loading posts you commented on: ${error.message}</p>
+                        <div class="mt-3">
+                            <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
+                                <i class="fas fa-home"></i> All Posts
+                            </button>
+                            <button onclick="window.navigation.reloadPage()" class="btn btn-primary">
+                                <i class="fas fa-sync"></i> Retry
+                            </button>
+                        </div>
+                    </div>`;
+            }
+        });
+}
+
+// Helper function to highlight active filter in the sidebar
+function highlightActiveFilter(filterType) {
+    const filterNav = document.getElementById('filter-nav');
+    if (!filterNav || !filterNav.querySelector) return;
+    
+    // Remove active class from all links
+    const allLinks = filterNav.querySelectorAll('.filter-link');
+    allLinks.forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    // Add active class to the selected filter link
+    if (filterType) {
+        const selector = filterType === 'created' || filterType === 'liked' || filterType === 'commented' 
+            ? `.filter-link[data-filter="${filterType}"]` 
+            : `.filter-link[data-category="${filterType}"]`;
+            
+        const activeLink = filterNav.querySelector(selector);
+        if (activeLink) {
+            activeLink.classList.add('active');
+        }
+    }
+}
+
 // Show proper empty state or posts list (replacing showPostsPlaceholder)
-function showProperPostsState(posts, categoryName = null) {
+// Show proper empty state or posts list (replacing showPostsPlaceholder)
+function showProperPostsState(posts, title = 'Posts') {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
-    
-    const title = categoryName ? `${categoryName} Posts` : 'Posts';
     
     if (!posts || posts.length === 0) {
         mainContent.innerHTML = `
             <div class="posts-container">
                 <div class="posts-header">
                     <h1>${title}</h1>
-                    ${categoryName ? `
                     <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
                         <i class="fas fa-arrow-left"></i> All Posts
-                    </button>` : ''}
+                    </button>
                 </div>
                 <div class="no-posts-message">
                     <i class="fas fa-info-circle"></i>
-                    <p>${categoryName ? 
-                        `No posts available in the ${categoryName} category.` : 
-                        'No posts available yet. Be the first to create a post!'}</p>
+                    <p>No posts available for this filter.</p>
                     <button onclick="window.navigation.navigateTo('/create')" class="btn btn-primary mt-3">
                         <i class="fas fa-plus"></i> Create Post
                     </button>
@@ -539,10 +868,9 @@ function showProperPostsState(posts, categoryName = null) {
             <div class="posts-container">
                 <div class="posts-header">
                     <h1>${title}</h1>
-                    ${categoryName ? `
                     <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
                         <i class="fas fa-arrow-left"></i> All Posts
-                    </button>` : ''}
+                    </button>
                 </div>
                 <div class="posts-list">
         `;
@@ -575,9 +903,9 @@ function showProperPostsState(posts, categoryName = null) {
         
         postsHtml += `
                 </div>
-                <div class="create-post-button-container">
+                <div class="create-post-button">
                     <button onclick="window.navigation.navigateTo('/create')" class="btn btn-primary">
-                        <i class="fas fa-plus"></i> Create New Post
+                        <i class="fas fa-plus"></i> Create Post
                     </button>
                 </div>
             </div>
@@ -587,14 +915,9 @@ function showProperPostsState(posts, categoryName = null) {
     }
 }
 
-function loadSinglePost(postId) { 
-    console.log('Loading single post:', postId);
-    
-    // Validate postId
-    if (!postId) {
-        console.error('No post ID provided');
-        return;
-    }
+// Function to load a single post
+function loadSinglePost(postId) {
+    console.log(`Loading single post with ID: ${postId}`);
     
     // Show loading state
     const mainContent = document.getElementById('main-content');
@@ -607,209 +930,59 @@ function loadSinglePost(postId) {
         `;
     }
     
-    // Check authentication before loading post
-    const authPromise = AuthService.checkAuthState().catch(error => {
-        console.error('Auth check failed:', error);
-        return false; // Not authenticated if check fails
-    });
-    
-    authPromise.then(isAuth => {
-        if (!isAuth) {
-            window.navigation.navigateTo('/signin');
-            return;
-        }
-        
-        fetch(`/api/posts/single?id=${postId}`, {
-            credentials: 'include' // Include cookies for auth
-        }) 
-            .then(response => {
-                if (!response.ok) {
-                    // If API not implemented yet or returns error, show placeholder with mock data
-                    console.warn(`Error loading post: ${response.status}`);
-                    return { 
-                        post: { 
-                            id: postId, 
-                            title: 'Sample Post', 
-                            content: 'This is a placeholder for post content since the API returned an error.',
-                            author: 'System',
-                            created_at: new Date().toISOString()
-                        },
-                        comments: [
-                            {
-                                id: 1,
-                                content: "This is a sample comment.",
-                                author: "User1",
-                                created_at: new Date().toISOString()
-                            }
-                        ]
-                    };
+    fetch(`/api/posts/single?id=${postId}`, {
+        credentials: 'include' // Include cookies for auth
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    // Unauthorized, redirect to login
+                    window.navigation.navigateTo('/signin');
+                    throw new Error('Please sign in to view this post');
                 }
-                return response.json();
-            }) 
-            .then(data => { 
-                console.log('Post data received:', data);
-                
-                // Handle missing data
-                const post = data.post || { id: postId, title: 'Post not found', content: 'The requested post could not be loaded.' };
-                const comments = Array.isArray(data.comments) ? data.comments : [];
-                
-                try {
-                    if (typeof SinglePostComponent === 'function') {
-                        const singlePost = new SinglePostComponent(postId); 
-                        singlePost.post = post; 
-                        singlePost.comments = comments; 
-                        
-                        // Make sure we have current user info for the component
-                        const currentUser = AuthService.getCurrentUser();
-                        singlePost.currentUserID = currentUser ? currentUser.id : null;
-                        
-                        singlePost.mount(); 
-                    } else {
-                        // Show placeholder if component not available
-                        showSinglePostPlaceholder(post, comments);
-                    }
-                } catch (error) {
-                    console.error('Error mounting post component:', error);
-                    if (mainContent) {
-                        mainContent.innerHTML = `
-                            <div class="error-message">
-                                <i class="fas fa-exclamation-circle"></i>
-                                <p>Error loading post component: ${error.message}</p>
-                                <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
-                                    <i class="fas fa-arrow-left"></i> Back to Posts
-                                </button>
-                            </div>`;
-                    }
-                }
-            }) 
-            .catch(error => { 
-                console.error('Error loading post:', error); 
-                const mainContent = document.getElementById('main-content');
-                if (mainContent) {
-                    mainContent.innerHTML = ` 
-                        <div class="error-message"> 
-                            <i class="fas fa-exclamation-circle"></i> 
-                            <p>Error loading post. The post may not exist or you may not have permission to view it.</p>
-                            <div class="mt-3">
-                                <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
-                                    <i class="fas fa-arrow-left"></i> Back to Posts
-                                </button>
-                                <button onclick="window.navigation.reloadPage()" class="btn btn-primary">
-                                    <i class="fas fa-sync"></i> Retry
-                                </button>
-                            </div>
-                        </div>`; 
-                }
-            });
-    });
-} 
-
-// Show placeholder for single post when component not available
-function showSinglePostPlaceholder(post, comments) {
-    const mainContent = document.getElementById('main-content');
-    if (!mainContent) return;
-    
-    let html = `
-        <div class="single-post-container">
-            <div class="post-header">
-                <h1>${post.title || 'Untitled Post'}</h1>
-                <div class="post-meta">
-                    <span>By: ${post.author || 'Anonymous'}</span>
-                    <span>Posted: ${post.created_at || 'Unknown date'}</span>
-                </div>
-            </div>
-            <div class="post-content">
-                ${post.content || 'No content available'}
-            </div>
-            <div class="post-actions">
-                <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
-                    <i class="fas fa-arrow-left"></i> Back to Posts
-                </button>
-            </div>
-            <div class="comments-section">
-                <h3>Comments (${comments.length})</h3>
-    `;
-    
-    if (comments.length === 0) {
-        html += `
-                <div class="no-comments-message">
-                    <p>No comments yet. Be the first to comment!</p>
-                </div>
-        `;
-    } else {
-        html += `<div class="comments-list">`;
-        comments.forEach(comment => {
-            html += `
-                <div class="comment-card">
-                    <div class="comment-header">
-                        <span class="comment-author">${comment.author || 'Anonymous'}</span>
-                        <span class="comment-date">${comment.created_at || 'Unknown date'}</span>
+                throw new Error(`Failed to load post: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Single post data:', data);
+            
+            if (!data || !data.post) {
+                throw new Error('Post not found');
+            }
+            
+            // Create and mount single post component
+            if (typeof SinglePostComponent === 'function') {
+                const singlePostComponent = new SinglePostComponent(postId);
+                singlePostComponent.post = data.post;
+                singlePostComponent.comments = data.comments || [];
+                singlePostComponent.isLoggedIn = true; // We already checked auth
+                singlePostComponent.currentUserID = AuthService.getCurrentUser()?.id;
+                singlePostComponent.mount();
+            } else {
+                // Fallback if component doesn't exist
+                showSinglePostFallback(data.post, data.comments || []);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading single post:', error);
+            if (mainContent) {
+                mainContent.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p>Error loading post: ${error.message}</p>
+                        <div class="mt-3">
+                            <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
+                                <i class="fas fa-home"></i> All Posts
+                            </button>
+                            <button onclick="window.navigation.reloadPage()" class="btn btn-primary">
+                                <i class="fas fa-sync"></i> Retry
+                            </button>
+                        </div>
                     </div>
-                    <div class="comment-content">
-                        ${comment.content || 'No content'}
-                    </div>
-                </div>
-            `;
+                `;
+            }
         });
-        html += `</div>`;
-    }
-    
-    html += `
-                <div class="comment-form">
-                    <h4>Add a Comment</h4>
-                    <textarea placeholder="Write your comment here..." rows="3"></textarea>
-                    <button class="btn btn-primary mt-2">Submit Comment</button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    mainContent.innerHTML = html;
-}
-
-function getPostIdFromUrl() { 
-    const urlParams = new URLSearchParams(window.location.search); 
-    return urlParams.get('id'); 
-}
-
-// Add helper method to AuthService to set auth state from outside
-AuthService.setAuthState = function(isAuth, user) {
-    this.isAuthenticated = isAuth;
-    this.currentUser = user;
-    
-    // Also set window variables for backward compatibility
-    window.isAuthenticated = isAuth;
-    window.isLoggedIn = isAuth;
-    window.currentUserID = user ? user.id : null;
-    window.currentUser = user;
-};
-
-// Add a function to handle post clicks from anywhere in the app
-function handlePostClick(postId) {
-    // Prevent default behavior if event object is passed
-    if (postId && postId.preventDefault) {
-        postId.preventDefault();
-        postId = postId.currentTarget.dataset.postId;
-    }
-
-    // Validate postId
-    if (!postId) {
-        console.error('No post ID provided');
-        return;
-    }
-
-    console.log('Handling post click for:', postId);
-
-    // Update URL without full page reload
-    const newUrl = `/?id=${postId}`;
-    window.history.pushState(
-        { postId: postId },
-        '',
-        newUrl
-    );
-
-    // Load the single post
-    loadSinglePost(postId);
 }
 
 // Function to load posts for a specific category
@@ -832,6 +1005,11 @@ function loadCategoryPosts(categoryName) {
     })
         .then(response => {
             if (!response.ok) {
+                if (response.status === 401) {
+                    // Unauthorized, redirect to login
+                    window.navigation.navigateTo('/signin');
+                    throw new Error('Please sign in to view category posts');
+                }
                 throw new Error(`Failed to load category posts: ${response.status}`);
             }
             return response.json();
@@ -848,32 +1026,30 @@ function loadCategoryPosts(categoryName) {
                 postsComponent.posts = posts;
                 postsComponent.isLoggedIn = true; // We already checked auth
                 postsComponent.currentUserID = AuthService.getCurrentUser()?.id;
-                postsComponent.filterCategory = categoryName; // Set the category filter
-                postsComponent.mount();
                 
-                // Highlight the active category in the filter nav
-                const filterNav = document.getElementById('filter-nav');
-                if (filterNav && filterNav.querySelector) {
-                    const activeLink = filterNav.querySelector(`.filter-link[data-category="${categoryName}"]`);
-                    if (activeLink) {
-                        // Remove active class from all links
-                        const allLinks = filterNav.querySelectorAll('.filter-link');
-                        allLinks.forEach(link => {
-                            link.classList.remove('active');
-                        });
-                        
-                        // Add active class to the selected category link
-                        activeLink.classList.add('active');
-                    }
+                // Add a title to the main content before mounting posts
+                if (mainContent) {
+                    mainContent.innerHTML = `
+                        <h2 class="filter-title">Category: ${categoryName}</h2>
+                        <div id="posts-container"></div>
+                    `;
+                    
+                    // Mount posts to the posts container
+                    postsComponent.mount(document.getElementById('posts-container'));
+                } else {
+                    // Fallback to mounting directly to main content
+                    postsComponent.mount();
                 }
+                
+                // Highlight the active filter in the sidebar
+                highlightActiveFilter(categoryName);
             } else {
-                // Show proper empty state or posts list with category filter
-                showProperPostsState(posts, categoryName);
+                // Show proper empty state or posts list
+                showProperPostsState(posts, `Category: ${categoryName}`);
             }
         })
         .catch(error => {
             console.error('Error loading category posts:', error);
-            const mainContent = document.getElementById('main-content');
             if (mainContent) {
                 mainContent.innerHTML = `
                     <div class="error-message">
@@ -887,7 +1063,175 @@ function loadCategoryPosts(categoryName) {
                                 <i class="fas fa-sync"></i> Retry
                             </button>
                         </div>
-                    </div>`;
+                    </div>
+                `;
             }
         });
 }
+
+// Fallback function to show a single post if component doesn't exist
+function showSinglePostFallback(post, comments) {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+    
+    // Extract post data with fallbacks
+    const postId = post.ID || post.id;
+    const title = post.Title || post.title || 'Untitled Post';
+    const content = post.Content || post.content || 'No content';
+    const author = post.Username || post.username || post.Author || post.author || 'Anonymous';
+    const postDate = post.PostTime || post.postTime || post.created_at || '';
+    
+    let html = `
+        <div class="post-container">
+            <button class="back-button" onclick="window.history.back()">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+            
+            <div class="post-card">
+                <h2>${title}</h2>
+                <div class="post-meta">
+                    <span class="post-author">By: ${author}</span>
+                    <span class="post-date">${postDate}</span>
+                </div>
+                <div class="post-content">
+                    <p>${content}</p>
+                </div>
+            </div>
+            
+            <div class="comments-section">
+                <h3>Comments (${comments.length})</h3>
+                
+                <form class="comment-form">
+                    <textarea placeholder="Write a comment..." class="comment-input"></textarea>
+                    <button type="button" class="btn btn-primary">Post Comment</button>
+                </form>
+                
+                <div class="comments-list">
+    `;
+    
+    if (comments.length === 0) {
+        html += `<p class="no-comments">No comments yet. Be the first to comment!</p>`;
+    } else {
+        comments.forEach(comment => {
+            const commentAuthor = comment.Username || comment.username || comment.Author || comment.author || 'Anonymous';
+            const commentContent = comment.Content || comment.content || '';
+            const commentDate = comment.CommentTime || comment.commentTime || comment.created_at || '';
+            
+            html += `
+                <div class="comment">
+                    <div class="comment-header">
+                        <span class="comment-author">${commentAuthor}</span>
+                        <span class="comment-date">${commentDate}</span>
+                    </div>
+                    <div class="comment-content">
+                        <p>${commentContent}</p>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+    
+    mainContent.innerHTML = html;
+}
+
+// Function to handle post click
+function handlePostClick(event) {
+    let postId;
+    
+    if (typeof event === 'string') {
+        // If called with just the ID
+        postId = event;
+    } else {
+        // If called from a click event
+        event.preventDefault();
+        
+        // Find the post card element
+        const postCard = event.target.closest('.post-card');
+        if (!postCard) return;
+        
+        postId = postCard.dataset.postId;
+    }
+    
+    if (!postId) {
+        console.error('No post ID found');
+        return;
+    }
+    
+    // Navigate to the post
+    window.navigation.navigateTo(`/?id=${postId}`);
+}
+
+// Function to get post ID from URL
+function getPostIdFromUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('id');
+}
+
+// Add CSS for filter title
+const style = document.createElement('style');
+style.textContent = `
+    .filter-title {
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+        color: #333;
+        font-size: 1.5rem;
+    }
+    
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 50px 0;
+    }
+    
+    .loading-spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .error-message {
+        text-align: center;
+        padding: 30px;
+        background-color: #fff3f3;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .error-message i {
+        font-size: 48px;
+        color: #e74c3c;
+        margin-bottom: 15px;
+    }
+    
+    .error-message p {
+        margin-bottom: 20px;
+        color: #333;
+    }
+    
+    .mt-3 {
+        margin-top: 15px;
+    }
+    
+    .mr-2 {
+        margin-right: 10px;
+    }
+`;
+document.head.appendChild(style);

@@ -1,8 +1,14 @@
 import PostsComponent from '../posts/posts.js';
+import AuthService from '../../services/auth-service.js';
 
 class FilterNavComponent {
     constructor() {
         this.container = document.getElementById('filter-nav');
+        this.isLoggedIn = false;
+        
+        // Check authentication state
+        const currentUser = AuthService.getCurrentUser();
+        this.isLoggedIn = !!currentUser;
     }
 
     render() {
@@ -11,9 +17,9 @@ class FilterNavComponent {
                 <a href="/" class="filter-link" data-route="/">All posts</a>
                 <h3>Filter Posts by:</h3>
                 <ul>
-                    <li><a href="/created" class="filter-link" data-route="/created">Created Posts</a></li>
-                    <li><a href="/liked" class="filter-link" data-route="/liked">Reacted Posts</a></li>
-                    <li><a href="/commented" class="filter-link" data-route="/commented">Commented Posts</a></li>
+                    <li><a href="/created" class="filter-link" data-filter="created">Created Posts</a></li>
+                    <li><a href="/liked" class="filter-link" data-filter="liked">Reacted Posts</a></li>
+                    <li><a href="/commented" class="filter-link" data-filter="commented">Commented Posts</a></li>
                 </ul>
                 <h3>Categories</h3>
                 <ul class="category-list">
@@ -36,6 +42,31 @@ class FilterNavComponent {
         
         this.container.innerHTML = this.render();
         this.attachEventListeners();
+        
+        // Check if we need to highlight an active filter based on current URL
+        this.highlightActiveFilterFromURL();
+    }
+    
+    highlightActiveFilterFromURL() {
+        const path = window.location.pathname;
+        const searchParams = new URLSearchParams(window.location.search);
+        const categoryName = searchParams.get('name');
+        
+        if (categoryName) {
+            this.highlightActiveFilter(categoryName);
+        } else if (path === '/created') {
+            this.highlightActiveFilterByType('created');
+        } else if (path === '/liked') {
+            this.highlightActiveFilterByType('liked');
+        } else if (path === '/commented') {
+            this.highlightActiveFilterByType('commented');
+        } else if (path === '/') {
+            // Highlight "All posts" link
+            const allPostsLink = this.container.querySelector('.filter-link[data-route="/"]');
+            if (allPostsLink) {
+                allPostsLink.classList.add('active');
+            }
+        }
     }
     
     attachEventListeners() {
@@ -47,19 +78,137 @@ class FilterNavComponent {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
                 
-                // Get the route or category
+                // Get the route, category, or filter type
                 const route = link.dataset.route;
                 const category = link.dataset.category;
+                const filter = link.dataset.filter;
                 
                 if (category) {
                     // Handle category filter
                     this.handleCategoryFilter(category);
+                } else if (filter) {
+                    // Handle user-specific filters (created, liked, commented)
+                    this.handleUserFilter(filter);
                 } else if (route) {
                     // Handle route navigation
                     window.navigation.navigateTo(route);
                 }
             });
         });
+    }
+    
+    handleUserFilter(filterType) {
+        console.log(`Filtering by user filter: ${filterType}`);
+        
+        // Check if user is logged in
+        if (!this.isLoggedIn) {
+            console.log('User not logged in, redirecting to signin');
+            window.navigation.navigateTo('/signin');
+            return;
+        }
+        
+        // Update URL without full page reload
+        const newUrl = `/${filterType}`;
+        window.history.pushState(
+            { filterType: filterType },
+            '',
+            newUrl
+        );
+        
+        // Show loading state
+        const mainContent = document.getElementById('main-content');
+        if (mainContent) {
+            let filterTitle = '';
+            switch (filterType) {
+                case 'created':
+                    filterTitle = 'Created';
+                    break;
+                case 'liked':
+                    filterTitle = 'Reacted';
+                    break;
+                case 'commented':
+                    filterTitle = 'Commented';
+                    break;
+            }
+            
+            mainContent.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p>Loading your ${filterTitle.toLowerCase()} posts...</p>
+                </div>
+            `;
+        }
+        
+        // Fetch posts based on filter type
+        const endpoint = `/api/posts/${filterType}`;
+        
+        fetch(endpoint, {
+            credentials: 'include' // Include cookies for auth
+        })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        // Unauthorized, redirect to login
+                        window.navigation.navigateTo('/signin');
+                        throw new Error('Please sign in to view your posts');
+                    }
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(`${filterType} posts data:`, data);
+                
+                // Create and mount posts component with filtered data
+                const postsComponent = new PostsComponent();
+                postsComponent.posts = data;
+                
+                // Set a title based on filter type
+                let filterTitle = '';
+                switch (filterType) {
+                    case 'created':
+                        filterTitle = 'Posts You Created';
+                        break;
+                    case 'liked':
+                        filterTitle = 'Posts You Reacted To';
+                        break;
+                    case 'commented':
+                        filterTitle = 'Posts You Commented On';
+                        break;
+                }
+                
+                // Add a title to the main content before mounting posts
+                if (mainContent) {
+                    mainContent.innerHTML = `
+                        <h2 class="filter-title">${filterTitle}</h2>
+                        <div id="posts-container"></div>
+                    `;
+                    
+                    // Mount posts to the posts container
+                    postsComponent.mount(document.getElementById('posts-container'));
+                } else {
+                    // Fallback to mounting directly to main content
+                    postsComponent.mount();
+                }
+                
+                // Highlight the active filter
+                this.highlightActiveFilterByType(filterType);
+            })
+            .catch(error => {
+                console.error(`Error loading ${filterType} posts:`, error);
+                
+                if (mainContent) {
+                    mainContent.innerHTML = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <p>Error loading your posts: ${error.message}</p>
+                            <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
+                                <i class="fas fa-home"></i> Go to Home
+                            </button>
+                        </div>
+                    `;
+                }
+            });
     }
     
     handleCategoryFilter(category) {
@@ -99,7 +248,20 @@ class FilterNavComponent {
                 const postsComponent = new PostsComponent();
                 postsComponent.posts = data;
                 postsComponent.filterCategory = category;
-                postsComponent.mount();
+                
+                // Add a title to the main content before mounting posts
+                if (mainContent) {
+                    mainContent.innerHTML = `
+                        <h2 class="filter-title">Category: ${category}</h2>
+                        <div id="posts-container"></div>
+                    `;
+                    
+                    // Mount posts to the posts container
+                    postsComponent.mount(document.getElementById('posts-container'));
+                } else {
+                    // Fallback to mounting directly to main content
+                    postsComponent.mount();
+                }
                 
                 // Highlight the active category
                 this.highlightActiveFilter(category);
@@ -131,6 +293,22 @@ class FilterNavComponent {
         // Add active class to the selected category link
         if (category) {
             const activeLink = this.container.querySelector(`.filter-link[data-category="${category}"]`);
+            if (activeLink) {
+                activeLink.classList.add('active');
+            }
+        }
+    }
+    
+    highlightActiveFilterByType(filterType) {
+        // Remove active class from all links
+        const allLinks = this.container.querySelectorAll('.filter-link');
+        allLinks.forEach(link => {
+            link.classList.remove('active');
+        });
+        
+        // Add active class to the selected filter link
+        if (filterType) {
+            const activeLink = this.container.querySelector(`.filter-link[data-filter="${filterType}"]`);
             if (activeLink) {
                 activeLink.classList.add('active');
             }
