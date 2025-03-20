@@ -57,6 +57,8 @@ class SinglePostComponent {
         const likes = this.post.Likes || this.post.likes || 0;
         const dislikes = this.post.Dislikes || this.post.dislikes || 0;
         const commentCount = this.post.Comments || this.post.comments || 0;
+        const profilePic = this.post.ProfilePic || this.post.profilePic || null;
+        const imagePath = this.post.ImagePath || this.post.imagePath || '';
         
         // Format category display
         let categoryDisplay = '';
@@ -68,7 +70,7 @@ class SinglePostComponent {
             
             if (categoryNames.length > 0) {
                 categoryDisplay = `
-                    <div class="post-categories">
+                    <div class="post-categories-right">
                         ${categoryNames.map(cat => `
                             <span class="category-tag">${cat}</span>
                         `).join('')}
@@ -79,36 +81,69 @@ class SinglePostComponent {
         
         const isAuthor = this.isLoggedIn && this.currentUserID === authorId;
         
+        // Create avatar HTML based on profile picture
+        let avatarHtml = '';
+        if (profilePic && profilePic.Valid) {
+            avatarHtml = `<img src="${profilePic.String}" alt="Profile Picture" class="post-avatar-img">`;
+        } else {
+            avatarHtml = `
+                <div class="post-avatar-placeholder">
+                    <i class="fas fa-user"></i>
+                </div>
+            `;
+        }
+        
         let html = `
-            <div class="single-post-container">
-                <div class="post-header">
-                    <h1 class="post-title">${title}</h1>
-                    ${categoryDisplay}
-                    <div class="post-meta">
-                        <span class="post-author">By: ${author}</span>
-                        <span class="post-date">${this.formatDate(postDate)}</span>
+            <button class="back-button" onclick="window.history.back()">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+            
+            <div class="post-container">
+                <div class="post-card">
+                    <div class="post-header">
+                        <div class="post-avatar">
+                            ${avatarHtml}
+                        </div>
+                        <div class="post-info">
+                            <h3>${author}</h3>
+                            <span class="timestamp">${this.formatDate(postDate)}</span>
+                        </div>
+                        ${categoryDisplay}
+                    </div>
+                    
+                    <div class="post-content">
+                        <h2>${title}</h2>
+                        <p>${content}</p>
+                        ${imagePath ? `<img src="${imagePath}" alt="Post image" class="post-image">` : ''}
                     </div>
                 </div>
                 
-                <div class="post-content">
-                    ${content}
-                </div>
-                
+                <!-- Reaction Buttons -->
                 <div class="post-footer">
-                    <div class="post-reactions">
-                        <button class="reaction-btn like-btn" data-post-id="${postId}">
-                            <i class="fas fa-thumbs-up"></i> <span id="likes-${postId}">${likes}</span>
+                    <div class="action-container">
+                        <button class="action-btn like-btn" data-post-id="${postId}" data-action="like">
+                            <i class="fas fa-thumbs-up"></i>
+                            <span class="count" id="likes-${postId}">${likes}</span>
                         </button>
-                        <button class="reaction-btn dislike-btn" data-post-id="${postId}">
-                            <i class="fas fa-thumbs-down"></i> <span id="dislikes-${postId}">${dislikes}</span>
+                    </div>
+                    <div class="action-container">
+                        <button class="action-btn comment-btn" data-post-id="${postId}">
+                            <i class="fas fa-comment"></i>
+                            <span class="count" id="comments-${postId}">${commentCount}</span>
+                        </button>
+                    </div>
+                    <div class="action-container">
+                        <button class="action-btn dislike-btn" data-post-id="${postId}" data-action="dislike">
+                            <i class="fas fa-thumbs-down"></i>
+                            <span class="count" id="dislikes-${postId}">${dislikes}</span>
                         </button>
                     </div>
                     
                     ${isAuthor ? `
                         <div class="post-actions">
-                            <button class="btn btn-edit" data-post-id="${postId}">
+                            <a href="/edit-post?id=${postId}" class="btn btn-edit">
                                 <i class="fas fa-edit"></i> Edit
-                            </button>
+                            </a>
                             <button class="btn btn-delete" data-post-id="${postId}">
                                 <i class="fas fa-trash"></i> Delete
                             </button>
@@ -120,10 +155,11 @@ class SinglePostComponent {
                     <h3>Comments (${commentCount})</h3>
                     
                     ${this.isLoggedIn ? `
-                        <div class="comment-form">
-                            <textarea id="comment-input" placeholder="Write a comment..."></textarea>
-                            <button id="submit-comment" class="btn btn-primary">Post Comment</button>
-                        </div>
+                        <form class="comment-form">
+                            <input type="hidden" name="post_id" value="${postId}">
+                            <textarea name="content" class="comment-input" id="comment-input" placeholder="Write a comment..." required></textarea>
+                            <button type="button" id="submit-comment" class="submit-button">Post Comment</button>
+                        </form>
                     ` : `
                         <div class="login-prompt">
                             <p>Please <a href="/signin">sign in</a> to comment</p>
@@ -151,39 +187,61 @@ class SinglePostComponent {
             const content = comment.Content || comment.content || '';
             const author = comment.Username || comment.username || comment.Author || comment.author || 'Anonymous';
             const authorId = comment.UserID || comment.userId || comment.user_id || '';
-            const commentDate = comment.CreatedAt || comment.createdAt || comment.created_at || '';
+            const commentDate = comment.CommentTime || comment.commentTime || comment.CreatedAt || comment.createdAt || comment.created_at || '';
             const likes = comment.Likes || comment.likes || 0;
             const dislikes = comment.Dislikes || comment.dislikes || 0;
+            const profilePic = comment.ProfilePic || comment.profilePic || null;
             
             const isCommentAuthor = this.isLoggedIn && this.currentUserID === authorId;
             
-            return `
-                <div class="comment" data-comment-id="${commentId}">
-                    <div class="comment-header">
-                        <span class="comment-author">${author}</span>
-                        <span class="comment-date">${this.formatDate(commentDate)}</span>
+            // Create avatar HTML based on profile picture
+            let avatarHtml = '';
+            if (profilePic && profilePic.Valid) {
+                avatarHtml = `<img src="${profilePic.String}" class="comment-avatar">`;
+            } else {
+                avatarHtml = `
+                    <div class="comment-avatar-placeholder">
+                        <i class="fas fa-user"></i>
                     </div>
-                    <div class="comment-content">${content}</div>
-                    <div class="comment-footer">
-                        <div class="comment-reactions">
-                            <button class="reaction-btn comment-like-btn" data-comment-id="${commentId}">
-                                <i class="fas fa-thumbs-up"></i> <span>${likes}</span>
+                `;
+            }
+            
+            return `
+                <div class="comments-section">
+                    <div class="comment-header">
+                        ${avatarHtml}
+                        <div class="comment-author">
+                            <strong>${author}</strong>
+                            <span class="comment-time">${this.formatDate(commentDate)}</span>
+                        </div>
+                    </div>
+                    <div class="comment-content" id="comment-content-${commentId}">
+                        ${content}
+                    </div>
+                    ${isCommentAuthor ? `
+                        <div class="comment-actions">
+                            <button onclick="editComment('${commentId}')" class="edit-btn">
+                                <i class="fas fa-edit"></i> Edit
                             </button>
-                            <button class="reaction-btn comment-dislike-btn" data-comment-id="${commentId}">
-                                <i class="fas fa-thumbs-down"></i> <span>${dislikes}</span>
+                            <button class="delete-btn" data-comment-id="${commentId}">
+                                <i class="fas fa-trash"></i> Delete
                             </button>
                         </div>
-                        
-                        ${isCommentAuthor ? `
-                            <div class="comment-actions">
-                                <button class="btn btn-sm btn-edit-comment" data-comment-id="${commentId}">
-                                    <i class="fas fa-edit"></i> Edit
-                                </button>
-                                <button class="btn btn-sm btn-delete-comment" data-comment-id="${commentId}">
-                                    <i class="fas fa-trash"></i> Delete
-                                </button>
-                            </div>
-                        ` : ''}
+                    ` : ''}
+                    <!-- Comment Reaction Buttons -->
+                    <div class="comment-reaction-buttons">
+                        <div class="action-container">
+                            <button class="action-btn comment-like-btn" data-comment-id="${commentId}" data-action="like">
+                                <i class="fas fa-thumbs-up"></i>
+                                <span class="count" id="comment-likes-${commentId}">${likes}</span>
+                            </button>
+                        </div>
+                        <div class="action-container">
+                            <button class="action-btn comment-dislike-btn" data-comment-id="${commentId}" data-action="dislike">
+                                <i class="fas fa-thumbs-down"></i>
+                                <span class="count" id="comment-dislikes-${commentId}">${dislikes}</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -195,7 +253,7 @@ class SinglePostComponent {
             <div class="error-message">
                 <i class="fas fa-exclamation-circle"></i>
                 <p>${message}</p>
-                <button onclick="window.history.back()" class="btn btn-outline">
+                <button onclick="window.history.back()" class="btn btn-outline back-button">
                     <i class="fas fa-arrow-left"></i> Go Back
                 </button>
             </div>
@@ -238,14 +296,7 @@ class SinglePostComponent {
             dislikeBtn.addEventListener('click', () => this.handleDislike(this.postId));
         }
         
-        // Edit/delete post buttons
-        const editBtn = document.querySelector('.btn-edit');
-        if (editBtn) {
-            editBtn.addEventListener('click', () => {
-                window.navigation.navigateTo(`/edit-post?id=${this.postId}`);
-            });
-        }
-        
+        // Delete post button
         const deleteBtn = document.querySelector('.btn-delete');
         if (deleteBtn) {
             deleteBtn.addEventListener('click', () => this.handleDeletePost());
@@ -257,22 +308,36 @@ class SinglePostComponent {
             submitCommentBtn.addEventListener('click', () => this.handleSubmitComment());
         }
         
-        // Comment edit/delete buttons
-        const editCommentBtns = document.querySelectorAll('.btn-edit-comment');
-        editCommentBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const commentId = btn.dataset.commentId;
-                this.handleEditComment(commentId);
-            });
-        });
-        
-        const deleteCommentBtns = document.querySelectorAll('.btn-delete-comment');
+        // Comment delete buttons
+        const deleteCommentBtns = document.querySelectorAll('.delete-btn');
         deleteCommentBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const commentId = btn.dataset.commentId;
                 this.handleDeleteComment(commentId);
             });
         });
+        
+        // Comment like/dislike buttons
+        const commentLikeBtns = document.querySelectorAll('.comment-like-btn');
+        commentLikeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const commentId = btn.dataset.commentId;
+                this.handleCommentLike(commentId);
+            });
+        });
+        
+        const commentDislikeBtns = document.querySelectorAll('.comment-dislike-btn');
+        commentDislikeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const commentId = btn.dataset.commentId;
+                this.handleCommentDislike(commentId);
+            });
+        });
+        
+        // Define global editComment function
+        window.editComment = (commentId) => {
+            this.handleEditComment(commentId);
+        };
     }
     
     handleLike(postId) {
@@ -373,6 +438,104 @@ class SinglePostComponent {
         });
     }
     
+    handleCommentLike(commentId) {
+        if (!this.isLoggedIn) {
+            window.navigation.navigateTo('/signin');
+            return;
+        }
+        
+        fetch('/api/comments/react', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                comment_id: parseInt(commentId),
+                like: 1
+            }),
+            credentials: 'include'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to like comment');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Update UI
+                const likesElement = document.getElementById(`comment-likes-${commentId}`);
+                const dislikesElement = document.getElementById(`comment-dislikes-${commentId}`);
+                
+                if (likesElement) likesElement.textContent = data.likes;
+                if (dislikesElement) dislikesElement.textContent = data.dislikes;
+                
+                // Toggle active state
+                const likeBtn = document.querySelector(`.comment-like-btn[data-comment-id="${commentId}"]`);
+                const dislikeBtn = document.querySelector(`.comment-dislike-btn[data-comment-id="${commentId}"]`);
+                
+                if (likeBtn) {
+                    likeBtn.classList.toggle('active', data.userReaction === 1);
+                }
+                if (dislikeBtn) {
+                    dislikeBtn.classList.remove('active');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error liking comment:', error);
+        });
+    }
+    
+    handleCommentDislike(commentId) {
+        if (!this.isLoggedIn) {
+            window.navigation.navigateTo('/signin');
+            return;
+        }
+        
+        fetch('/api/comments/react', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                comment_id: parseInt(commentId),
+                like: 0
+            }),
+            credentials: 'include'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to dislike comment');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Update UI
+                const likesElement = document.getElementById(`comment-likes-${commentId}`);
+                const dislikesElement = document.getElementById(`comment-dislikes-${commentId}`);
+                
+                if (likesElement) likesElement.textContent = data.likes;
+                if (dislikesElement) dislikesElement.textContent = data.dislikes;
+                
+                // Toggle active state
+                const likeBtn = document.querySelector(`.comment-like-btn[data-comment-id="${commentId}"]`);
+                const dislikeBtn = document.querySelector(`.comment-dislike-btn[data-comment-id="${commentId}"]`);
+                
+                if (dislikeBtn) {
+                    dislikeBtn.classList.toggle('active', data.userReaction === 0);
+                }
+                if (likeBtn) {
+                    likeBtn.classList.remove('active');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error disliking comment:', error);
+        });
+    }
+    
     handleDeletePost() {
         if (!confirm('Are you sure you want to delete this post?')) {
             return;
@@ -443,11 +606,10 @@ class SinglePostComponent {
     }
     
     handleEditComment(commentId) {
-        const commentElement = document.querySelector(`.comment[data-comment-id="${commentId}"]`);
-        if (!commentElement) return;
+        const contentElement = document.getElementById(`comment-content-${commentId}`);
+        if (!contentElement) return;
         
-        const contentElement = commentElement.querySelector('.comment-content');
-        const currentContent = contentElement.textContent;
+        const currentContent = contentElement.textContent.trim();
         
         // Replace content with textarea
         contentElement.innerHTML = `
@@ -531,7 +693,7 @@ class SinglePostComponent {
         .then(data => {
             if (data.success) {
                 // Remove comment from UI
-                const commentElement = document.querySelector(`.comment[data-comment-id="${commentId}"]`);
+                const commentElement = document.querySelector(`.comments-section[data-comment-id="${commentId}"]`);
                 if (commentElement) {
                     commentElement.remove();
                 }
