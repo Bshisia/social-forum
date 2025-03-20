@@ -6,7 +6,7 @@ import AuthComponent from './components/authentication/auth.js';
 import NavbarComponent from './components/navbar/navbar.js';
 // Uncomment these as you implement them
 import PostsComponent from './components/posts/posts.js';
-import SinglePostComponent from './components/posts/post.js';
+import SinglePostComponent from './components/posts/single_post.js';
 import CreatePostComponent from './components/posts/create_post.js';
 import EditPostComponent from './components/posts/edit_post.js';
 import ProfileComponent from './components/profile/profile.js';
@@ -498,12 +498,12 @@ function showProperPostsState(posts) {
             const contentPreview = contentStr.substring(0, 100) + (contentStr.length > 100 ? '...' : '');
             
             postsHtml += `
-                <div class="post-card" data-post-id="${postId}">
+                <div class="post-card" data-post-id="${postId}" onclick="handlePostClick(event)">
                     <h3 class="post-title">${title}</h3>
                     <p class="post-excerpt">${contentPreview}</p>
                     <div class="post-footer">
                         <span class="post-author">By: ${author}</span>
-                        <button onclick="window.navigation.navigateTo('/?id=${postId}')" class="btn btn-sm">
+                        <button class="btn btn-sm" onclick="event.stopPropagation(); handlePostClick('${postId}')">
                             Read More
                         </button>
                     </div>
@@ -528,6 +528,12 @@ function showProperPostsState(posts) {
 function loadSinglePost(postId) { 
     console.log('Loading single post:', postId);
     
+    // Validate postId
+    if (!postId) {
+        console.error('No post ID provided');
+        return;
+    }
+    
     // Show loading state
     const mainContent = document.getElementById('main-content');
     if (mainContent) {
@@ -539,69 +545,101 @@ function loadSinglePost(postId) {
         `;
     }
     
-    fetch(`/api/posts/single?id=${postId}`, {
-        credentials: 'include' // Include cookies for auth
-    }) 
-        .then(response => {
-            if (!response.ok) {
-                // If API not implemented yet or returns error, show placeholder with mock data
-                console.warn(`Error loading post: ${response.status}`);
-                return { 
-                    post: { 
-                        id: postId, 
-                        title: 'Sample Post', 
-                        content: 'This is a placeholder for post content since the API returned an error.',
-                        author: 'System',
-                        created_at: new Date().toISOString()
-                    },
-                    comments: [
-                        {
-                            id: 1,
-                            content: "This is a sample comment.",
-                            author: "User1",
+    // Check authentication before loading post
+    const authPromise = AuthService.checkAuthState().catch(error => {
+        console.error('Auth check failed:', error);
+        return false; // Not authenticated if check fails
+    });
+    
+    authPromise.then(isAuth => {
+        if (!isAuth) {
+            window.navigation.navigateTo('/signin');
+            return;
+        }
+        
+        fetch(`/api/posts/single?id=${postId}`, {
+            credentials: 'include' // Include cookies for auth
+        }) 
+            .then(response => {
+                if (!response.ok) {
+                    // If API not implemented yet or returns error, show placeholder with mock data
+                    console.warn(`Error loading post: ${response.status}`);
+                    return { 
+                        post: { 
+                            id: postId, 
+                            title: 'Sample Post', 
+                            content: 'This is a placeholder for post content since the API returned an error.',
+                            author: 'System',
                             created_at: new Date().toISOString()
-                        }
-                    ]
-                };
-            }
-            return response.json();
-        }) 
-        .then(data => { 
-            console.log('Post data received:', data);
-            
-            // Handle missing data
-            const post = data.post || { id: postId, title: 'Post not found', content: 'The requested post could not be loaded.' };
-            const comments = Array.isArray(data.comments) ? data.comments : [];
-            
-            if (typeof SinglePostComponent === 'function') {
-                const singlePost = new SinglePostComponent(postId); 
-                singlePost.post = post; 
-                singlePost.comments = comments; 
-                singlePost.mount(); 
-            } else {
-                // Show placeholder if component not available
-                showSinglePostPlaceholder(post, comments);
-            }
-        }) 
-        .catch(error => { 
-            console.error('Error loading post:', error); 
-            const mainContent = document.getElementById('main-content');
-            if (mainContent) {
-                mainContent.innerHTML = ` 
-                    <div class="error-message"> 
-                        <i class="fas fa-exclamation-circle"></i> 
-                        <p>Error loading post. The post may not exist or you may not have permission to view it.</p>
-                        <div class="mt-3">
-                            <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
-                                <i class="fas fa-arrow-left"></i> Back to Posts
-                            </button>
-                            <button onclick="window.navigation.reloadPage()" class="btn btn-primary">
-                                <i class="fas fa-sync"></i> Retry
-                            </button>
-                        </div>
-                    </div>`; 
-            }
-        }); 
+                        },
+                        comments: [
+                            {
+                                id: 1,
+                                content: "This is a sample comment.",
+                                author: "User1",
+                                created_at: new Date().toISOString()
+                            }
+                        ]
+                    };
+                }
+                return response.json();
+            }) 
+            .then(data => { 
+                console.log('Post data received:', data);
+                
+                // Handle missing data
+                const post = data.post || { id: postId, title: 'Post not found', content: 'The requested post could not be loaded.' };
+                const comments = Array.isArray(data.comments) ? data.comments : [];
+                
+                try {
+                    if (typeof SinglePostComponent === 'function') {
+                        const singlePost = new SinglePostComponent(postId); 
+                        singlePost.post = post; 
+                        singlePost.comments = comments; 
+                        
+                        // Make sure we have current user info for the component
+                        const currentUser = AuthService.getCurrentUser();
+                        singlePost.currentUserID = currentUser ? currentUser.id : null;
+                        
+                        singlePost.mount(); 
+                    } else {
+                        // Show placeholder if component not available
+                        showSinglePostPlaceholder(post, comments);
+                    }
+                } catch (error) {
+                    console.error('Error mounting post component:', error);
+                    if (mainContent) {
+                        mainContent.innerHTML = `
+                            <div class="error-message">
+                                <i class="fas fa-exclamation-circle"></i>
+                                <p>Error loading post component: ${error.message}</p>
+                                <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
+                                    <i class="fas fa-arrow-left"></i> Back to Posts
+                                </button>
+                            </div>`;
+                    }
+                }
+            }) 
+            .catch(error => { 
+                console.error('Error loading post:', error); 
+                const mainContent = document.getElementById('main-content');
+                if (mainContent) {
+                    mainContent.innerHTML = ` 
+                        <div class="error-message"> 
+                            <i class="fas fa-exclamation-circle"></i> 
+                            <p>Error loading post. The post may not exist or you may not have permission to view it.</p>
+                            <div class="mt-3">
+                                <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
+                                    <i class="fas fa-arrow-left"></i> Back to Posts
+                                </button>
+                                <button onclick="window.navigation.reloadPage()" class="btn btn-primary">
+                                    <i class="fas fa-sync"></i> Retry
+                                </button>
+                            </div>
+                        </div>`; 
+                }
+            });
+    });
 } 
 
 // Show placeholder for single post when component not available
@@ -684,10 +722,39 @@ AuthService.setAuthState = function(isAuth, user) {
     window.currentUser = user;
 };
 
+// Add a function to handle post clicks from anywhere in the app
+function handlePostClick(postId) {
+    // Prevent default behavior if event object is passed
+    if (postId && postId.preventDefault) {
+        postId.preventDefault();
+        postId = postId.currentTarget.dataset.postId;
+    }
+
+    // Validate postId
+    if (!postId) {
+        console.error('No post ID provided');
+        return;
+    }
+
+    console.log('Handling post click for:', postId);
+
+    // Update URL without full page reload
+    const newUrl = `/?id=${postId}`;
+    window.history.pushState(
+        { postId: postId },
+        '',
+        newUrl
+    );
+
+    // Load the single post
+    loadSinglePost(postId);
+}
+
 // Export any functions that need to be accessed from other modules
 export {
     loadPosts,
     loadSinglePost,
     getPostIdFromUrl,
-    handleRoute
+    handleRoute,
+    handlePostClick
 };

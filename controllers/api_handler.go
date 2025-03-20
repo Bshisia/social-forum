@@ -180,7 +180,7 @@ func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		postCount++
 		log.Printf("Processing post #%d", postCount)
-		
+
 		var post utils.Post
 		var postTime string
 		var profilePic sql.NullString
@@ -195,7 +195,7 @@ func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Debug: Log the post data after scanning
-		log.Printf("Post scanned from DB: ID=%d, Title=%s, UserID=%s, Username=%s, Likes=%d, Dislikes=%d, Comments=%d", 
+		log.Printf("Post scanned from DB: ID=%d, Title=%s, UserID=%s, Username=%s, Likes=%d, Dislikes=%d, Comments=%d",
 			post.ID, post.Title, post.UserID, post.Username, post.Likes, post.Dislikes, post.Comments)
 
 		// Format the time
@@ -237,13 +237,13 @@ func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
 	// Return posts as JSON
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	
+
 	// Debug: Log the final posts array before sending
 	for i, post := range posts {
-		log.Printf("Post %d: ID=%d, Title=%s, UserID=%s, Username=%s, Categories=%v", 
+		log.Printf("Post %d: ID=%d, Title=%s, UserID=%s, Username=%s, Categories=%v",
 			i, post.ID, post.Title, post.UserID, post.Username, getCategoryNames(post.Categories))
 	}
-	
+
 	log.Printf("Sending %d posts to client", len(posts))
 	json.NewEncoder(w).Encode(posts)
 }
@@ -262,31 +262,126 @@ func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 
 	postid := r.URL.Query().Get("id")
 	if postid == "" {
-		log.Printf("Single post request missing ID parameter")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Post ID required"})
+		http.Error(w, "Post ID required", http.StatusBadRequest)
 		return
 	}
 
+	log.Printf("Single post request for ID: %s", postid)
+
 	postID, err := strconv.ParseInt(postid, 10, 64)
 	if err != nil {
-		log.Printf("Invalid post ID format: %s", postid)
+		log.Printf("Invalid post ID format: %s - Error: %v", postid, err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid post ID"})
 		return
 	}
 
-	log.Printf("Fetching single post with ID: %d", postID)
-	post, comments, err := ah.postHandler.getPostByID(postID)
+	// Query for the post
+	postQuery := `
+		SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+			   u.nickname, u.profile_pic,
+			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+			   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		WHERE p.id = ?
+	`
+
+	var post utils.Post
+	var postTime string
+	var profilePic sql.NullString
+
+	err = utils.GlobalDB.QueryRow(postQuery, postID).Scan(
+		&post.ID, &post.Title, &post.Content, &post.ImagePath, &postTime, &post.UserID,
+		&post.Username, &profilePic, &post.Likes, &post.Dislikes, &post.Comments,
+	)
 	if err != nil {
-		log.Printf("Error getting post: %v", err)
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		if err == sql.ErrNoRows {
+			log.Printf("Post not found: %d", postID)
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Post not found"})
+			return
+		}
+		log.Printf("Error querying post %d: %v", postID, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
 		return
 	}
 
-	// Return success response
-	w.WriteHeader(http.StatusOK)
+	// Format the time
+	post.PostTime = postTime
+
+	// Handle null profile pic
+	if profilePic.Valid {
+		post.ProfilePic = profilePic.String
+	} else {
+		post.ProfilePic = ""
+	}
+
+	// Get categories for this post
+	categories, err := ah.postHandler.getPostCategories(postID)
+	if err != nil {
+		log.Printf("Error getting categories for post %d: %v", post.ID, err)
+		// Continue anyway, just with empty categories
+		post.Categories = []utils.Category{}
+	} else {
+		post.Categories = categories
+	}
+
+	// Query for comments
+	commentsQuery := `
+		SELECT c.id, c.content, c.user_id, u.nickname, u.profile_pic, c.created_at,
+			   (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND like = 1) as likes,
+			   (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND like = 0) as dislikes
+		FROM comments c
+		JOIN users u ON c.user_id = u.id
+		WHERE c.post_id = ?
+		ORDER BY c.created_at ASC
+	`
+
+	rows, err := utils.GlobalDB.Query(commentsQuery, postID)
+	if err != nil {
+		log.Printf("Error querying comments for post %d: %v", postID, err)
+		// Return post without comments
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"post":     post,
+			"comments": []utils.Comment{},
+		})
+		return
+	}
+	defer rows.Close()
+
+	var comments []utils.Comment
+	for rows.Next() {
+		var comment utils.Comment
+		var createdAt time.Time
+		var commentProfilePic sql.NullString
+
+		err := rows.Scan(
+			&comment.ID, &comment.Content, &comment.UserID, &comment.Username,
+			&commentProfilePic, &createdAt, &comment.Likes, &comment.Dislikes,
+		)
+		if err != nil {
+			log.Printf("Error scanning comment row: %v", err)
+			continue
+		}
+
+		comment.PostID = int(post.ID)
+		comment.CommentTime = createdAt
+
+		// Handle null profile pic
+		if commentProfilePic.Valid {
+			comment.ProfilePic = commentProfilePic
+		} else {
+			comment.ProfilePic.Valid = false
+		}
+
+		comments = append(comments, comment)
+	}
+
+	log.Printf("Returning post ID %d with %d comments", post.ID, len(comments))
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"post":     post,
 		"comments": comments,

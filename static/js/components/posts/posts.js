@@ -279,6 +279,8 @@ class PostsComponent {
             return;
         }
 
+        console.log('Loading single post:', postId);
+
         // Update URL without full page reload
         const newUrl = `/?id=${postId}`;
         window.history.pushState(
@@ -286,6 +288,17 @@ class PostsComponent {
             '',
             newUrl
         );
+
+        // Show loading state
+        const mainContent = document.getElementById('main-content');
+        if (mainContent) {
+            mainContent.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p>Loading post...</p>
+                </div>
+            `;
+        }
 
         // Load the single post view
         fetch(`/api/posts/single?id=${postId}`)
@@ -306,14 +319,19 @@ class PostsComponent {
             })
             .catch(error => {
                 console.error('Error loading post:', error);
-                this.mainContainer.innerHTML = `
-                    <div class="error-message">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <p>Error loading post</p>
-                        <button onclick="window.history.back()" class="btn btn-outline">
-                            <i class="fas fa-arrow-left"></i> Go Back
-                        </button>
-                    </div>`;
+                
+                // Use mainContent instead of this.mainContainer
+                const mainContent = document.getElementById('main-content');
+                if (mainContent) {
+                    mainContent.innerHTML = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <p>Error loading post: ${error.message}</p>
+                            <button onclick="window.history.back()" class="btn btn-outline">
+                                <i class="fas fa-arrow-left"></i> Go Back
+                            </button>
+                        </div>`;
+                }
             });
     }
 
