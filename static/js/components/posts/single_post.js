@@ -633,8 +633,59 @@ class SinglePostComponent {
         })
         .then(data => {
             if (data.success) {
-                // Reload the page to show the new comment
-                window.navigation.reloadPage();
+                // Instead of reloading the page, add the new comment to the UI
+                const newComment = data.comment;
+                
+                // Clear the comment input
+                commentInput.value = '';
+                
+                // Update the comment count in the comments section heading
+                const commentsHeading = document.querySelector('.comments-section h3');
+                if (commentsHeading) {
+                    const currentCount = parseInt(commentsHeading.textContent.match(/\d+/)[0]);
+                    const newCount = currentCount + 1;
+                    commentsHeading.textContent = `Comments (${newCount})`;
+                    
+                    // Also update the comment count in the post card
+                    const postCommentCount = document.getElementById(`comments-${this.postId}`);
+                    if (postCommentCount) {
+                        postCommentCount.textContent = newCount;
+                    }
+                    
+                    // Update the internal comment count
+                    if (this.post) {
+                        if (this.post.Comments !== undefined) {
+                            this.post.Comments = newCount;
+                        } else if (this.post.comments !== undefined) {
+                            this.post.comments = newCount;
+                        }
+                    }
+                }
+                
+                // If the server returned the new comment data, add it to the UI
+                if (newComment) {
+                    // Add the new comment to our comments array
+                    this.comments.push(newComment);
+                    
+                    // Update the comments list
+                    const commentsList = document.querySelector('.comments-list');
+                    if (commentsList) {
+                        // If there was a "no comments" message, remove it
+                        const noCommentsMsg = commentsList.querySelector('.no-comments');
+                        if (noCommentsMsg) {
+                            commentsList.innerHTML = '';
+                        }
+                        
+                        // Append the new comment HTML
+                        commentsList.innerHTML += this.renderSingleComment(newComment);
+                        
+                        // Attach event listeners to the new comment
+                        this.attachCommentEventListeners(newComment.ID || newComment.id);
+                    }
+                } else {
+                    // If the server didn't return the new comment data, reload the page
+                    window.navigation.reloadPage();
+                }
             }
         })
         .catch(error => {
@@ -736,11 +787,27 @@ class SinglePostComponent {
                     commentElement.remove();
                 }
                 
-                // Update comment count
+                // Update comment count in the comments section heading
                 const commentsHeading = document.querySelector('.comments-section h3');
                 if (commentsHeading) {
                     const currentCount = parseInt(commentsHeading.textContent.match(/\d+/)[0]);
-                    commentsHeading.textContent = `Comments (${currentCount - 1})`;
+                    const newCount = currentCount - 1;
+                    commentsHeading.textContent = `Comments (${newCount})`;
+                    
+                    // Also update the comment count in the post card
+                    const postCommentCount = document.getElementById(`comments-${this.postId}`);
+                    if (postCommentCount) {
+                        postCommentCount.textContent = newCount;
+                    }
+                    
+                    // Update the internal comment count
+                    if (this.post) {
+                        if (this.post.Comments !== undefined) {
+                            this.post.Comments = newCount;
+                        } else if (this.post.comments !== undefined) {
+                            this.post.comments = newCount;
+                        }
+                    }
                 }
             }
         })
@@ -754,6 +821,105 @@ class SinglePostComponent {
 // Make the component available globally
 window.SinglePostComponent = SinglePostComponent;
 export default SinglePostComponent;
+
+// Add helper methods for comment rendering and event handling
+SinglePostComponent.prototype.renderSingleComment = function(comment) {
+    // Extract comment data with fallbacks
+    const commentId = comment.ID || comment.id;
+    const content = comment.Content || comment.content || '';
+    const author = comment.Username || comment.username || comment.Author || comment.author || 'Anonymous';
+    const authorId = comment.UserID || comment.userId || comment.userID || comment.user_id || '';
+    const commentDate = comment.CommentTime || comment.commentTime || comment.CreatedAt || comment.createdAt || comment.created_at || '';
+    const likes = comment.Likes || comment.likes || 0;
+    const dislikes = comment.Dislikes || comment.dislikes || 0;
+    const profilePic = comment.ProfilePic || comment.profilePic || null;
+    
+    // Create avatar HTML based on profile picture
+    let avatarHtml = '';
+    if (profilePic && typeof profilePic === 'object' && profilePic.Valid) {
+        avatarHtml = `<img src="${profilePic.String}" class="comment-avatar">`;
+    } else if (profilePic && typeof profilePic === 'string' && profilePic) {
+        avatarHtml = `<img src="${profilePic}" class="comment-avatar">`;
+    } else if (comment.profile_pic && typeof comment.profile_pic === 'object' && comment.profile_pic.Valid) {
+        avatarHtml = `<img src="${comment.profile_pic.String}" class="comment-avatar">`;
+    } else if (comment.profile_pic && typeof comment.profile_pic === 'string' && comment.profile_pic) {
+        avatarHtml = `<img src="${comment.profile_pic}" class="comment-avatar">`;
+    } else {
+        avatarHtml = `
+            <div class="comment-avatar-placeholder">
+                <i class="fas fa-user"></i>
+            </div>
+        `;
+    }
+    
+    const isCommentAuthor = this.isLoggedIn && String(this.currentUserID) === String(authorId);
+    
+    return `
+        <div class="comment-item" data-comment-id="${commentId}">
+            <div class="comment-header">
+                ${avatarHtml}
+                <div class="comment-author">
+                    <strong>${author}</strong>
+                    <span class="comment-time">${this.formatDate(commentDate)}</span>
+                </div>
+            </div>
+            <div class="comment-content" id="comment-content-${commentId}">
+                ${content}
+            </div>
+            ${isCommentAuthor ? `
+                <div class="comment-actions">
+                    <button class="edit-btn" data-comment-id="${commentId}">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                    <button class="delete-btn" data-comment-id="${commentId}">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </div>
+            ` : ''}
+            <!-- Comment Reaction Buttons -->
+            <div class="comment-reaction-buttons">
+                <div class="action-container">
+                    <button class="action-btn comment-like-btn" data-comment-id="${commentId}" data-action="like">
+                        <i class="fas fa-thumbs-up"></i>
+                        <span class="count" id="comment-likes-${commentId}">${likes}</span>
+                    </button>
+                </div>
+                <div class="action-container">
+                    <button class="action-btn comment-dislike-btn" data-comment-id="${commentId}" data-action="dislike">
+                        <i class="fas fa-thumbs-down"></i>
+                        <span class="count" id="comment-dislikes-${commentId}">${dislikes}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+};
+
+SinglePostComponent.prototype.attachCommentEventListeners = function(commentId) {
+    // Edit button
+    const editBtn = document.querySelector(`.edit-btn[data-comment-id="${commentId}"]`);
+    if (editBtn) {
+        editBtn.addEventListener('click', () => this.handleEditComment(commentId));
+    }
+    
+    // Delete button
+    const deleteBtn = document.querySelector(`.delete-btn[data-comment-id="${commentId}"]`);
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => this.handleDeleteComment(commentId));
+    }
+    
+    // Like button
+    const likeBtn = document.querySelector(`.comment-like-btn[data-comment-id="${commentId}"]`);
+    if (likeBtn) {
+        likeBtn.addEventListener('click', () => this.handleCommentLike(commentId));
+    }
+    
+    // Dislike button
+    const dislikeBtn = document.querySelector(`.comment-dislike-btn[data-comment-id="${commentId}"]`);
+    if (dislikeBtn) {
+        dislikeBtn.addEventListener('click', () => this.handleCommentDislike(commentId));
+    }
+};
 
 // Add unmount method for clean navigation
 SinglePostComponent.prototype.unmount = function() {
