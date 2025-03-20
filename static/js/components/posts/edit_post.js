@@ -13,6 +13,7 @@ class EditPostComponent {
                 throw new Error('Failed to load post');
             }
             const data = await response.json();
+            console.log('Edit post data:', data);
             this.post = data.post;
             this.render();
         } catch (error) {
@@ -26,6 +27,14 @@ class EditPostComponent {
             this.renderError('Post not found');
             return;
         }
+        
+        // Extract post data with fallbacks for different field name formats
+        const postId = this.post.ID || this.post.id;
+        const title = this.post.Title || this.post.title || '';
+        const content = this.post.Content || this.post.content || '';
+        const imagePath = this.post.ImagePath || this.post.imagePath || '';
+        
+        console.log('Rendering edit form with:', { postId, title, content, imagePath });
     
         this.mainContainer.innerHTML = `
             <div class="post-container">
@@ -35,24 +44,24 @@ class EditPostComponent {
                     </div>
                     
                     <form id="edit-post-form">
-                        <input type="hidden" name="post_id" value="${this.post.ID}">
+                        <input type="hidden" name="post_id" value="${postId}">
                         
                         <div class="form-group">
                             <label for="title">Title:</label>
-                            <input type="text" id="title" name="title" value="${this.post.Title}" required>
+                            <input type="text" id="title" name="title" value="${this.escapeHtml(title)}" required>
                         </div>
     
                         <div class="form-group">
                             <label for="content">Content:</label>
-                            <textarea id="content" name="content" required>${this.post.Content}</textarea>
+                            <textarea id="content" name="content" required>${this.escapeHtml(content)}</textarea>
                         </div>
     
-                        ${this.post.ImagePath ? `
+                        ${imagePath ? `
                             <div class="form-group">
                                 <label>Current Image:</label>
                                 <div class="post-image-preview">
-                                    <img src="${this.post.ImagePath}" alt="Post image" class="post-image">
-                                    <input type="hidden" name="existing_image" value="${this.post.ImagePath}">
+                                    <img src="${imagePath}" alt="Post image" class="post-image">
+                                    <input type="hidden" name="existing_image" value="${imagePath}">
                                 </div>
                             </div>
                         ` : ''}
@@ -74,6 +83,17 @@ class EditPostComponent {
     
         this.attachEventListeners();
     }
+    // Helper method to escape HTML special characters
+    escapeHtml(unsafe) {
+        if (typeof unsafe !== 'string') return '';
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+    
     attachEventListeners() {
         const form = document.getElementById('edit-post-form');
         const deleteBtn = document.getElementById('delete-post-btn');
@@ -97,6 +117,8 @@ class EditPostComponent {
             alert('Title and content are required');
             return;
         }
+        
+        console.log('Submitting edit with:', { postId: this.postId, title, content });
     
         fetch('/api/posts/edit', {
             method: 'POST',
@@ -144,7 +166,7 @@ class EditPostComponent {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    post_id: this.postId
+                    post_id: parseInt(this.postId)
                 }),
                 credentials: 'include'
             })
@@ -176,6 +198,27 @@ class EditPostComponent {
 
     mount() {
         this.loadPost();
+    }
+    
+    // Add unmount method for clean navigation
+    unmount() {
+        console.log('Unmounting EditPostComponent');
+        
+        // Remove event listeners
+        const form = document.getElementById('edit-post-form');
+        if (form) {
+            form.removeEventListener('submit', this.handleSubmit);
+        }
+        
+        const deleteBtn = document.getElementById('delete-post-btn');
+        if (deleteBtn) {
+            deleteBtn.removeEventListener('click', this.handleDelete);
+        }
+        
+        // Clear the container
+        if (this.mainContainer) {
+            this.mainContainer.innerHTML = '';
+        }
     }
 }
 

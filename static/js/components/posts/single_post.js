@@ -51,7 +51,12 @@ class SinglePostComponent {
         const title = this.post.Title || this.post.title || 'Untitled Post';
         const content = this.post.Content || this.post.content || 'No content';
         const author = this.post.Username || this.post.username || this.post.Author || this.post.author || 'Anonymous';
-        const authorId = this.post.UserID || this.post.userId || this.post.user_id || '';
+        const authorId = this.post.UserID || this.post.userId || this.post.userID || this.post.user_id || '';
+        
+        // Debug the raw userID from the post
+        console.log('Raw post object userID:', this.post.userID);
+        console.log('Raw post object UserID:', this.post.UserID);
+        console.log('Extracted authorId:', authorId);
         const postDate = this.post.PostTime || this.post.postTime || this.post.created_at || '';
         const categories = this.post.Categories || this.post.categories || [];
         const likes = this.post.Likes || this.post.likes || 0;
@@ -79,13 +84,16 @@ class SinglePostComponent {
             }
         }
         
-        const isAuthor = this.isLoggedIn && this.currentUserID === authorId;
+        const isAuthor = this.isLoggedIn && String(this.currentUserID) === String(authorId);
         
         // Create avatar HTML based on profile picture
         let avatarHtml = '';
         
         // Debug profile picture data
         console.log('Profile picture data in single post:', profilePic);
+        console.log('Post author ID:', authorId);
+        console.log('Current user ID:', this.currentUserID);
+        console.log('Is author check:', isAuthor);
         
         // Check all possible profile picture formats
         if (profilePic && typeof profilePic === 'object' && profilePic.Valid) {
@@ -202,13 +210,11 @@ class SinglePostComponent {
             const commentId = comment.ID || comment.id;
             const content = comment.Content || comment.content || '';
             const author = comment.Username || comment.username || comment.Author || comment.author || 'Anonymous';
-            const authorId = comment.UserID || comment.userId || comment.user_id || '';
+            const authorId = comment.UserID || comment.userId || comment.userID || comment.user_id || '';
             const commentDate = comment.CommentTime || comment.commentTime || comment.CreatedAt || comment.createdAt || comment.created_at || '';
             const likes = comment.Likes || comment.likes || 0;
             const dislikes = comment.Dislikes || comment.dislikes || 0;
             const profilePic = comment.ProfilePic || comment.profilePic || null;
-            
-            const isCommentAuthor = this.isLoggedIn && this.currentUserID === authorId;
             
             // Create avatar HTML based on profile picture
             let avatarHtml = '';
@@ -228,8 +234,14 @@ class SinglePostComponent {
                 `;
             }
             
+            const isCommentAuthor = this.isLoggedIn && String(this.currentUserID) === String(authorId);
+            
+            console.log(`Comment ID ${commentId} author ID:`, authorId);
+            console.log(`Comment ID ${commentId} current user ID:`, this.currentUserID);
+            console.log(`Comment ID ${commentId} is author check:`, isCommentAuthor);
+            
             return `
-                <div class="comments-section">
+                <div class="comment-item" data-comment-id="${commentId}">
                     <div class="comment-header">
                         ${avatarHtml}
                         <div class="comment-author">
@@ -242,7 +254,7 @@ class SinglePostComponent {
                     </div>
                     ${isCommentAuthor ? `
                         <div class="comment-actions">
-                            <button onclick="editComment('${commentId}')" class="edit-btn">
+                            <button class="edit-btn" data-comment-id="${commentId}">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
                             <button class="delete-btn" data-comment-id="${commentId}">
@@ -330,7 +342,15 @@ class SinglePostComponent {
             submitCommentBtn.addEventListener('click', () => this.handleSubmitComment());
         }
         
-        // Comment delete buttons
+        // Comment edit and delete buttons
+        const editCommentBtns = document.querySelectorAll('.edit-btn');
+        editCommentBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const commentId = btn.dataset.commentId;
+                this.handleEditComment(commentId);
+            });
+        });
+        
         const deleteCommentBtns = document.querySelectorAll('.delete-btn');
         deleteCommentBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -356,10 +376,6 @@ class SinglePostComponent {
             });
         });
         
-        // Define global editComment function
-        window.editComment = (commentId) => {
-            this.handleEditComment(commentId);
-        };
     }
     
     handleLike(postId) {
@@ -715,7 +731,7 @@ class SinglePostComponent {
         .then(data => {
             if (data.success) {
                 // Remove comment from UI
-                const commentElement = document.querySelector(`.comments-section[data-comment-id="${commentId}"]`);
+                const commentElement = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
                 if (commentElement) {
                     commentElement.remove();
                 }
@@ -738,3 +754,13 @@ class SinglePostComponent {
 // Make the component available globally
 window.SinglePostComponent = SinglePostComponent;
 export default SinglePostComponent;
+
+// Add unmount method for clean navigation
+SinglePostComponent.prototype.unmount = function() {
+    console.log('Unmounting SinglePostComponent');
+    
+    // Clear the container
+    if (this.container) {
+        this.container.innerHTML = '';
+    }
+};
