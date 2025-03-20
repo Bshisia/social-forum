@@ -60,6 +60,31 @@ const router = {
             loadPosts(); 
         }); 
     },
+    '/profile': (id) => { 
+        // Check authentication before showing profile 
+        AuthService.checkAuthState().then(isAuth => { 
+            if (!isAuth) { 
+                window.navigation.navigateTo('/signin'); 
+                return; 
+            } 
+            
+            const currentUser = AuthService.getCurrentUser(); 
+            const profileId = id || (currentUser ? currentUser.id : null); 
+            
+            if (!profileId) { 
+                window.navigation.navigateTo('/'); 
+                return; 
+            } 
+            
+            if (typeof ProfileComponent === 'function') {
+                const profile = new ProfileComponent(profileId); 
+                profile.mount(); 
+            } else {
+                console.error('ProfileComponent is not defined');
+                document.getElementById('main-content').innerHTML = '<h1>Profile</h1><p>Component not available</p>';
+            }
+        }); 
+    },
     '/category': (categoryName) => {
         // Check authentication before showing category posts
         AuthService.checkAuthState().then(isAuth => {
@@ -163,31 +188,6 @@ const router = {
             loadSinglePost(id);
         }); 
     }, 
-    '/profile': (id) => { 
-        // Check authentication before showing profile 
-        AuthService.checkAuthState().then(isAuth => { 
-            if (!isAuth) { 
-                window.navigation.navigateTo('/signin'); 
-                return; 
-            } 
-            
-            const currentUser = AuthService.getCurrentUser(); 
-            const profileId = id || (currentUser ? currentUser.id : null); 
-            
-            if (!profileId) { 
-                window.navigation.navigateTo('/'); 
-                return; 
-            } 
-            
-            if (typeof ProfileComponent === 'function') {
-                const profile = new ProfileComponent(profileId); 
-                profile.mount(); 
-            } else {
-                console.error('ProfileComponent is not defined');
-                document.getElementById('main-content').innerHTML = '<h1>Profile</h1><p>Component not available</p>';
-            }
-        }); 
-    }, 
     '/signin': () => { 
         // If already authenticated, redirect to home 
         AuthService.checkAuthState().then(isAuth => { 
@@ -250,7 +250,7 @@ function handleRoute() {
     // Show/hide navigation elements based on page type
     toggleNavigationElements(!authPage);
 
-    // Handle profile path 
+    // Handle profile path with query parameter
     if (path === '/profile') { 
         router['/profile'](userId); 
         return; 

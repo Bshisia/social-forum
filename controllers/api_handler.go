@@ -119,6 +119,10 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+	case "/api/users/stats":
+		ah.handleUserStats(w, r)
+		return
+
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -1201,65 +1205,162 @@ func (ah *APIHandler) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 
 	userID := r.URL.Query().Get("id")
 	if userID == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "User ID required"})
-		return
+		// If no ID provided, try to get current user from session
+		cookie, err := r.Cookie("session_token")
+		if err != nil {
+			log.Printf("Error getting session: %v", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Unauthorized - No session found",
+			})
+			return
+		}
+
+		sessionUserID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+		if err != nil || sessionUserID == "" {
+			log.Printf("No valid user ID in session: %v", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Unauthorized - Invalid session",
+			})
+			return
+		}
+
+		userID = sessionUserID
 	}
 
-	profile, err := ah.postHandler.getUserProfile(userID)
+	log.Printf("Getting profile for user ID: %s", userID)
+
+	// Query user data
+	query := `
+		SELECT id, nickname, email, first_name, last_name, age, gender, profile_pic
+		FROM users
+		WHERE id = ?
+	`
+
+	var user struct {
+		ID         string         `json:"id"`
+		Nickname   string         `json:"nickname"`
+		Email      string         `json:"email"`
+		FirstName  string         `json:"first_name"`
+		LastName   string         `json:"last_name"`
+		Age        int            `json:"age"`
+		Gender     string         `json:"gender"`
+		ProfilePic sql.NullString `json:"profile_pic"`
+	}
+
+	err := utils.GlobalDB.QueryRow(query, userID).Scan(
+		&user.ID,
+		&user.Nickname,
+		&user.Email,
+		&user.FirstName,
+		&user.LastName,
+		&user.Age,
+		&user.Gender,
+		&user.ProfilePic,
+	)
 	if err != nil {
+		log.Printf("Error getting user profile: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Error getting user profile: %v", err),
+		})
 		return
 	}
 
+	// Return user data
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"profile": profile,
+		"profile": user,
 	})
 }
 
 func (ah *APIHandler) handleUpdateProfilePic(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	userID := r.Context().Value("userID").(string)
+	// Get user ID from context or session cookie
+	var userID string
+
+	// Try to get from context first
+	contextUserID := r.Context().Value("userID")
+	if contextUserID != nil {
+		if id, ok := contextUserID.(string); ok && id != "" {
+			userID = id
+		}
+	}
+
+	// If not in context, try to get from session cookie
+	if userID == "" {
+		cookie, err := r.Cookie("session_token")
+		if err != nil {
+			log.Printf("Error getting session cookie: %v", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized - No session cookie found"})
+			return
+		}
+
+		// Validate the session
+		sessionUserID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+		if err != nil {
+			log.Printf("Session validation failed: %v", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid or expired session"})
+			return
+		}
+
+		userID = sessionUserID
+	}
+
+	// Check if we have a valid user ID
 	if userID == "" {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized - No valid user ID found"})
 		return
 	}
 
+	log.Printf("Updating profile picture for user ID: %s", userID)
+
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		log.Printf("Error parsing multipart form: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "File too large"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "File too large or invalid form"})
 		return
 	}
 
 	file, header, err := r.FormFile("profile_pic")
 	if err != nil {
+		log.Printf("Error getting profile_pic file: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid file upload"})
 		return
 	}
 	defer file.Close()
 
+	log.Printf("Processing profile picture: %s, size: %d bytes", header.Filename, header.Size)
+
 	// Process image using ImageHandler
 	imageHandler := NewImageHandler()
 	imagePath, err := imageHandler.ProcessImage(file, header)
 	if err != nil {
+		log.Printf("Error processing image: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
+	log.Printf("Image processed successfully: %s", imagePath)
+
 	// Update database
 	_, err = utils.GlobalDB.Exec("UPDATE users SET profile_pic = ? WHERE id = ?", imagePath, userID)
 	if err != nil {
+		log.Printf("Error updating profile_pic in database: %v", err)
 		os.Remove(imagePath)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update profile picture"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update profile picture in database"})
 		return
 	}
+
+	log.Printf("Profile picture updated successfully for user: %s", userID)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1968,6 +2069,92 @@ func (ah *APIHandler) handleLikedPosts(w http.ResponseWriter, r *http.Request) {
 	// Return posts as JSON
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
+}
+
+// handleUserStats returns statistics for a user (post count, comment count, likes received)
+func (ah *APIHandler) handleUserStats(w http.ResponseWriter, r *http.Request) {
+	// Set response headers
+	w.Header().Set("Content-Type", "application/json")
+
+	// Get user ID from query parameter
+	userID := r.URL.Query().Get("id")
+	if userID == "" {
+		// If no ID provided, try to get current user from session
+		cookie, err := r.Cookie("session_token")
+		if err != nil {
+			log.Printf("Error getting session: %v", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Unauthorized - No session found",
+			})
+			return
+		}
+
+		sessionUserID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+		if err != nil || sessionUserID == "" {
+			log.Printf("No valid user ID in session: %v", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Unauthorized - Invalid session",
+			})
+			return
+		}
+
+		userID = sessionUserID
+	}
+
+	log.Printf("Getting stats for user ID: %s", userID)
+
+	// Get post count
+	var postCount int
+	err := utils.GlobalDB.QueryRow("SELECT COUNT(*) FROM posts WHERE user_id = ?", userID).Scan(&postCount)
+	if err != nil {
+		log.Printf("Error getting post count: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Error getting post count: %v", err),
+		})
+		return
+	}
+
+	// Get comment count
+	var commentCount int
+	err = utils.GlobalDB.QueryRow("SELECT COUNT(*) FROM comments WHERE user_id = ?", userID).Scan(&commentCount)
+	if err != nil {
+		log.Printf("Error getting comment count: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Error getting comment count: %v", err),
+		})
+		return
+	}
+
+	// Get likes received (likes on user's posts)
+	var likesReceived int
+	err = utils.GlobalDB.QueryRow(`
+		SELECT COUNT(*) 
+		FROM reaction r
+		JOIN posts p ON r.post_id = p.id
+		WHERE p.user_id = ? AND r.like = 1
+	`, userID).Scan(&likesReceived)
+	if err != nil {
+		log.Printf("Error getting likes received: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Error getting likes received: %v", err),
+		})
+		return
+	}
+
+	// Return stats
+	stats := map[string]interface{}{
+		"post_count":     postCount,
+		"comment_count":  commentCount,
+		"likes_received": likesReceived,
+		"user_id":        userID,
+	}
+
+	json.NewEncoder(w).Encode(stats)
 }
 
 // handleCommentedPosts returns posts commented on by the current user

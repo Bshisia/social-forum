@@ -31,7 +31,7 @@ class UsersNavComponent {
                         
                         return `
                             <li class="user-item">
-                                <a href="/profile/${userId}" class="user-link">
+                                <a href="/profile?id=${userId}" class="user-link" onclick="event.preventDefault(); window.navigation.navigateTo('/profile?id=${userId}')">
                                     <div class="user-avatar">
                                         ${profilePic ? 
                                             `<img src="${profilePic}" alt="${userName}'s avatar" class="user-avatar-img">` :
