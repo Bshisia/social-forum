@@ -1,6 +1,7 @@
 // Import authentication service 
 import AuthService from './services/auth-service.js'; 
 import AuthComponent from './components/authentication/auth.js'; 
+import navigationHelper from './services/navigation-helper.js';
 
 import NavbarComponent from './components/navbar/navbar.js';
 import PostsComponent from './components/posts/posts.js';
@@ -25,19 +26,74 @@ export {
     handlePostClick
 };
 
+// Function to reset layout before navigation
+function resetLayout() {
+    console.log('Resetting layout');
+    
+    // Clean up navigation helper
+    navigationHelper.cleanUp();
+    
+    // Reset the main content area
+    const mainContent = document.getElementById('main-content');
+    if (mainContent) {
+        mainContent.innerHTML = `
+            <div class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Loading...</p>
+            </div>
+        `;
+    }
+    
+    // Make sure sidebars are in their proper place
+    const filterNav = document.getElementById('filter-nav');
+    const usersNav = document.getElementById('users-nav');
+    
+    // Reset filter nav position and display
+    if (filterNav) {
+        filterNav.style.position = '';
+        filterNav.style.left = '';
+        filterNav.style.top = '';
+        filterNav.style.width = '';
+        filterNav.style.zIndex = '';
+    }
+    
+    // Reset users nav position and display
+    if (usersNav) {
+        usersNav.style.position = '';
+        usersNav.style.right = '';
+        usersNav.style.top = '';
+        usersNav.style.width = '';
+        usersNav.style.zIndex = '';
+    }
+    
+    // Reset any other layout issues
+    document.body.style.overflow = '';
+}
 // Navigation helper
 window.navigation = { 
     navigateTo: (path, data = null) => { 
+        console.log(`Navigation: navigating to ${path}`);
+        
         if (path === window.location.pathname + window.location.search) { 
             // Don't push new state if URL hasn't changed 
+            resetLayout(); // Still reset layout
             handleRoute(); 
             return; 
         } 
+        
+        // Reset layout before navigation
+        resetLayout();
+        
         window.history.pushState(data, '', path); 
         handleRoute(); 
     }, 
     reloadPage: () => { 
-        handleRoute(); // Just re-handle current route instead of navigating 
+        console.log('Navigation: reloading page');
+        
+        // Reset layout before reloading
+        resetLayout();
+        
+        handleRoute(); // Re-handle current route instead of navigating 
     } 
 }; 
 
@@ -103,58 +159,76 @@ const router = {
         });
     },
     '/created': () => {
-        // Check authentication before showing created posts
-        AuthService.checkAuthState().then(isAuth => {
-            if (!isAuth) {
-                window.navigation.navigateTo('/signin');
-                return;
-            }
+    // Check authentication before showing created posts
+    AuthService.checkAuthState().then(isAuth => {
+        if (!isAuth) {
+            window.navigation.navigateTo('/signin');
+            return;
+        }
+        
+        // Get user ID from query parameter if present
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('user_id');
+        
+        // Load posts created by the specified user or current user
+        loadCreatedPosts(userId);
+    });
+},
+
+'/liked': () => {
+    // Check authentication before showing liked posts
+    AuthService.checkAuthState().then(isAuth => {
+        if (!isAuth) {
+            window.navigation.navigateTo('/signin');
+            return;
+        }
+        
+        // Get user ID from query parameter if present
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('user_id');
+        
+        // Load posts liked by the specified user or current user
+        loadLikedPosts(userId);
+    });
+},
+
+'/commented': () => {
+    // Check authentication before showing commented posts
+    AuthService.checkAuthState().then(isAuth => {
+        if (!isAuth) {
+            window.navigation.navigateTo('/signin');
+            return;
+        }
+        
+        // Get user ID from query parameter if present
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('user_id');
+        
+        // Load posts commented on by the specified user or current user
+        loadCommentedPosts(userId);
+    });
+},
+
+ '/create': () => { 
+    // Check authentication before showing create post page 
+    AuthService.checkAuthState().then(isAuth => { 
+        if (!isAuth) { 
+            window.navigation.navigateTo('/signin'); 
+            return; 
+        } 
+        
+        if (typeof CreatePostComponent === 'function') {
+            const createPost = new CreatePostComponent(); 
+            createPost.mount(); 
             
-            // Load posts created by the current user
-            loadCreatedPosts();
-        });
-    },
-    '/liked': () => {
-        // Check authentication before showing liked posts
-        AuthService.checkAuthState().then(isAuth => {
-            if (!isAuth) {
-                window.navigation.navigateTo('/signin');
-                return;
-            }
-            
-            // Load posts liked by the current user
-            loadLikedPosts();
-        });
-    },
-    '/commented': () => {
-        // Check authentication before showing commented posts
-        AuthService.checkAuthState().then(isAuth => {
-            if (!isAuth) {
-                window.navigation.navigateTo('/signin');
-                return;
-            }
-            
-            // Load posts commented on by the current user
-            loadCommentedPosts();
-        });
-    },
-    '/create': () => { 
-        // Check authentication before showing create post page 
-        AuthService.checkAuthState().then(isAuth => { 
-            if (!isAuth) { 
-                window.navigation.navigateTo('/signin'); 
-                return; 
-            } 
-            
-            if (typeof CreatePostComponent === 'function') {
-                const createPost = new CreatePostComponent(); 
-                createPost.mount(); 
-            } else {
-                console.error('CreatePostComponent is not defined');
-                document.getElementById('main-content').innerHTML = '<h1>Create Post</h1><p>Component not available</p>';
-            }
-        }); 
-    }, 
+            // Register with navigation helper
+            navigationHelper.setCurrentComponent(createPost);
+        } else {
+            console.error('CreatePostComponent is not defined');
+            document.getElementById('main-content').innerHTML = '<h1>Create Post</h1><p>Component not available</p>';
+        }
+    }); 
+}, 
     '/edit-post': (id) => { 
         // Check authentication before showing edit post page 
         AuthService.checkAuthState().then(isAuth => { 
@@ -348,9 +422,18 @@ function toggleNavigationElements(show) {
 }
 
 // Handle browser back/forward navigation
-window.addEventListener('popstate', () => { 
-    handleRoute(); 
-}); 
+window.addEventListener('popstate', (event) => { 
+    console.log('Navigation: popstate event triggered');
+    
+    // Try to handle with navigation helper first
+    const handled = navigationHelper.handleBack();
+    
+    if (!handled) {
+        // If not handled by navigation helper, reset layout and handle route
+        resetLayout();
+        handleRoute(); 
+    }
+});
 
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {    

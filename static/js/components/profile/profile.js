@@ -154,6 +154,16 @@ class ProfileComponent {
             profilePicValid = true;
         }
         
+        // Create navigation URLs with user ID for other users' profiles
+        const createdPostsUrl = this.isCurrentUser ? '/created' : `/created?user_id=${this.userId}`;
+        const commentedPostsUrl = this.isCurrentUser ? '/commented' : `/commented?user_id=${this.userId}`;
+        const likedPostsUrl = this.isCurrentUser ? '/liked' : `/liked?user_id=${this.userId}`;
+        
+        // Determine if stats cards should be clickable based on count
+        const createdClickable = this.userStats.postCount > 0;
+        const commentedClickable = this.userStats.commentCount > 0;
+        const likedClickable = this.userStats.likesReceived > 0;
+        
         let html = `
             <div class="page-header">
                 <h1 class="page-title">PROFILE</h1>
@@ -188,31 +198,37 @@ class ProfileComponent {
             </div>
             
             <div class="stats-container">
-                <div class="stat-card" onclick="window.navigation.navigateTo('/created')" style="cursor: pointer;">
+                <div class="stat-card ${createdClickable ? 'clickable' : 'disabled'}" 
+                     ${createdClickable ? `data-url="${createdPostsUrl}"` : ''}
+                     style="cursor: ${createdClickable ? 'pointer' : 'default'};">
                     <i class="fas fa-pencil-alt"></i>
                     <h3>Posts Created</h3>
                     <span class="stat-number">${this.userStats.postCount}</span>
                     <div class="stat-link">
-                        <span>View Posts</span>
-                        <i class="fas fa-arrow-right"></i>
+                        <span>${createdClickable ? 'View Posts' : 'No Posts'}</span>
+                        ${createdClickable ? '<i class="fas fa-arrow-right"></i>' : ''}
                     </div>
                 </div>
-                <div class="stat-card" onclick="window.navigation.navigateTo('/commented')" style="cursor: pointer;">
+                <div class="stat-card ${commentedClickable ? 'clickable' : 'disabled'}" 
+                     ${commentedClickable ? `data-url="${commentedPostsUrl}"` : ''}
+                     style="cursor: ${commentedClickable ? 'pointer' : 'default'};">
                     <i class="fas fa-comment"></i>
                     <h3>Comments Made</h3>
                     <span class="stat-number">${this.userStats.commentCount}</span>
                     <div class="stat-link">
-                        <span>View Comments</span>
-                        <i class="fas fa-arrow-right"></i>
+                        <span>${commentedClickable ? 'View Comments' : 'No Comments'}</span>
+                        ${commentedClickable ? '<i class="fas fa-arrow-right"></i>' : ''}
                     </div>
                 </div>
-                <div class="stat-card" onclick="window.navigation.navigateTo('/liked')" style="cursor: pointer;">
+                <div class="stat-card ${likedClickable ? 'clickable' : 'disabled'}" 
+                     ${likedClickable ? `data-url="${likedPostsUrl}"` : ''}
+                     style="cursor: ${likedClickable ? 'pointer' : 'default'};">
                     <i class="fas fa-heart"></i>
                     <h3>Likes Given</h3>
                     <span class="stat-number">${this.userStats.likesReceived}</span>
                     <div class="stat-link">
-                        <span>View Liked Posts</span>
-                        <i class="fas fa-arrow-right"></i>
+                        <span>${likedClickable ? 'View Liked Posts' : 'No Likes'}</span>
+                        ${likedClickable ? '<i class="fas fa-arrow-right"></i>' : ''}
                     </div>
                 </div>
             </div>
@@ -247,17 +263,13 @@ class ProfileComponent {
             profilePicInput.addEventListener('change', this.handleProfilePicUpdate.bind(this));
         }
         
-        // Make stat cards clickable
-        const statCards = document.querySelectorAll('.stat-card');
+        // Make stat cards clickable only if they have content
+        const statCards = document.querySelectorAll('.stat-card.clickable');
         statCards.forEach(card => {
             card.addEventListener('click', (e) => {
-                const route = e.currentTarget.getAttribute('onclick');
-                if (route) {
-                    // Extract the route from the onclick attribute
-                    const routeMatch = route.match(/navigateTo\('([^']+)'\)/);
-                    if (routeMatch && routeMatch[1]) {
-                        window.navigation.navigateTo(routeMatch[1]);
-                    }
+                const url = card.getAttribute('data-url');
+                if (url) {
+                    window.navigation.navigateTo(url);
                 }
             });
         });
@@ -319,6 +331,27 @@ class ProfileComponent {
                         }
                     });
             }, 100);
+        }
+    }
+    
+    // Add unmount method for clean navigation
+    unmount() {
+        console.log('Unmounting ProfileComponent');
+        
+        // Remove event listeners
+        const profilePicInput = document.getElementById('profile_pic');
+        if (profilePicInput) {
+            profilePicInput.removeEventListener('change', this.handleProfilePicUpdate);
+        }
+        
+        const statCards = document.querySelectorAll('.stat-card.clickable');
+        statCards.forEach(card => {
+            card.removeEventListener('click', null);
+        });
+        
+        // Clear the container
+        if (this.container) {
+            this.container.innerHTML = '';
         }
     }
 }

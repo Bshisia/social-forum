@@ -2,6 +2,9 @@ class CreatePostComponent {
     constructor() {
         this.mainContainer = document.getElementById('main-content');
         this.errorMessage = '';
+        // Bind methods to this instance to maintain context
+        this.handleSubmit = this.handleSubmit.bind(this);
+        this.handleImageChange = this.handleImageChange.bind(this);
     }
 
     render() {
@@ -225,7 +228,46 @@ class CreatePostComponent {
         });
     }
 
+
+
+    handleImageChange(e) {
+        const file = e.target.files[0];
+        const preview = document.getElementById('image-preview');
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; height: auto;">`;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    attachEventListeners() {
+        const form = document.getElementById('create-post-form');
+        form.addEventListener('submit', this.handleSubmit);
+
+        const imageInput = document.getElementById('image-input');
+        imageInput.addEventListener('change', this.handleImageChange);
+    }
+
+    /**
+     * Clean up when component is unmounted
+     * This helps prevent layout issues when navigating away
+     */
     unmount() {
+        console.log('Unmounting CreatePostComponent');
+        
+        // Remove event listeners
+        const form = document.getElementById('create-post-form');
+        if (form) {
+            form.removeEventListener('submit', this.handleSubmit);
+        }
+        
+        const imageInput = document.getElementById('image-input');
+        if (imageInput) {
+            imageInput.removeEventListener('change', this.handleImageChange);
+        }
+        
         // Show sidebars again
         const filterNav = document.getElementById('filter-nav');
         const usersNav = document.getElementById('users-nav');
@@ -237,25 +279,12 @@ class CreatePostComponent {
         if (mainLayout) {
             mainLayout.classList.remove('create-post-layout');
         }
-    }
-
-
-    attachEventListeners() {
-        const form = document.getElementById('create-post-form');
-        form.addEventListener('submit', this.handleSubmit.bind(this));
-
-        const imageInput = document.getElementById('image-input');
-        imageInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            const preview = document.getElementById('image-preview');
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; height: auto;">`;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
+        
+        // Clear the container if needed
+        if (this.mainContainer) {
+            // Optional: clear content or leave it for the next component
+            // this.mainContainer.innerHTML = '';
+        }
     }
 }
 
