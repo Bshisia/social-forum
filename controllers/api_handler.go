@@ -147,9 +147,12 @@ func (ah *APIHandler) checkAuth(w http.ResponseWriter, r *http.Request) bool {
 
 func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
+		log.Printf("Invalid method for posts endpoint: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	log.Printf("Handling GET request for posts")
 
 	// Get all posts from the database
 	query := `
@@ -163,6 +166,7 @@ func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
 		ORDER BY p.post_at DESC
 	`
 
+	log.Printf("Executing posts query")
 	rows, err := utils.GlobalDB.Query(query)
 	if err != nil {
 		log.Printf("Error querying posts: %v", err)
@@ -172,7 +176,11 @@ func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	var posts []utils.Post
+	postCount := 0
 	for rows.Next() {
+		postCount++
+		log.Printf("Processing post #%d", postCount)
+		
 		var post utils.Post
 		var postTime string
 		var profilePic sql.NullString
@@ -186,23 +194,32 @@ func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
 			continue // Skip this post but continue with others
 		}
 
+		// Debug: Log the post data after scanning
+		log.Printf("Post scanned from DB: ID=%d, Title=%s, UserID=%s, Username=%s, Likes=%d, Dislikes=%d, Comments=%d", 
+			post.ID, post.Title, post.UserID, post.Username, post.Likes, post.Dislikes, post.Comments)
+
 		// Format the time
 		post.PostTime = postTime
+		log.Printf("Post time: %s", postTime)
 
 		// Handle null profile pic
 		if profilePic.Valid {
 			post.ProfilePic = profilePic.String
+			log.Printf("Profile pic path: %s", profilePic.String)
 		} else {
 			post.ProfilePic = "" // Default empty string for NULL profile_pic
+			log.Printf("No profile pic found")
 		}
 
 		// Get categories for this post
+		log.Printf("Fetching categories for post ID: %d", post.ID)
 		categories, err := ah.postHandler.getPostCategories(int64(post.ID))
 		if err != nil {
 			log.Printf("Error getting categories for post %d: %v", post.ID, err)
 			// Continue anyway, just with empty categories
 			post.Categories = []utils.Category{}
 		} else {
+			log.Printf("Found %d categories for post %d", len(categories), post.ID)
 			post.Categories = categories
 		}
 
@@ -211,13 +228,33 @@ func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
 
 	// If no posts were found, return an empty array rather than nil
 	if posts == nil {
+		log.Printf("No posts found, returning empty array")
 		posts = []utils.Post{}
+	} else {
+		log.Printf("Found %d posts total", len(posts))
 	}
 
 	// Return posts as JSON
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	
+	// Debug: Log the final posts array before sending
+	for i, post := range posts {
+		log.Printf("Post %d: ID=%d, Title=%s, UserID=%s, Username=%s, Categories=%v", 
+			i, post.ID, post.Title, post.UserID, post.Username, getCategoryNames(post.Categories))
+	}
+	
+	log.Printf("Sending %d posts to client", len(posts))
 	json.NewEncoder(w).Encode(posts)
+}
+
+// Helper function to extract category names for logging
+func getCategoryNames(categories []utils.Category) []string {
+	var names []string
+	for _, cat := range categories {
+		names = append(names, cat.Name)
+	}
+	return names
 }
 
 func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {

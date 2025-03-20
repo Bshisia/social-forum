@@ -1,143 +1,198 @@
-class PostsComponent {constructor() {
-    this.posts = [];
-    this.isLoggedIn = false;
-    this.currentUserID = null;
-    this.container = null;
-    this.filterCategory = null;
-}
-
-mount(container = document.getElementById('main-content')) {
-    this.container = container;
-    if (!this.container) {
-        console.error('Cannot mount PostsComponent: container element not found');
-        return;
+class PostsComponent {
+    constructor() {
+        this.posts = [];
+        this.isLoggedIn = false;
+        this.currentUserID = null;
+        this.container = null;
+        this.filterCategory = null;
     }
-    
-    // Get filter category from URL if present
-    const urlParams = new URLSearchParams(window.location.search);
-    this.filterCategory = urlParams.get('category');
-    
-    // Get authentication state if not provided
-    if (!this.isLoggedIn) {
-        const currentUser = AuthService.getCurrentUser();
-        this.isLoggedIn = !!currentUser;
-        this.currentUserID = currentUser ? currentUser.id : null;
+
+    mount(container = document.getElementById('main-content')) {
+        this.container = container;
+        if (!this.container) {
+            console.error('Cannot mount PostsComponent: container element not found');
+            return;
+        }
+        
+        // Get filter category from URL if present
+        const urlParams = new URLSearchParams(window.location.search);
+        this.filterCategory = urlParams.get('category');
+        
+        // Get authentication state if not provided
+        if (!this.isLoggedIn) {
+            const currentUser = AuthService.getCurrentUser();
+            this.isLoggedIn = !!currentUser;
+            this.currentUserID = currentUser ? currentUser.id : null;
+        }
+        
+        // Debug: Log the posts data
+        console.log('Posts data in mount:', this.posts);
+        
+        this.render();
+        this.attachEventListeners();
     }
-    
-    this.render();
-    this.attachEventListeners();
-}
 
-render() {
-    // Filter posts by category if needed
-    const filteredPosts = this.filterCategory 
-        ? this.posts.filter(post => post.category === this.filterCategory)
-        : this.posts;
+    render() {
+        // Debug: Log the posts data before filtering
+        console.log('Posts data before filtering:', this.posts);
         
-    if (filteredPosts.length === 0) {
-        this.renderEmptyState();
-    } else {
-        this.renderPosts(filteredPosts);
+        // Filter posts by category if needed
+        const filteredPosts = this.filterCategory 
+            ? this.posts.filter(post => {
+                // Check if post has Categories array and if it includes the filter category
+                return post.Categories && post.Categories.some(cat => 
+                    cat.Name === this.filterCategory || cat.name === this.filterCategory
+                );
+            })
+            : this.posts;
+        
+        // Debug: Log the filtered posts
+        console.log('Filtered posts:', filteredPosts);
+            
+        if (filteredPosts.length === 0) {
+            this.renderEmptyState();
+        } else {
+            this.renderPosts(filteredPosts);
+        }
     }
-}
 
-renderEmptyState() {
-    const categoryText = this.filterCategory 
-        ? `in category "${this.filterCategory}"` 
-        : '';
-        
-    this.container.innerHTML = `
-        <div class="posts-container">
-            <div class="posts-header">
-                <h1>Posts ${categoryText}</h1>
-                ${this.isLoggedIn ? `
-                    <button class="btn btn-primary create-post-btn" onclick="window.navigation.navigateTo('/create')">
-                        <i class="fas fa-plus"></i> Create Post
-                    </button>
-                ` : ''}
-            </div>
-            <div class="no-posts-message">
-                <i class="fas fa-info-circle"></i>
-                <p>No posts available ${categoryText}. ${this.isLoggedIn ? 'Be the first to create a post!' : 'Please sign in to create a post.'}</p>
-                ${this.isLoggedIn ? `
-                    <button onclick="window.navigation.navigateTo('/create')" class="btn btn-primary mt-3">
-                        <i class="fas fa-plus"></i> Create Post
-                    </button>
-                ` : `
-                    <button onclick="window.navigation.navigateTo('/signin')" class="btn btn-primary mt-3">
-                        <i class="fas fa-sign-in-alt"></i> Sign In
-                    </button>
-                `}
-            </div>
-        </div>
-    `;
-}
-
-renderPosts(posts) {
-    let postsHtml = `
-        <div class="posts-container">
-            <div class="posts-header">
-                <h1>Posts ${this.filterCategory ? `in ${this.filterCategory}` : ''}</h1>
-                ${this.isLoggedIn ? `
-                    <button class="btn btn-primary create-post-btn" onclick="window.navigation.navigateTo('/create')">
-                        <i class="fas fa-plus"></i> Create Post
-                    </button>
-                ` : ''}
-            </div>
-            <div class="posts-list">
-    `;
-    
-    // Create post cards
-    posts.forEach(post => {
-        const isAuthor = this.isLoggedIn && this.currentUserID === post.author_id;
-        
-        postsHtml += `
-            <div class="post-card">
-                ${post.category ? `<div class="post-category">${post.category}</div>` : ''}
-                <h3 class="post-title">${post.title || 'Untitled Post'}</h3>
-                <p class="post-excerpt">${post.content?.substring(0, 150) || 'No content'}${post.content?.length > 150 ? '...' : ''}</p>
-                <div class="post-footer">
-                    <div class="post-meta">
-                        <span class="post-author">By: ${post.author || 'Anonymous'}</span>
-                        <span class="post-date">${this.formatDate(post.created_at)}</span>
-                    </div>
-                    <div class="post-actions">
-                        <button onclick="window.navigation.navigateTo('/?id=${post.id}')" class="btn btn-sm btn-outline">
-                            Read More
+    renderEmptyState() {
+        const categoryText = this.filterCategory 
+            ? `in category "${this.filterCategory}"` 
+            : '';
+            
+        this.container.innerHTML = `
+            <div class="posts-container">
+                <div class="posts-header">
+                    <h1>Posts ${categoryText}</h1>
+                    ${this.isLoggedIn ? `
+                        <button class="btn btn-primary create-post-btn" onclick="window.navigation.navigateTo('/create')">
+                            <i class="fas fa-plus"></i> Create Post
                         </button>
-                        ${isAuthor ? `
-                            <button onclick="window.navigation.navigateTo('/edit-post?id=${post.id}')" class="btn btn-sm">
-                                <i class="fas fa-edit"></i> Edit
-                            </button>
-                        ` : ''}
-                    </div>
+                    ` : ''}
+                </div>
+                <div class="no-posts-message">
+                    <i class="fas fa-info-circle"></i>
+                    <p>No posts available ${categoryText}. ${this.isLoggedIn ? 'Be the first to create a post!' : 'Please sign in to create a post.'}</p>
+                    ${this.isLoggedIn ? `
+                        <button onclick="window.navigation.navigateTo('/create')" class="btn btn-primary mt-3">
+                            <i class="fas fa-plus"></i> Create Post
+                        </button>
+                    ` : `
+                        <button onclick="window.navigation.navigateTo('/signin')" class="btn btn-primary mt-3">
+                            <i class="fas fa-sign-in-alt"></i> Sign In
+                        </button>
+                    `}
                 </div>
             </div>
         `;
-    });
-    
-    postsHtml += `
-            </div>
-        </div>
-    `;
-    
-    this.container.innerHTML = postsHtml;
-}
-
-formatDate(dateString) {
-    if (!dateString) return 'Unknown date';
-    
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
-        });
-    } catch (e) {
-        return dateString;
     }
-}
+
+    renderPosts(posts) {
+        // Debug: Log the posts data being rendered
+        console.log('Rendering posts:', posts);
+        
+        let postsHtml = `
+            <div class="posts-container">
+                <div class="posts-header">
+                    <h1>Posts ${this.filterCategory ? `in ${this.filterCategory}` : ''}</h1>
+                    ${this.isLoggedIn ? `
+                        <button class="btn btn-primary create-post-btn" onclick="window.navigation.navigateTo('/create')">
+                            <i class="fas fa-plus"></i> Create Post
+                        </button>
+                    ` : ''}
+                </div>
+                <div class="posts-list">
+        `;
+        
+        // Create post cards
+        posts.forEach(post => {
+            // Debug: Log each post being processed
+            console.log('Processing post:', post);
+            
+            // Handle different field name formats that might come from the API
+            const postId = post.ID || post.id;
+            const title = post.Title || post.title || 'Untitled Post';
+            const content = post.Content || post.content || 'No content';
+            const author = post.Username || post.username || post.Author || post.author || 'Anonymous';
+            const authorId = post.UserID || post.userId || post.user_id || '';
+            const postDate = post.PostTime || post.postTime || post.created_at || '';
+            const categories = post.Categories || post.categories || [];
+            
+            // Debug: Log the extracted fields
+            console.log('Extracted fields:', { postId, title, content, author, authorId, postDate });
+            
+            // Format category display
+            let categoryDisplay = '';
+            if (categories && categories.length > 0) {
+                // Handle both object and string categories
+                const categoryNames = categories.map(cat => 
+                    typeof cat === 'string' ? cat : (cat.Name || cat.name)
+                ).filter(Boolean);
+                
+                if (categoryNames.length > 0) {
+                    categoryDisplay = `<div class="post-category">${categoryNames.join(', ')}</div>`;
+                }
+            }
+            
+            // Ensure content is a string before using substring
+            const contentStr = String(content);
+            const contentPreview = contentStr.substring(0, 150) + (contentStr.length > 150 ? '...' : '');
+            
+            const isAuthor = this.isLoggedIn && this.currentUserID === authorId;
+            
+            postsHtml += `
+                <div class="post-card" data-post-id="${postId}">
+                    ${categoryDisplay}
+                    <h3 class="post-title">${title}</h3>
+                    <p class="post-excerpt">${contentPreview}</p>
+                    <div class="post-footer">
+                        <div class="post-meta">
+                            <span class="post-author">By: ${author}</span>
+                            <span class="post-date">${this.formatDate(postDate)}</span>
+                        </div>
+                        <div class="post-actions">
+                            <button onclick="window.navigation.navigateTo('/?id=${postId}')" class="btn btn-sm btn-outline">
+                                Read More
+                            </button>
+                            ${isAuthor ? `
+                                <button onclick="window.navigation.navigateTo('/edit-post?id=${postId}')" class="btn btn-sm">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        postsHtml += `
+                </div>
+            </div>
+        `;
+        
+        this.container.innerHTML = postsHtml;
+    }
+
+    formatDate(dateString) {
+        if (!dateString) return 'Unknown date';
+        
+        try {
+            const date = new Date(dateString);
+            // Check if date is valid
+            if (isNaN(date.getTime())) {
+                return 'Invalid date';
+            }
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        } catch (e) {
+            console.error('Error formatting date:', e);
+            return 'Date error';
+        }
+    }
 
     attachEventListeners() {
         // Post click handler
@@ -200,20 +255,15 @@ formatDate(dateString) {
         });
 
         const editButtons = document.querySelectorAll('.btn-edit');
-    editButtons.forEach(button => {
-        button.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent post click
-            e.preventDefault(); // Prevent default link behavior
-            const postId = button.dataset.postId;
-            console.log('Edit button clicked for post:', postId); // Debug
-            window.navigation.navigateTo(`/edit-post?id=${postId}`);
+        editButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent post click
+                e.preventDefault(); // Prevent default link behavior
+                const postId = button.dataset.postId;
+                console.log('Edit button clicked for post:', postId); // Debug
+                window.navigation.navigateTo(`/edit-post?id=${postId}`);
+            });
         });
-    });
-
-
-
-
-
     }
 
     handlePostClick(postId) {
@@ -246,6 +296,9 @@ formatDate(dateString) {
                 return response.json();
             })
             .then(data => {
+                // Debug: Log the single post data
+                console.log('Single post data:', data);
+                
                 const singlePost = new SinglePostComponent(postId);
                 singlePost.post = data.post;
                 singlePost.comments = data.comments;
@@ -314,7 +367,6 @@ formatDate(dateString) {
                 console.error('Error:', error);
             });
     }
-
 
     handleDislike(postId) {
         fetch('/api/posts/react', {
