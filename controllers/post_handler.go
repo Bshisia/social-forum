@@ -279,7 +279,7 @@ func (ph *PostHandler) getAllUsers() ([]utils.User, error) {
 	var users []utils.User
 	for rows.Next() {
 		var user utils.User
-		err := rows.Scan(&user.ID, &user.UserName, &user.ProfilePic)
+		err := rows.Scan(&user.ID, &user.Nickname, &user.ImageURL)
 		if err != nil {
 			return nil, err
 		}
@@ -289,88 +289,70 @@ func (ph *PostHandler) getAllUsers() ([]utils.User, error) {
 }
 
 func (ph *PostHandler) getAllPosts() ([]utils.Post, error) {
-	rows, err := utils.GlobalDB.Query(`
-        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, 
-               p.post_at, p.likes, p.dislikes, p.comments,
-               u.username, u.profile_pic, c.id AS category_id, c.name AS category_name
+	query := `
+        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at, 
+               u.username, 
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments,
+               u.profile_pic
         FROM posts p
         JOIN users u ON p.user_id = u.id
-        LEFT JOIN post_categories pc ON p.id = pc.post_id
-        LEFT JOIN categories c ON pc.category_id = c.id
         ORDER BY p.post_at DESC
-    `)
+    `
+
+	rows, err := utils.GlobalDB.Query(query)
 	if err != nil {
+		log.Printf("Error querying posts: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
 
-	postMap := make(map[int]utils.Post)
+	var posts []utils.Post
 	for rows.Next() {
 		var post utils.Post
 		var postTime time.Time
-		var categoryID sql.NullInt64
-		var categoryName sql.NullString
 
-		if err := rows.Scan(
+		err := rows.Scan(
 			&post.ID,
 			&post.UserID,
 			&post.Title,
 			&post.Content,
 			&post.ImagePath,
 			&postTime,
+			&post.Username,
 			&post.Likes,
 			&post.Dislikes,
 			&post.Comments,
-			&post.Username,
 			&post.ProfilePic,
-			&categoryID,
-			&categoryName,
-		); err != nil {
-			log.Printf("Error scanning post: %v", err)
-			continue
+		)
+		if err != nil {
+			log.Printf("Error scanning post row: %v", err)
+			continue // Skip this post but continue with others
 		}
 
+		// Format the time
 		post.PostTime = FormatTimeAgo(postTime)
 
-		// If this post already exists in our map, update it
-		if existingPost, exists := postMap[post.ID]; exists {
-			if categoryID.Valid && categoryName.Valid {
-				category := utils.Category{
-					ID:   int(categoryID.Int64),
-					Name: categoryName.String,
-				}
-				// Check if category already exists
-				categoryExists := false
-				for _, existingCat := range existingPost.Categories {
-					if existingCat.ID == category.ID {
-						categoryExists = true
-						break
-					}
-				}
-				if !categoryExists {
-					existingPost.Categories = append(existingPost.Categories, category)
-				}
-				postMap[post.ID] = existingPost
-			}
+		// Get categories for this post
+		categories, err := ph.getPostCategories(int64(post.ID))
+		if err != nil {
+			log.Printf("Error getting categories for post %d: %v", post.ID, err)
+			// Continue anyway, just with empty categories
+			post.Categories = []utils.Category{}
 		} else {
-			// Initialize Categories slice
-			post.Categories = make([]utils.Category, 0)
-			if categoryID.Valid && categoryName.Valid {
-				post.Categories = append(post.Categories, utils.Category{
-					ID:   int(categoryID.Int64),
-					Name: categoryName.String,
-				})
-			}
-			postMap[post.ID] = post
+			post.Categories = categories
 		}
-	}
 
-	var posts []utils.Post
-	for _, post := range postMap {
 		posts = append(posts, post)
 	}
 
-	return posts, rows.Err()
+	// If no posts were found, return an empty array rather than nil
+	if posts == nil {
+		posts = []utils.Post{}
+	}
+
+	return posts, nil
 }
 
 func (ph *PostHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
@@ -602,41 +584,31 @@ func (ph *PostHandler) getPostByID(postID int64) (*utils.Post, []utils.Comment, 
 	post := &utils.Post{}
 	err := utils.GlobalDB.QueryRow(`
         SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at, 
-               p.likes, p.dislikes, p.comments, u.username, u.profile_pic
+               u.username, 
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments,
+               u.profile_pic
         FROM posts p
         LEFT JOIN users u ON p.user_id = u.id
         WHERE p.id = ?
     `, postID).Scan(
 		&post.ID, &post.UserID, &post.Title, &post.Content, &post.ImagePath,
-		&postTime, &post.Likes, &post.Dislikes, &post.Comments,
-		&post.Username, &post.ProfilePic,
+		&postTime, &post.Username, &post.Likes, &post.Dislikes, &post.Comments,
+		&post.ProfilePic,
 	)
-
 	if err != nil {
 		return nil, nil, err
 	}
 	post.PostTime = FormatTimeAgo(postTime)
 
-
 	// Get categories for the post
-	rows, err := utils.GlobalDB.Query(`
-        SELECT c.id, c.name 
-        FROM categories c
-        JOIN post_categories pc ON c.id = pc.category_id
-        WHERE pc.post_id = ?
-    `, postID)
+	categories, err := ph.getPostCategories(postID)
 	if err != nil {
-		return nil, nil, err
-	}
-	defer rows.Close()
-
-	post.Categories = []utils.Category{}
-	for rows.Next() {
-		var cat utils.Category
-		if err := rows.Scan(&cat.ID, &cat.Name); err != nil {
-			return nil, nil, err
-		}
-		post.Categories = append(post.Categories, cat)
+		log.Printf("Error getting categories for post %d: %v", postID, err)
+		post.Categories = []utils.Category{}
+	} else {
+		post.Categories = categories
 	}
 
 	// Get comments
@@ -1180,8 +1152,37 @@ func (ph *PostHandler) getPostsByCategoryName(categoryName string) ([]utils.Post
 	return ph.scanPosts(rows)
 }
 
+// getPostCategories retrieves all categories for a given post
+func (ph *PostHandler) getPostCategories(postID int64) ([]utils.Category, error) {
+	query := `
+		SELECT c.id, c.name 
+		FROM categories c
+		JOIN post_categories pc ON c.id = pc.category_id
+		WHERE pc.post_id = ?
+	`
+
+	rows, err := utils.GlobalDB.Query(query, postID)
+	if err != nil {
+		log.Printf("Error querying categories for post %d: %v", postID, err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categories []utils.Category
+	for rows.Next() {
+		var category utils.Category
+		if err := rows.Scan(&category.ID, &category.Name); err != nil {
+			log.Printf("Error scanning category row: %v", err)
+			continue
+		}
+		categories = append(categories, category)
+	}
+
+	return categories, nil
+}
+
 func (ph *PostHandler) scanPosts(rows *sql.Rows) ([]utils.Post, error) {
-	postMap := make(map[int]utils.Post)
+	postMap := make(map[int64]utils.Post)
 	for rows.Next() {
 		var post utils.Post
 		var postTime time.Time
@@ -1238,67 +1239,67 @@ func (ph *PostHandler) scanPosts(rows *sql.Rows) ([]utils.Post, error) {
 }
 
 func (ph *PostHandler) getUserProfile(userID string) (*ProfileData, error) {
-    var profile ProfileData
+	var profile ProfileData
 
-    // Validate userID
-    if userID == "" {
-        return nil, fmt.Errorf("invalid user ID")
-    }
+	// Validate userID
+	if userID == "" {
+		return nil, fmt.Errorf("invalid user ID")
+	}
 
-    // First check if user exists
-    var exists bool
-    err := utils.GlobalDB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", userID).Scan(&exists)
-    if err != nil {
-        return nil, fmt.Errorf("error checking user existence: %v", err)
-    }
-    if !exists {
-        return nil, fmt.Errorf("user not found")
-    }
+	// First check if user exists
+	var exists bool
+	err := utils.GlobalDB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", userID).Scan(&exists)
+	if err != nil {
+		return nil, fmt.Errorf("error checking user existence: %v", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("user not found")
+	}
 
-    // Get user profile data
-    err = utils.GlobalDB.QueryRow(`
+	// Get user profile data
+	err = utils.GlobalDB.QueryRow(`
         SELECT username, email, COALESCE(profile_pic, '') as profile_pic
         FROM users 
         WHERE id = ?
     `, userID).Scan(&profile.Username, &profile.Email, &profile.ProfilePic)
-    if err != nil {
-        return nil, fmt.Errorf("error getting user profile: %v", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("error getting user profile: %v", err)
+	}
 
-    // Get post count
-    err = utils.GlobalDB.QueryRow(`
+	// Get post count
+	err = utils.GlobalDB.QueryRow(`
         SELECT COUNT(*) 
         FROM posts 
         WHERE user_id = ?
     `, userID).Scan(&profile.PostCount)
-    if err != nil {
-        return nil, fmt.Errorf("error getting post count: %v", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("error getting post count: %v", err)
+	}
 
-    // Get comment count
-    err = utils.GlobalDB.QueryRow(`
+	// Get comment count
+	err = utils.GlobalDB.QueryRow(`
         SELECT COUNT(*) 
         FROM comments 
         WHERE user_id = ?
     `, userID).Scan(&profile.CommentCount)
-    if err != nil {
-        return nil, fmt.Errorf("error getting comment count: %v", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("error getting comment count: %v", err)
+	}
 
-    // Get likes received
-    err = utils.GlobalDB.QueryRow(`
+	// Get likes received
+	err = utils.GlobalDB.QueryRow(`
         SELECT COUNT(*) 
         FROM reaction l
         JOIN posts p ON l.post_id = p.id
         WHERE p.user_id = ? AND l.like = 1
     `, userID).Scan(&profile.LikesReceived)
-    if err != nil {
-        return nil, fmt.Errorf("error getting likes received: %v", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("error getting likes received: %v", err)
+	}
 
-    profile.UserID = userID
-    profile.IsLoggedIn = true // Set based on session
-    profile.IsOwnProfile = false // Set based on comparison with current user
+	profile.UserID = userID
+	profile.IsLoggedIn = true    // Set based on session
+	profile.IsOwnProfile = false // Set based on comparison with current user
 
-    return &profile, nil
+	return &profile, nil
 }

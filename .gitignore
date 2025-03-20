@@ -4,3 +4,4 @@ static/uploads/
 *.env
 *.sqlite
 .qodo
+*.json

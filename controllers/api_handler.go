@@ -25,6 +25,17 @@ func NewAPIHandler() *APIHandler {
 }
 
 func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers for API requests
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	// Handle preflight requests
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	switch r.URL.Path {
 	case "/api/posts":
 		ah.handlePosts(w, r)
@@ -68,16 +79,16 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		ah.handleEditComment(w, r)
-	case "/api/comments/delete":
-		if !ah.checkAuth(w, r) {
-			return
-		}
 	case "/login": // Add this new endpoint
 		ah.handleLogin(w, r)
 	case "/register": // Add this new endpoint
 		ah.handleRegister(w, r)
 	case "/signout": // Add this new endpoint
 		ah.handleSignout(w, r)
+	case "/api/comments/delete":
+		if !ah.checkAuth(w, r) {
+			return
+		}
 		ah.handleDeleteComment(w, r)
 	case "/api/users/profile":
 		if r.Method == "GET" {
@@ -97,19 +108,36 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ah *APIHandler) checkAuth(w http.ResponseWriter, r *http.Request) bool {
+	// Get the session cookie
 	cookie, err := r.Cookie("session_token")
 	if err != nil {
+		log.Printf("Authentication failed: No session cookie found - Error: %v", err)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "No session found. Please log in."})
 		return false
 	}
 
+	// Log the cookie value for debugging (partial for security)
+	cookiePreview := ""
+	if len(cookie.Value) > 10 {
+		cookiePreview = cookie.Value[:10] + "..."
+	} else {
+		cookiePreview = cookie.Value
+	}
+	log.Printf("Found session cookie: %s", cookiePreview)
+
+	// Validate the session
 	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
 	if err != nil {
+		log.Printf("Session validation failed: %v", err)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid session"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid or expired session. Please log in again."})
 		return false
 	}
+
+	log.Printf("Session validated successfully for user: %s", userID)
 
 	// Add userID to request context
 	ctx := context.WithValue(r.Context(), "userID", userID)
@@ -118,15 +146,77 @@ func (ah *APIHandler) checkAuth(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	posts, err := ah.postHandler.getAllPosts()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	// Get all posts from the database
+	query := `
+		SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+			   u.nickname, u.profile_pic,
+			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+			   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		ORDER BY p.post_at DESC
+	`
+
+	rows, err := utils.GlobalDB.Query(query)
+	if err != nil {
+		log.Printf("Error querying posts: %v", err)
+		http.Error(w, "Failed to get posts", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var posts []utils.Post
+	for rows.Next() {
+		var post utils.Post
+		var postTime string
+		var profilePic sql.NullString
+
+		err := rows.Scan(
+			&post.ID, &post.Title, &post.Content, &post.ImagePath, &postTime, &post.UserID,
+			&post.Username, &profilePic, &post.Likes, &post.Dislikes, &post.Comments,
+		)
+		if err != nil {
+			log.Printf("Error scanning post row: %v", err)
+			continue // Skip this post but continue with others
+		}
+
+		// Format the time
+		post.PostTime = postTime
+
+		// Handle null profile pic
+		if profilePic.Valid {
+			post.ProfilePic = profilePic.String
+		} else {
+			post.ProfilePic = "" // Default empty string for NULL profile_pic
+		}
+
+		// Get categories for this post
+		categories, err := ah.postHandler.getPostCategories(int64(post.ID))
+		if err != nil {
+			log.Printf("Error getting categories for post %d: %v", post.ID, err)
+			// Continue anyway, just with empty categories
+			post.Categories = []utils.Category{}
+		} else {
+			post.Categories = categories
+		}
+
+		posts = append(posts, post)
+	}
+
+	// If no posts were found, return an empty array rather than nil
+	if posts == nil {
+		posts = []utils.Post{}
+	}
+
+	// Return posts as JSON
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(posts)
 }
 
@@ -135,24 +225,31 @@ func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 
 	postid := r.URL.Query().Get("id")
 	if postid == "" {
-		http.Error(w, "Post ID required", http.StatusBadRequest)
+		log.Printf("Single post request missing ID parameter")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Post ID required"})
 		return
 	}
 
 	postID, err := strconv.ParseInt(postid, 10, 64)
 	if err != nil {
+		log.Printf("Invalid post ID format: %s", postid)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid post ID"})
 		return
 	}
 
+	log.Printf("Fetching single post with ID: %d", postID)
 	post, comments, err := ah.postHandler.getPostByID(postID)
 	if err != nil {
-		log.Printf("Error getting post: %v", err) // Add debug logging
-		http.Error(w, err.Error(), http.StatusNotFound)
+		log.Printf("Error getting post: %v", err)
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
+	// Return success response
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"post":     post,
 		"comments": comments,
@@ -160,13 +257,63 @@ func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ah *APIHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	users, err := ah.postHandler.getAllUsers()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Get all users from the database
+	query := `
+		SELECT id, nickname, email, first_name, last_name, age, gender, profile_pic, created_at
+		FROM users
+		ORDER BY created_at DESC
+	`
+
+	rows, err := utils.GlobalDB.Query(query)
+	if err != nil {
+		log.Printf("Error getting users: %v", err)
+		http.Error(w, "Failed to get users", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var users []utils.User
+	for rows.Next() {
+		var user utils.User
+		var createdAt time.Time
+		var profilePic sql.NullString
+
+		// Scan into the User struct with proper handling for NULL profile_pic
+		err := rows.Scan(
+			&user.ID, &user.Nickname, &user.Email, &user.FirstName, &user.LastName,
+			&user.Age, &user.Gender, &profilePic, &createdAt,
+		)
+		if err != nil {
+			log.Printf("Error scanning user row: %v", err)
+			continue
+		}
+
+		// Format the time
+		user.CreatedAt = createdAt
+
+		// Handle NULL profile_pic
+		if profilePic.Valid {
+			user.ProfilePic = profilePic.String
+		} else {
+			user.ProfilePic = "" // Default empty string for NULL profile_pic
+		}
+
+		users = append(users, user)
+	}
+
+	// If no users were found, return an empty array rather than nil
+	if users == nil {
+		users = []utils.User{}
+	}
+
+	// Return users as JSON
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(users)
 }
 
@@ -177,16 +324,20 @@ func (ah *APIHandler) handleFilteredPosts(w http.ResponseWriter, r *http.Request
 	userID := r.URL.Query().Get("userId")
 	category := r.URL.Query().Get("category")
 
+	log.Printf("Filtered posts request - Type: %s, UserID: %s, Category: %s",
+		filterType, userID, category)
+
 	var posts []utils.Post
 	var err error
 
 	switch filterType {
 	case "created":
+
 		posts, err = fetchUserPostsForPosts(userID)
 	case "liked":
 		posts, err = fetchUserPostsForLikes(userID)
-	case "commented":
-		posts, err = fetchUserPostsForComments(userID)
+	// case "commented":
+	// 	posts, err = fetchUserPostsForComments(userID)
 	case "category":
 		posts, err = ah.postHandler.getPostsByCategoryName(category)
 	default:
@@ -194,11 +345,14 @@ func (ah *APIHandler) handleFilteredPosts(w http.ResponseWriter, r *http.Request
 	}
 
 	if err != nil {
+		log.Printf("Error getting filtered posts: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
+	// Return success response
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(posts)
 }
 
@@ -207,16 +361,20 @@ func (ah *APIHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 
 	userID := r.Context().Value("userID").(string)
 	if userID == "" {
+		log.Printf("Create post failed: userID is empty in context")
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized - User ID not found in session"})
 		return
 	}
+
+	log.Printf("Creating post for user: %s", userID)
 
 	// Parse multipart form with error handling
 	err := r.ParseMultipartForm(20 << 20)
 	if err != nil && err != http.ErrNotMultipart {
+		log.Printf("Error parsing form: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Error parsing form"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Error parsing form: " + err.Error()})
 		return
 	}
 
@@ -225,7 +383,11 @@ func (ah *APIHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	content := r.FormValue("content")
 	categories := r.Form["categories[]"]
 
+	log.Printf("Post data received - Title: %s, Content length: %d, Categories: %v",
+		title, len(content), categories)
+
 	if title == "" || content == "" || len(categories) == 0 {
+		log.Printf("Invalid post data: missing required fields")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Title, content, and at least one category are required"})
 		return
@@ -235,46 +397,56 @@ func (ah *APIHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	var imagePath string
 	file, header, err := r.FormFile("image")
 	if err != nil && err != http.ErrMissingFile {
+		log.Printf("Error getting image file: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Error processing image"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Error processing image: " + err.Error()})
 		return
 	}
 
 	if err == nil && file != nil {
+		log.Printf("Image file received: %s, size: %d bytes", header.Filename, header.Size)
 		defer file.Close()
 		if header.Size > 20<<20 {
+			log.Printf("Image too large: %d bytes", header.Size)
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Image too large"})
+			json.NewEncoder(w).Encode(map[string]string{"error": "Image too large (max 20MB)"})
 			return
 		}
 
 		imageHandler := NewImageHandler()
 		imagePath, err = imageHandler.ProcessImage(file, header)
 		if err != nil {
+			log.Printf("Image processing failed: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Image processing failed"})
+			json.NewEncoder(w).Encode(map[string]string{"error": "Image processing failed: " + err.Error()})
 			return
 		}
+		log.Printf("Image processed successfully: %s", imagePath)
 	}
 
 	// Start transaction
 	tx, err := utils.GlobalDB.Begin()
 	if err != nil {
+		log.Printf("Database error starting transaction: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error: " + err.Error()})
 		return
 	}
 	defer tx.Rollback()
 
 	// Insert post
 	currentTime := time.Now()
+	log.Printf("Inserting post into database - UserID: %s, Title: %s, Time: %v",
+		userID, title, currentTime)
+
 	result, err := tx.Exec(`
         INSERT INTO posts (user_id, title, content, imagepath, post_at)
         VALUES (?, ?, ?, ?, ?)
     `, userID, title, content, imagePath, currentTime)
 	if err != nil {
+		log.Printf("Error creating post: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Error creating post"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Error creating post: " + err.Error()})
 		return
 	}
 
@@ -317,10 +489,13 @@ func (ah *APIHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
+		log.Printf("Error committing transaction: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Error committing transaction"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Error committing transaction: " + err.Error()})
 		return
 	}
+
+	log.Printf("Post created successfully - ID: %d", postID)
 
 	// Return success response
 	w.WriteHeader(http.StatusCreated)
@@ -991,8 +1166,8 @@ func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set the session cookie
-	http.SetCookie(w, &http.Cookie{
+	// Set the session cookie with detailed logging
+	cookie := &http.Cookie{
 		Name:     "session_token",
 		Value:    sessionToken,
 		Path:     "/",
@@ -1000,10 +1175,15 @@ func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Secure:   r.TLS != nil,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   3600 * 24 * 7, // 1 week
-	})
+	}
+	http.SetCookie(w, cookie)
+
+	// Log cookie details for debugging
+	log.Printf("Setting session cookie: Name=%s, Path=%s, HttpOnly=%v, Secure=%v, SameSite=%v, MaxAge=%d",
+		cookie.Name, cookie.Path, cookie.HttpOnly, cookie.Secure, cookie.SameSite, cookie.MaxAge)
 
 	// Debug: Log successful login
-	log.Printf("Login successful - User: %s, Nickname: %s", userId, nickname)
+	log.Printf("Login successful - User: %s, Nickname: %s, Session: %s", userId, nickname, sessionToken[:10]+"...")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1040,7 +1220,7 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Debug: Log decoding error
 		log.Printf("Registration error - Failed to decode request body: %v", err)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1051,15 +1231,15 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Debug: Log registration attempt
-	log.Printf("Registration attempt - Email: %s, Nickname: %s", 
+	log.Printf("Registration attempt - Email: %s, Nickname: %s",
 		userData.Email, userData.Nickname)
 
 	// Validate input
 	if userData.Nickname == "" || userData.Email == "" || userData.Password == "" {
 		// Debug: Log validation failure
-		log.Printf("Registration validation failed - Nickname: %s, Email: %s", 
+		log.Printf("Registration validation failed - Nickname: %s, Email: %s",
 			userData.Nickname, userData.Email)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1075,7 +1255,7 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Debug: Log database error
 		log.Printf("Registration error - Failed to check email: %v", err)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1088,7 +1268,7 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if count > 0 {
 		// Debug: Log email already exists
 		log.Printf("Registration failed - Email already exists: %s", userData.Email)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1103,7 +1283,7 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Debug: Log database error
 		log.Printf("Registration error - Failed to check nickname: %v", err)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1116,7 +1296,7 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if count > 0 {
 		// Debug: Log nickname already exists
 		log.Printf("Registration failed - Nickname already exists: %s", userData.Nickname)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1131,7 +1311,7 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Debug: Log password hashing error
 		log.Printf("Registration error - Failed to hash password: %v", err)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1158,7 +1338,7 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Debug: Log database error
 		log.Printf("Registration error - Failed to create user: %v", err)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1169,9 +1349,9 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userId, _ := result.LastInsertId()
-	
+
 	// Debug: Log successful registration
-	log.Printf("Registration successful - User ID: %d, Email: %s, Nickname: %s", 
+	log.Printf("Registration successful - User ID: %d, Email: %s, Nickname: %s",
 		userId, userData.Email, userData.Nickname)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1242,26 +1422,42 @@ func (ah *APIHandler) handleValidateSession(w http.ResponseWriter, r *http.Reque
 	cookie, err := r.Cookie("session_token")
 	if err != nil {
 		// No session cookie, session is invalid
+		log.Printf("Session validation: No cookie found - Error: %v", err)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"valid": false,
+			"error": "No session cookie found",
 		})
 		return
 	}
 
+	// Log cookie details for debugging
+	cookiePreview := ""
+	if len(cookie.Value) > 10 {
+		cookiePreview = cookie.Value[:10] + "..."
+	} else {
+		cookiePreview = cookie.Value
+	}
+	log.Printf("Session validation: Found cookie: %s", cookiePreview)
+
 	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
 	if err != nil {
 		// Invalid session
+		log.Printf("Session validation failed: %v", err)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"valid": false,
+			"error": err.Error(),
 		})
 		return
 	}
+
+	log.Printf("Session validated successfully for user: %s", userID)
 
 	// Get user information
 	var email, nickname string
 	err = utils.GlobalDB.QueryRow("SELECT email, nickname FROM users WHERE id = ?", userID).Scan(&email, &nickname)
 	if err != nil {
 		// Error retrieving user info, but session is still valid
+		log.Printf("Error retrieving user info: %v", err)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"valid":    true,
 			"userId":   userID,
@@ -1275,6 +1471,7 @@ func (ah *APIHandler) handleValidateSession(w http.ResponseWriter, r *http.Reque
 	var unreadCount int
 	err = utils.GlobalDB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read = 0", userID).Scan(&unreadCount)
 	if err != nil {
+		log.Printf("Error getting notification count: %v", err)
 		unreadCount = 0
 	}
 

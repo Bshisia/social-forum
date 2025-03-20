@@ -420,35 +420,18 @@ function loadPosts() {
     }) 
         .then(response => {
             if (!response.ok) {
-                // If API not implemented yet or returns error, show placeholder with mock data
-                console.warn(`Error loading posts: ${response.status}`);
-                return { 
-                    posts: [
-                        {
-                            id: 1,
-                            title: "Welcome to the Forum",
-                            content: "This is a placeholder post since the API returned an error. The backend might not be fully implemented yet.",
-                            author: "System",
-                            created_at: new Date().toISOString()
-                        },
-                        {
-                            id: 2,
-                            title: "Getting Started",
-                            content: "Here are some tips to get started with the forum. This is placeholder content.",
-                            author: "Admin",
-                            created_at: new Date().toISOString()
-                        }
-                    ]
-                };
+                // Don't show placeholders, show error instead
+                throw new Error(`Failed to load posts: ${response.status}`);
             }
             return response.json();
         }) 
         .then(postsData => {
             console.log('Posts received:', postsData); 
             
-            // Handle empty posts array
+            // Handle empty posts array or null data
+            // Always ensure we have an array, even if empty
             const posts = Array.isArray(postsData) ? postsData : 
-                          (postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
+                        (postsData && postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
             
             if (typeof PostsComponent === 'function') {
                 const postsComponent = new PostsComponent();
@@ -457,8 +440,8 @@ function loadPosts() {
                 postsComponent.currentUserID = AuthService.getCurrentUser()?.id; 
                 postsComponent.mount(); 
             } else {
-                // Show placeholder if component not available
-                showPostsPlaceholder(posts);
+                // Show proper empty state or posts list
+                showProperPostsState(posts);
             }
         }) 
         .catch(error => { 
@@ -466,9 +449,9 @@ function loadPosts() {
             const mainContent = document.getElementById('main-content');
             if (mainContent) {
                 mainContent.innerHTML = ` 
-                    <div class="no-posts-message"> 
+                    <div class="error-message"> 
                         <i class="fas fa-exclamation-circle"></i> 
-                        <p>Error loading posts. Please try again later.</p> 
+                        <p>Error loading posts: ${error.message}</p> 
                         <button onclick="window.navigation.reloadPage()" class="btn btn-primary mt-3">
                             <i class="fas fa-sync"></i> Retry
                         </button>
@@ -477,18 +460,18 @@ function loadPosts() {
         }); 
 } 
 
-// Show placeholder for posts when component not available
-function showPostsPlaceholder(posts) {
+// Show proper empty state or posts list (replacing showPostsPlaceholder)
+function showProperPostsState(posts) {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
     
-    if (posts.length === 0) {
+    if (!posts || posts.length === 0) {
         mainContent.innerHTML = `
             <div class="posts-container">
                 <h1>Posts</h1>
                 <div class="no-posts-message">
                     <i class="fas fa-info-circle"></i>
-                    <p>No posts available. Be the first to create a post!</p>
+                    <p>No posts available yet. Be the first to create a post!</p>
                     <button onclick="window.navigation.navigateTo('/create')" class="btn btn-primary mt-3">
                         <i class="fas fa-plus"></i> Create Post
                     </button>
@@ -502,15 +485,25 @@ function showPostsPlaceholder(posts) {
                 <div class="posts-list">
         `;
         
-        // Create simple post cards
+        // Create post cards
         posts.forEach(post => {
+            // Handle different field name formats that might come from the API
+            const postId = post.ID || post.id;
+            const title = post.Title || post.title || 'Untitled Post';
+            const content = post.Content || post.content || 'No content';
+            const author = post.Username || post.username || post.Author || post.author || 'Anonymous';
+            
+            // Ensure content is a string before using substring
+            const contentStr = String(content);
+            const contentPreview = contentStr.substring(0, 100) + (contentStr.length > 100 ? '...' : '');
+            
             postsHtml += `
-                <div class="post-card">
-                    <h3>${post.title || 'Untitled Post'}</h3>
-                    <p>${post.content?.substring(0, 100) || 'No content'}${post.content?.length > 100 ? '...' : ''}</p>
+                <div class="post-card" data-post-id="${postId}">
+                    <h3 class="post-title">${title}</h3>
+                    <p class="post-excerpt">${contentPreview}</p>
                     <div class="post-footer">
-                        <span>By: ${post.author || 'Anonymous'}</span>
-                        <button onclick="window.navigation.navigateTo('/?id=${post.id}')" class="btn btn-sm">
+                        <span class="post-author">By: ${author}</span>
+                        <button onclick="window.navigation.navigateTo('/?id=${postId}')" class="btn btn-sm">
                             Read More
                         </button>
                     </div>
@@ -519,6 +512,11 @@ function showPostsPlaceholder(posts) {
         });
         
         postsHtml += `
+                </div>
+                <div class="create-post-button-container">
+                    <button onclick="window.navigation.navigateTo('/create')" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Create New Post
+                    </button>
                 </div>
             </div>
         `;

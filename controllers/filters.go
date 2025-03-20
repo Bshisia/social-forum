@@ -83,7 +83,7 @@ func getAllUsers() ([]utils.User, error) {
 	var users []utils.User
 	for rows.Next() {
 		var user utils.User
-		err := rows.Scan(&user.ID, &user.UserName, &user.ProfilePic)
+		err := rows.Scan(&user.ID, &user.Nickname, &user.ImageURL)
 		if err != nil {
 			return nil, err
 		}
@@ -101,8 +101,7 @@ func CommentedPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch posts
-	posts, err := fetchUserPostsForComments(userID)
+	posts, err := FetchUserPostsForComments(userID)
 	if err != nil {
 		log.Printf("Error fetching posts: %v", err)
 		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
@@ -152,7 +151,7 @@ func fetchUserPostsForPosts(userID string) ([]utils.Post, error) {
 	}
 	defer rows.Close()
 
-	postMap := make(map[int]utils.Post)
+	postMap := make(map[int64]utils.Post)
 	var postTime time.Time
 	for rows.Next() {
 		var post utils.Post
@@ -236,7 +235,7 @@ func fetchUserPostsForLikes(userID string) ([]utils.Post, error) {
 	}
 	defer rows.Close()
 
-	postMap := make(map[int]utils.Post)
+	postMap := make(map[int64]utils.Post)
 	var postTime time.Time
 	for rows.Next() {
 		var post utils.Post
@@ -286,7 +285,7 @@ func fetchUserPostsForLikes(userID string) ([]utils.Post, error) {
 	return posts, nil
 }
 
-func fetchUserPostsForComments(userID string) ([]utils.Post, error) {
+func FetchUserPostsForComments(userID string) ([]utils.Post, error) {
 	rows, err := utils.GlobalDB.Query(`
 		SELECT DISTINCT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at, p.likes, p.dislikes, p.comments,
 			   u.username, u.profile_pic, c.id AS category_id, c.name AS category_name
@@ -303,7 +302,7 @@ func fetchUserPostsForComments(userID string) ([]utils.Post, error) {
 	}
 	defer rows.Close()
 
-	postMap := make(map[int]utils.Post)
+	postMap := make(map[int64]utils.Post)
 	var postTime time.Time
 	for rows.Next() {
 		var post utils.Post
