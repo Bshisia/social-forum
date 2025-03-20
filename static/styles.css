@@ -224,10 +224,30 @@ body::before {
   color: white;
   border-radius: 8px;
   transition: background-color 0.2s ease;
+  position: relative;
 }
 
 .mobile-menu-content a:hover {
   background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Active mobile menu link styling */
+.mobile-menu-content a.active {
+  font-weight: bold;
+  background-color: rgba(255, 255, 255, 0.15);
+  position: relative;
+}
+
+.mobile-menu-content a.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 70%;
+  background-color: rgba(130, 193, 212, 0.8);
+  border-radius: 0 2px 2px 0;
 }
 
 /* Overlay */
@@ -970,11 +990,33 @@ body::before {
     padding: 10px;
     border-radius: 8px;
     transition: background-color 0.2s ease;
+    position: relative;
 }
 
 .categories-filter-container a:hover,
 .users-filter-container a:hover {
     background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Active filter link styling */
+.categories-filter-container a.active,
+.users-filter-container a.active {
+    font-weight: bold;
+    background-color: rgba(255, 255, 255, 0.2);
+    position: relative;
+}
+
+.categories-filter-container a.active::before,
+.users-filter-container a.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 70%;
+    background-color: rgba(130, 193, 212, 0.8);
+    border-radius: 0 2px 2px 0;
 }
 
 /* Section headings */

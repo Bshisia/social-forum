@@ -45,6 +45,8 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ah.handleUsers(w, r)
 	case "/api/posts/filter":
 		ah.handleFilteredPosts(w, r)
+	case "/api/posts/category":
+		ah.handleCategoryPosts(w, r)
 	case "/api/posts/create":
 		if !ah.checkAuth(w, r) {
 			return
@@ -329,15 +331,14 @@ func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 		post.Categories = categories
 	}
 
-	// Query for comments
 	commentsQuery := `
-		SELECT c.id, c.content, c.user_id, u.nickname, u.profile_pic, c.created_at,
-			   (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND like = 1) as likes,
-			   (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND like = 0) as dislikes
+		SELECT c.id, c.content, c.user_id, u.nickname, u.profile_pic, c.comment_at,
+			   (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND likes = 1) as likes,
+			   (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND likes = 0) as dislikes
 		FROM comments c
 		JOIN users u ON c.user_id = u.id
 		WHERE c.post_id = ?
-		ORDER BY c.created_at ASC
+		ORDER BY c.comment_at ASC
 	`
 
 	rows, err := utils.GlobalDB.Query(commentsQuery, postID)
@@ -355,12 +356,12 @@ func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 	var comments []utils.Comment
 	for rows.Next() {
 		var comment utils.Comment
-		var createdAt time.Time
+		var commentAt time.Time
 		var commentProfilePic sql.NullString
 
 		err := rows.Scan(
 			&comment.ID, &comment.Content, &comment.UserID, &comment.Username,
-			&commentProfilePic, &createdAt, &comment.Likes, &comment.Dislikes,
+			&commentProfilePic, &commentAt, &comment.Likes, &comment.Dislikes,
 		)
 		if err != nil {
 			log.Printf("Error scanning comment row: %v", err)
@@ -368,7 +369,7 @@ func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		comment.PostID = int(post.ID)
-		comment.CommentTime = createdAt
+		comment.CommentTime = commentAt
 
 		// Handle null profile pic
 		if commentProfilePic.Valid {
@@ -981,6 +982,118 @@ func (ah *APIHandler) handleEditComment(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// handleCategoryPosts handles requests for posts filtered by category
+func (ah *APIHandler) handleCategoryPosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		log.Printf("Invalid method for category posts endpoint: %s", r.Method)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	categoryName := r.URL.Query().Get("name")
+	if categoryName == "" {
+		log.Printf("Missing category name parameter")
+		http.Error(w, "Category name is required", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Handling GET request for posts in category: %s", categoryName)
+
+	// Get category ID
+	var categoryID int
+	err := utils.GlobalDB.QueryRow("SELECT id FROM categories WHERE name = ?", categoryName).Scan(&categoryID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Category not found: %s", categoryName)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode([]utils.Post{}) // Return empty array for non-existent category
+			return
+		}
+		log.Printf("Error querying category: %v", err)
+		http.Error(w, "Failed to get category", http.StatusInternalServerError)
+		return
+	}
+
+	// Get posts for this category
+	query := `
+		SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+			   u.nickname, u.profile_pic,
+			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+			   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		JOIN post_categories pc ON p.id = pc.post_id
+		WHERE pc.category_id = ?
+		ORDER BY p.post_at DESC
+	`
+
+	log.Printf("Executing category posts query for category ID: %d", categoryID)
+	rows, err := utils.GlobalDB.Query(query, categoryID)
+	if err != nil {
+		log.Printf("Error querying posts for category %s: %v", categoryName, err)
+		http.Error(w, "Failed to get posts", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var posts []utils.Post
+	postCount := 0
+	for rows.Next() {
+		postCount++
+		log.Printf("Processing post #%d for category %s", postCount, categoryName)
+
+		var post utils.Post
+		var postTime string
+		var profilePic sql.NullString
+
+		err := rows.Scan(
+			&post.ID, &post.Title, &post.Content, &post.ImagePath, &postTime, &post.UserID,
+			&post.Username, &profilePic, &post.Likes, &post.Dislikes, &post.Comments,
+		)
+		if err != nil {
+			log.Printf("Error scanning post row: %v", err)
+			continue // Skip this post but continue with others
+		}
+
+		// Format the time
+		post.PostTime = postTime
+
+		// Handle null profile pic
+		if profilePic.Valid {
+			post.ProfilePic = profilePic.String
+		} else {
+			post.ProfilePic = "" // Default empty string for NULL profile_pic
+		}
+
+		// Get categories for this post
+		categories, err := ah.postHandler.getPostCategories(int64(post.ID))
+		if err != nil {
+			log.Printf("Error getting categories for post %d: %v", post.ID, err)
+			// Continue anyway, just with empty categories
+			post.Categories = []utils.Category{}
+		} else {
+			post.Categories = categories
+		}
+
+		posts = append(posts, post)
+	}
+
+	// If no posts were found, return an empty array rather than nil
+	if posts == nil {
+		log.Printf("No posts found for category %s, returning empty array", categoryName)
+		posts = []utils.Post{}
+	} else {
+		log.Printf("Found %d posts for category %s", len(posts), categoryName)
+	}
+
+	// Return posts as JSON
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(posts)
+}
+
 func (ah *APIHandler) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	userID := r.Context().Value("userID").(string)
@@ -1462,10 +1575,14 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Registration debug - Password hash preview: %s", hashPreview)
 
-	// Insert user
-	result, err := utils.GlobalDB.Exec(
-		"INSERT INTO users (nickname, age, gender, first_name, last_name, email, password) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		userData.Nickname, userData.Age, userData.Gender, userData.FirstName, userData.LastName, userData.Email, hashedPassword,
+	// Generate a unique ID for the user
+	userID := utils.GenerateId()
+	log.Printf("Generated user ID: %s", userID)
+
+	// Insert user with the generated ID
+	_, err = utils.GlobalDB.Exec(
+		"INSERT INTO users (id, nickname, age, gender, first_name, last_name, email, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		userID, userData.Nickname, userData.Age, userData.Gender, userData.FirstName, userData.LastName, userData.Email, hashedPassword,
 	)
 	if err != nil {
 		// Debug: Log database error
@@ -1480,17 +1597,15 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userId, _ := result.LastInsertId()
-
 	// Debug: Log successful registration
-	log.Printf("Registration successful - User ID: %d, Email: %s, Nickname: %s",
-		userId, userData.Email, userData.Nickname)
+	log.Printf("Registration successful - User ID: %s, Email: %s, Nickname: %s",
+		userID, userData.Email, userData.Nickname)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Registration successful",
 		"success": true,
-		"userId":  userId,
+		"userId":  userID,
 	})
 }
 

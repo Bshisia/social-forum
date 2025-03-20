@@ -1,3 +1,6 @@
+// Import required services
+import AuthService from '../../services/auth-service.js';
+
 class PostsComponent {
     constructor() {
         this.posts = [];
@@ -63,16 +66,8 @@ class PostsComponent {
             
         this.container.innerHTML = `
             <div class="posts-container">
-                <div class="posts-header">
-                    <h1>Posts ${categoryText}</h1>
-                    ${this.isLoggedIn ? `
-                        <button class="btn btn-primary create-post-btn" onclick="window.navigation.navigateTo('/create')">
-                            <i class="fas fa-plus"></i> Create Post
-                        </button>
-                    ` : ''}
-                </div>
                 <div class="no-posts-message">
-                    <i class="fas fa-info-circle"></i>
+                    <i class="fas fa-inbox"></i>
                     <p>No posts available ${categoryText}. ${this.isLoggedIn ? 'Be the first to create a post!' : 'Please sign in to create a post.'}</p>
                     ${this.isLoggedIn ? `
                         <button onclick="window.navigation.navigateTo('/create')" class="btn btn-primary mt-3">
@@ -92,18 +87,7 @@ class PostsComponent {
         // Debug: Log the posts data being rendered
         console.log('Rendering posts:', posts);
         
-        let postsHtml = `
-            <div class="posts-container">
-                <div class="posts-header">
-                    <h1>Posts ${this.filterCategory ? `in ${this.filterCategory}` : ''}</h1>
-                    ${this.isLoggedIn ? `
-                        <button class="btn btn-primary create-post-btn" onclick="window.navigation.navigateTo('/create')">
-                            <i class="fas fa-plus"></i> Create Post
-                        </button>
-                    ` : ''}
-                </div>
-                <div class="posts-list">
-        `;
+        let postsHtml = `<div class="posts-container">`;
         
         // Create post cards
         posts.forEach(post => {
@@ -118,21 +102,39 @@ class PostsComponent {
             const authorId = post.UserID || post.userId || post.user_id || '';
             const postDate = post.PostTime || post.postTime || post.created_at || '';
             const categories = post.Categories || post.categories || [];
+            const likes = post.Likes || post.likes || 0;
+            const dislikes = post.Dislikes || post.dislikes || 0;
+            const comments = post.Comments || post.comments || 0;
+            const profilePic = post.ProfilePic || post.profilePic || null;
+            const imagePath = post.ImagePath || post.imagePath || '';
             
             // Debug: Log the extracted fields
             console.log('Extracted fields:', { postId, title, content, author, authorId, postDate });
+            
+            // Create avatar HTML based on profile picture
+            let avatarHtml = '';
+            if (profilePic && profilePic.Valid) {
+                avatarHtml = `<img src="${profilePic.String}" alt="Profile Picture" class="post-avatar-img">`;
+            } else {
+                avatarHtml = `
+                    <div class="post-avatar-placeholder">
+                        <i class="fas fa-user"></i>
+                    </div>
+                `;
+            }
             
             // Format category display
             let categoryDisplay = '';
             if (categories && categories.length > 0) {
                 // Handle both object and string categories
-                const categoryNames = categories.map(cat => 
-                    typeof cat === 'string' ? cat : (cat.Name || cat.name)
-                ).filter(Boolean);
-                
-                if (categoryNames.length > 0) {
-                    categoryDisplay = `<div class="post-category">${categoryNames.join(', ')}</div>`;
-                }
+                categoryDisplay = `
+                    <div class="post-categories-right">
+                        ${categories.map(cat => {
+                            const catName = typeof cat === 'string' ? cat : (cat.Name || cat.name);
+                            return catName ? `<span class="category-tag">${catName}</span>` : '';
+                        }).join('')}
+                    </div>
+                `;
             }
             
             // Ensure content is a string before using substring
@@ -142,34 +144,61 @@ class PostsComponent {
             const isAuthor = this.isLoggedIn && this.currentUserID === authorId;
             
             postsHtml += `
-                <div class="post-card" data-post-id="${postId}">
-                    ${categoryDisplay}
-                    <h3 class="post-title">${title}</h3>
-                    <p class="post-excerpt">${contentPreview}</p>
+                <div class="post-card">
+                    <div class="post-header">
+                        <div class="post-avatar">
+                            ${avatarHtml}
+                        </div>
+                        <div class="post-info">
+                            <h3>${author}</h3>
+                            <span class="timestamp">${this.formatDate(postDate)}</span>
+                        </div>
+                        ${categoryDisplay}
+                    </div>
+                    
+                    <a href="/?id=${postId}" class="post-content-link">
+                        <div class="post-content">
+                            <h2>${title}</h2>
+                            <p>${contentPreview}</p>
+                            ${imagePath ? `<img src="${imagePath}" alt="Post image" class="post-image">` : ''}
+                        </div>
+                    </a>
+                    
                     <div class="post-footer">
-                        <div class="post-meta">
-                            <span class="post-author">By: ${author}</span>
-                            <span class="post-date">${this.formatDate(postDate)}</span>
-                        </div>
-                        <div class="post-actions">
-                            <button onclick="window.navigation.navigateTo('/?id=${postId}')" class="btn btn-sm btn-outline">
-                                Read More
+                        <div class="action-container">
+                            <button class="action-btn like-btn" onclick="event.stopPropagation();" data-post-id="${postId}" data-action="like">
+                                <i class="fas fa-thumbs-up"></i>
+                                <span class="count" id="likes-${postId}">${likes}</span>
                             </button>
-                            ${isAuthor ? `
-                                <button onclick="window.navigation.navigateTo('/edit-post?id=${postId}')" class="btn btn-sm">
-                                    <i class="fas fa-edit"></i> Edit
-                                </button>
-                            ` : ''}
                         </div>
+                        <div class="action-container">
+                            <button class="action-btn comment-btn" data-post-id="${postId}" onclick="window.location.href='/?id=${postId}'">
+                                <i class="fas fa-comment"></i>
+                                <span class="count" id="comments-${postId}">${comments}</span>
+                            </button>
+                        </div>
+                        <div class="action-container">
+                            <button class="action-btn dislike-btn" onclick="event.stopPropagation();" data-post-id="${postId}" data-action="dislike">
+                                <i class="fas fa-thumbs-down"></i>
+                                <span class="count" id="dislikes-${postId}">${dislikes}</span>
+                            </button>
+                        </div>
+                        ${isAuthor ? `
+                            <div class="post-actions">
+                                <a href="/edit-post?id=${postId}" class="btn btn-edit">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <button class="btn btn-delete" data-post-id="${postId}">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             `;
         });
         
-        postsHtml += `
-                </div>
-            </div>
-        `;
+        postsHtml += `</div>`;
         
         this.container.innerHTML = postsHtml;
     }
@@ -195,18 +224,6 @@ class PostsComponent {
     }
 
     attachEventListeners() {
-        // Post click handler
-        const posts = document.querySelectorAll('.post-card');
-        posts.forEach(post => {
-            post.addEventListener('click', (e) => {
-                const postId = post.dataset.postId;
-                // Don't trigger if clicking like/comment buttons
-                if (!e.target.closest('.post-actions')) {
-                    this.handlePostClick(postId);
-                }
-            });
-        });
-
         // Like buttons
         const likeButtons = document.querySelectorAll('.like-btn');
         likeButtons.forEach(button => {
@@ -226,42 +243,15 @@ class PostsComponent {
             });
         });
 
-        const editLinks = document.querySelectorAll('.btn-edit');
-        editLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.stopPropagation(); // Only stop event bubbling
-            });
-        });
-
-        // Comment buttons
-        const commentButtons = document.querySelectorAll('.comment-btn');
-        commentButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent post click
-                const postId = button.dataset.postId;
-                this.handlePostClick(postId);
-            });
-        });
-
+        // Delete buttons
         const deleteButtons = document.querySelectorAll('.btn-delete');
         deleteButtons.forEach(button => {
             button.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const postId = button.closest('.post-card').dataset.postId;
+                const postId = button.dataset.postId;
                 if (confirm('Are you sure you want to delete this post?')) {
                     this.handleDelete(postId);
                 }
-            });
-        });
-
-        const editButtons = document.querySelectorAll('.btn-edit');
-        editButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent post click
-                e.preventDefault(); // Prevent default link behavior
-                const postId = button.dataset.postId;
-                console.log('Edit button clicked for post:', postId); // Debug
-                window.navigation.navigateTo(`/edit-post?id=${postId}`);
             });
         });
     }

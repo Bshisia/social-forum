@@ -2,9 +2,7 @@
 import AuthService from './services/auth-service.js'; 
 import AuthComponent from './components/authentication/auth.js'; 
 
-// Import other components as needed
 import NavbarComponent from './components/navbar/navbar.js';
-// Uncomment these as you implement them
 import PostsComponent from './components/posts/posts.js';
 import SinglePostComponent from './components/posts/single_post.js';
 import CreatePostComponent from './components/posts/create_post.js';
@@ -13,6 +11,16 @@ import ProfileComponent from './components/profile/profile.js';
 //import NotificationsComponent from './components/notifications/notifications.js';
 import FilterNavComponent from './components/filters/filters_nav.js';
 import UsersNavComponent from './components/users/users_nav.js';
+
+// Export functions for external use
+export {
+    loadPosts,
+    loadSinglePost,
+    loadCategoryPosts,
+    getPostIdFromUrl,
+    handleRoute,
+    handlePostClick
+};
 
 // Navigation helper
 window.navigation = { 
@@ -48,7 +56,24 @@ const router = {
             // Load posts 
             loadPosts(); 
         }); 
-    }, 
+    },
+    '/category': (categoryName) => {
+        // Check authentication before showing category posts
+        AuthService.checkAuthState().then(isAuth => {
+            if (!isAuth) {
+                window.navigation.navigateTo('/signin');
+                return;
+            }
+            
+            if (!categoryName) {
+                window.navigation.navigateTo('/');
+                return;
+            }
+            
+            // Load posts for the selected category
+            loadCategoryPosts(categoryName);
+        });
+    },
     '/create': () => { 
         // Check authentication before showing create post page 
         AuthService.checkAuthState().then(isAuth => { 
@@ -176,6 +201,9 @@ function handleRoute() {
     const urlParams = new URLSearchParams(search); 
     const userId = urlParams.get('id'); 
     const postId = urlParams.get('id'); 
+    const categoryName = urlParams.get('name');
+
+    console.log(`Handling route: ${path}${search}`);
 
     // Check if we're on an auth page
     const authPage = isAuthPage(path);
@@ -202,6 +230,16 @@ function handleRoute() {
     // Handle notifications path
     if (path === '/notifications') {
         router['/notifications']();
+        return;
+    }
+
+    // Handle category path
+    if (path === '/category') {
+        if (!categoryName) {
+            window.navigation.navigateTo('/');
+            return;
+        }
+        router['/category'](categoryName);
         return;
     }
 
@@ -294,8 +332,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 }); 
 
-// Initialize UI with user data
-function initializeUI() {
+// Make initializeUI function global so it can be called from auth component
+window.initializeUI = function() {
     const currentUser = AuthService.getCurrentUser();
     
     if (!currentUser) {
@@ -304,14 +342,17 @@ function initializeUI() {
         return;
     }
     
+    console.log('Initializing UI with user data:', currentUser);
+    
     // Initialize navbar if element exists
     const navbarElement = document.getElementById('navbar');
     if (navbarElement) {
         try {
             const navbar = new NavbarComponent( 
                 true, // isLoggedIn
-                currentUser.id, 
-                0 // unreadCount - default to 0
+                currentUser.id,
+                0, // unreadCount - default to 0
+                currentUser.nickname // Pass nickname to navbar
             ); 
             navbar.mount(navbarElement);
         } catch (error) {
@@ -324,7 +365,7 @@ function initializeUI() {
     
     // Handle the current route
     handleRoute();
-}
+};
 
 // Initialize optional components if they exist
 function initializeOptionalComponents() {
@@ -332,6 +373,8 @@ function initializeOptionalComponents() {
     if (!AuthService.getCurrentUser()) {
         return;
     }
+    
+    console.log('Initializing optional components');
     
     // Initialize filter nav if component exists
     const filterNavElement = document.getElementById('filter-nav');
@@ -351,8 +394,9 @@ function initializeOptionalComponents() {
         loadUsers()
             .then(usersData => {
                 try {
+                    console.log('Users data loaded:', usersData);
                     const usersNav = new UsersNavComponent(usersData); 
-                    usersNav.mount();
+                    usersNav.mount(usersNavElement);
                 } catch (error) {
                     console.error('Error mounting users nav:', error);
                 }
@@ -366,7 +410,7 @@ function initializeOptionalComponents() {
                 ];
                 try {
                     const usersNav = new UsersNavComponent(mockUsers);
-                    usersNav.mount();
+                    usersNav.mount(usersNavElement);
                 } catch (error) {
                     console.error('Error mounting users nav with mock data:', error);
                 }
@@ -374,8 +418,9 @@ function initializeOptionalComponents() {
     }
 }
 
-// Load users with better error handling
+// Improved loadUsers function with better error handling
 function loadUsers() {
+    console.log('Loading users...');
     return new Promise((resolve, reject) => {
         fetch('/api/users', {
             credentials: 'include' // Include cookies for auth
@@ -391,6 +436,7 @@ function loadUsers() {
             })
             .then(data => {
                 if (data) {
+                    console.log('Users data received:', data);
                     resolve(Array.isArray(data) ? data : []);
                 }
             })
@@ -461,17 +507,27 @@ function loadPosts() {
 } 
 
 // Show proper empty state or posts list (replacing showPostsPlaceholder)
-function showProperPostsState(posts) {
+function showProperPostsState(posts, categoryName = null) {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
+    
+    const title = categoryName ? `${categoryName} Posts` : 'Posts';
     
     if (!posts || posts.length === 0) {
         mainContent.innerHTML = `
             <div class="posts-container">
-                <h1>Posts</h1>
+                <div class="posts-header">
+                    <h1>${title}</h1>
+                    ${categoryName ? `
+                    <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
+                        <i class="fas fa-arrow-left"></i> All Posts
+                    </button>` : ''}
+                </div>
                 <div class="no-posts-message">
                     <i class="fas fa-info-circle"></i>
-                    <p>No posts available yet. Be the first to create a post!</p>
+                    <p>${categoryName ? 
+                        `No posts available in the ${categoryName} category.` : 
+                        'No posts available yet. Be the first to create a post!'}</p>
                     <button onclick="window.navigation.navigateTo('/create')" class="btn btn-primary mt-3">
                         <i class="fas fa-plus"></i> Create Post
                     </button>
@@ -481,7 +537,13 @@ function showProperPostsState(posts) {
     } else {
         let postsHtml = `
             <div class="posts-container">
-                <h1>Posts</h1>
+                <div class="posts-header">
+                    <h1>${title}</h1>
+                    ${categoryName ? `
+                    <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
+                        <i class="fas fa-arrow-left"></i> All Posts
+                    </button>` : ''}
+                </div>
                 <div class="posts-list">
         `;
         
@@ -750,11 +812,82 @@ function handlePostClick(postId) {
     loadSinglePost(postId);
 }
 
-// Export any functions that need to be accessed from other modules
-export {
-    loadPosts,
-    loadSinglePost,
-    getPostIdFromUrl,
-    handleRoute,
-    handlePostClick
-};
+// Function to load posts for a specific category
+function loadCategoryPosts(categoryName) {
+    console.log(`Loading posts for category: ${categoryName}`);
+    
+    // Show loading state
+    const mainContent = document.getElementById('main-content');
+    if (mainContent) {
+        mainContent.innerHTML = `
+            <div class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Loading ${categoryName} posts...</p>
+            </div>
+        `;
+    }
+    
+    fetch(`/api/posts/category?name=${encodeURIComponent(categoryName)}`, {
+        credentials: 'include' // Include cookies for auth
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Failed to load category posts: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(postsData => {
+            console.log('Category posts received:', postsData);
+            
+            // Handle empty posts array or null data
+            const posts = Array.isArray(postsData) ? postsData : 
+                        (postsData && postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
+            
+            if (typeof PostsComponent === 'function') {
+                const postsComponent = new PostsComponent();
+                postsComponent.posts = posts;
+                postsComponent.isLoggedIn = true; // We already checked auth
+                postsComponent.currentUserID = AuthService.getCurrentUser()?.id;
+                postsComponent.filterCategory = categoryName; // Set the category filter
+                postsComponent.mount();
+                
+                // Highlight the active category in the filter nav
+                const filterNav = document.getElementById('filter-nav');
+                if (filterNav && filterNav.querySelector) {
+                    const activeLink = filterNav.querySelector(`.filter-link[data-category="${categoryName}"]`);
+                    if (activeLink) {
+                        // Remove active class from all links
+                        const allLinks = filterNav.querySelectorAll('.filter-link');
+                        allLinks.forEach(link => {
+                            link.classList.remove('active');
+                        });
+                        
+                        // Add active class to the selected category link
+                        activeLink.classList.add('active');
+                    }
+                }
+            } else {
+                // Show proper empty state or posts list with category filter
+                showProperPostsState(posts, categoryName);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading category posts:', error);
+            const mainContent = document.getElementById('main-content');
+            if (mainContent) {
+                mainContent.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p>Error loading ${categoryName} posts: ${error.message}</p>
+                        <div class="mt-3">
+                            <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline mr-2">
+                                <i class="fas fa-home"></i> All Posts
+                            </button>
+                            <button onclick="window.navigation.reloadPage()" class="btn btn-primary">
+                                <i class="fas fa-sync"></i> Retry
+                            </button>
+                        </div>
+                    </div>`;
+            }
+        });
+}

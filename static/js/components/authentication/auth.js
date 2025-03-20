@@ -1,5 +1,17 @@
 import AuthService from '../../services/auth-service.js';
 
+// Function to initialize UI after successful login
+function initializeUI() {
+    // Update UI elements based on authentication state
+    const authState = AuthService.getAuthState();
+    
+    // Update navigation or other UI elements as needed
+    console.log('Initializing UI with auth state:', authState);
+    
+    // You can add more UI initialization logic here
+    // For example, showing/hiding elements based on login status
+}
+
 class AuthComponent {
     constructor(type = 'signin') {
         this.type = type; // 'signin' or 'signup'
@@ -228,6 +240,9 @@ class AuthComponent {
                     nickname: data.nickname
                 });
                 
+                // Initialize UI before navigating
+                initializeUI();
+                
                 // Navigate to home page
                 setTimeout(() => {
                     window.navigation.navigateTo('/');
@@ -266,10 +281,10 @@ class AuthComponent {
         
         const userData = {
             nickname: document.getElementById('nickname').value,
-            age: document.getElementById('age').value,
+            age: parseInt(document.getElementById('age').value),
             gender: document.getElementById('gender').value,
-            firstName: document.getElementById('firstName').value,
-            lastName: document.getElementById('lastName').value,
+            first_name: document.getElementById('firstName').value,
+            last_name: document.getElementById('lastName').value,
             email: document.getElementById('email').value,
             password: password,
         };
@@ -294,6 +309,14 @@ class AuthComponent {
             if (!response.ok) {
                 return response.json().then(data => {
                     throw new Error(data.message || `HTTP error! Status: ${response.status}`);
+                }).catch(err => {
+                    // If response is not JSON, handle plain text error
+                    if (err.name === 'SyntaxError') {
+                        return response.text().then(text => {
+                            throw new Error(text || `HTTP error! Status: ${response.status}`);
+                        });
+                    }
+                    throw err;
                 });
             }
             return response.json();

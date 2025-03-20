@@ -1,13 +1,33 @@
 import AuthService from '../../services/auth-service.js';
 
 class NavbarComponent {
-    constructor(isLoggedIn, currentUserID, unreadCount) {
+    constructor(isLoggedIn, currentUserID, unreadCount, nickname = '') {
         this.isLoggedIn = isLoggedIn;
         this.currentUserID = currentUserID;
         this.unreadCount = unreadCount;
+        this.nickname = nickname;
+        
+        // If nickname is not provided, try to get it from AuthService
+        if (!this.nickname && this.isLoggedIn) {
+            const currentUser = AuthService.getCurrentUser();
+            if (currentUser && currentUser.nickname) {
+                this.nickname = currentUser.nickname;
+            }
+        }
     }
 
     render() {
+        // Get user data if logged in but no nickname
+        if (this.isLoggedIn && !this.nickname) {
+            const currentUser = AuthService.getCurrentUser();
+            if (currentUser && currentUser.nickname) {
+                this.nickname = currentUser.nickname;
+            } else {
+                // Fallback to a default name if no nickname is available
+                this.nickname = 'User';
+            }
+        }
+        
         const template = `
             <nav class="navbar">
                 <div class="nav-container">
@@ -49,7 +69,7 @@ class NavbarComponent {
                 ${this.unreadCount > 0 ? `<span class="notification-dot">${this.unreadCount}</span>` : ''}
             </button>
             <button class="btn btn-outline" onclick="window.navigation.navigateTo('/profile?id=${this.currentUserID}')">
-                <i class="fas fa-user"></i> Profile
+                <i class="fas fa-user"></i> ${this.nickname || 'Profile'}
             </button>
             <button class="btn btn-primary" id="signout-btn">
                 <i class="fas fa-sign-out-alt"></i> Sign Out
@@ -73,7 +93,22 @@ class NavbarComponent {
                         <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/?category=General%20News')">General News</a></li>
                     </ul>
                 </div>
-            </div>`;
+            </div>
+            
+            ${this.isLoggedIn ? `
+            <div class="mobile-menu-section">
+                <button class="menu-toggle-btn">
+                    Filters <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="mobile-menu-content">
+                    <ul>
+                        <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/created')">Created Posts</a></li>
+                        <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/liked')">Reacted Posts</a></li>
+                        <li><a href="#" onclick="event.preventDefault(); window.navigation.navigateTo('/commented')">Commented Posts</a></li>
+                    </ul>
+                </div>
+            </div>
+            ` : ''}`;
     }
 
     mount(element) {
@@ -112,9 +147,29 @@ class NavbarComponent {
             signoutBtn.addEventListener('click', () => {
                 AuthService.signOut().then(() => {
                     window.navigation.navigateTo('/signin');
+                }).catch(error => {
+                    console.error('Error signing out:', error);
                 });
             });
         }
+        
+        // Toggle icon for menu buttons
+        menuToggles.forEach(toggle => {
+            if (toggle && toggle.nextElementSibling) {
+                toggle.addEventListener('click', (e) => {
+                    const icon = e.currentTarget.querySelector('i.fas');
+                    if (icon) {
+                        if (toggle.nextElementSibling.classList.contains('active')) {
+                            icon.classList.remove('fa-chevron-up');
+                            icon.classList.add('fa-chevron-down');
+                        } else {
+                            icon.classList.remove('fa-chevron-down');
+                            icon.classList.add('fa-chevron-up');
+                        }
+                    }
+                });
+            }
+        });
     }
 }
 
