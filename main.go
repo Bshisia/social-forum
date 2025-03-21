@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"forum/authentication"
+	handlers "forum/authentication"
 	"forum/controllers"
 	"forum/utils"
 )
@@ -37,10 +37,15 @@ func main() {
 	http.Handle("/api/", apiHandler)
 	http.HandleFunc("/api/user-status", controllers.GetUserStatus)
 
-	// 4. Auth routes - Use the APIHandler for login/register/signout
+	// 4. Auth routes - Use the APIHandler for login/register
 	http.Handle("/login", apiHandler)
 	http.Handle("/register", apiHandler)
-	http.Handle("/signout", apiHandler)
+
+	// Handle signout separately to ensure proper session management
+	http.HandleFunc("/signout", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Signout request received")
+		apiHandler.HandleSignout(w, r)
+	})
 
 	// 5. SPA catch-all route - serve index.html for all other routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

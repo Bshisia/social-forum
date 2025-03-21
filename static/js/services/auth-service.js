@@ -106,25 +106,46 @@ class AuthService {
     }
     
     // Sign out user
-    signOut() {
-        return fetch('/logout', {
-            method: 'POST',
-            credentials: 'include'
-        })
-            .then(() => {
-                this.clearAuthState();
-                return true;
-            })
-            .catch(error => {
-                console.error('Logout error:', error);
+    async signOut() {
+        console.log('Attempting to sign out user:', this.currentUser?.email);
+        
+        try {
+            // Use /signout to match the backend route in main.go
+            const response = await fetch('/signout', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    userId: this.currentUser?.id // Send user ID to help backend identify the session
+                })
+            });
+            
+            if (!response.ok) {
+                // Get more detailed error information
+                const errorText = await response.text();
+                console.error(`Signout failed with status ${response.status}: ${errorText}`);
+                
                 // Still clear local state even if server logout fails
                 this.clearAuthState();
                 return false;
-            });
+            }
+            
+            console.log('Sign out successful on server');
+            this.clearAuthState();
+            return true;
+        } catch (error) {
+            console.error('Logout error:', error);
+            // Still clear local state even if server logout fails
+            this.clearAuthState();
+            return false;
+        }
     }
     
     // Clear authentication state
     clearAuthState() {
+        console.log('Clearing authentication state');
         this.isAuthenticated = false;
         this.currentUser = null;
         

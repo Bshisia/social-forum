@@ -2,11 +2,11 @@ import AuthService from '../../services/auth-service.js';
 
 // Function to initialize UI after successful login
 function initializeUI() {
-    // Update UI elements based on authentication state
-    const authState = AuthService.getAuthState();
+    // Get current user data from AuthService
+    const currentUser = AuthService.getCurrentUser();
     
     // Update navigation or other UI elements as needed
-    console.log('Initializing UI with auth state:', authState);
+    console.log('Initializing UI with user data:', currentUser);
     
     // You can add more UI initialization logic here
     // For example, showing/hiding elements based on login status
@@ -233,7 +233,7 @@ class AuthComponent {
                     localStorage.setItem('userName', data.nickname);
                 }
                 
-                // Update auth state
+                // Update auth state with user data
                 AuthService.setAuthState(true, {
                     id: data.userId,
                     email: email,
