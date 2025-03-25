@@ -12,6 +12,7 @@ import ProfileComponent from './components/profile/profile.js';
 //import NotificationsComponent from './components/notifications/notifications.js';
 import FilterNavComponent from './components/filters/filters_nav.js';
 import UsersNavComponent from './components/users/users_nav.js';
+import ChatComponent from './components/chat/chat.js';
 
 // Export functions for external use
 export {
@@ -303,6 +304,29 @@ const router = {
             } else {
                 // Fallback if component doesn't exist
                 document.getElementById('main-content').innerHTML = '<h1>Notifications</h1><p>Your notifications will appear here.</p>';
+            }
+        });
+    },
+    '/chat': () => {
+        AuthService.checkAuthState().then(isAuth => {
+            if (!isAuth) {
+                window.navigation.navigateTo('/signin');
+                return;
+            }
+            
+            if (typeof ChatComponent === 'function') {
+                const chat = new ChatComponent();
+                chat.mount();
+            } else {
+                console.error('ChatComponent is not defined');
+                document.getElementById('main-content').innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p>Chat component is not available</p>
+                        <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
+                            <i class="fas fa-home"></i> Back to Home
+                        </button>
+                    </div>`;
             }
         });
     }
@@ -1318,3 +1342,74 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+class App {
+    constructor() {
+        this.currentComponent = null;
+        this.router = {
+            routes: {},
+            addRoute: (path, handler) => {
+                this.router.routes[path] = handler;
+            }
+        };
+    }
+
+    initialize() {
+        // Add chat route handling
+        this.router.addRoute('/chat', () => {
+            this.loadChat();
+        });
+
+        // Add to your existing route handler
+        this.handleRoute();
+    }
+
+    loadChat() {
+        // Get main content container
+        const mainContent = document.getElementById('main-content');
+        if (!mainContent) {
+            console.error('Main content container not found');
+            return;
+        }
+
+        // Check authentication
+        AuthService.checkAuthState().then(isAuth => {
+            if (!isAuth) {
+                window.navigation.navigateTo('/signin');
+                return;
+            }
+
+            // Clear previous content
+            mainContent.innerHTML = '';
+
+            // Initialize and mount chat component
+            const chat = new ChatComponent();
+            this.currentComponent = chat;
+            chat.mount(mainContent);
+        });
+    }
+
+    handleRoute() {
+        const path = window.location.pathname;
+        const handler = this.router.routes[path];
+
+        if (handler) {
+            handler();
+        } else {
+            // Handle default route
+            if (path === '/chat') {
+                this.loadChat();
+            }
+            // ... other route handling
+        }
+    }
+}
+
+// Add event listener for navigation
+window.addEventListener('popstate', () => {
+    app.handleRoute();
+});
+
+// Initialize the app
+const app = new App();
+app.initialize();
