@@ -1,13 +1,14 @@
 class ChatComponent {
-    constructor() {
-        this.container = null;
+    constructor(container, selectedUser) {
+        this.container = container;
+        this.selectedUser = selectedUser; // The user to chat with
         this.messages = [];
         this.currentUser = {
             id: 1,
             username: "CurrentUser",
             avatar: "https://via.placeholder.com/40"
         };
-        
+
         // Mock data for testing
         this.mockMessages = [
             {
@@ -25,26 +26,19 @@ class ChatComponent {
                 senderAvatar: "https://via.placeholder.com/40",
                 content: "I'm good, thanks! How about you?",
                 timestamp: "2024-03-24T10:01:00"
-            },
-            {
-                id: 3,
-                senderId: 2,
-                senderName: "John Doe",
-                senderAvatar: "https://via.placeholder.com/40",
-                content: "Doing great! Working on the new project.",
-                timestamp: "2024-03-24T10:02:00"
             }
         ];
     }
 
-    mount(container = document.getElementById('main-content')) {
-        this.container = container;
+    mount() {
         if (!this.container) {
             console.error('Cannot mount ChatComponent: container not found');
             return;
         }
 
-        this.messages = this.mockMessages; // In real app, fetch from API
+        this.messages = this.mockMessages.filter(
+            msg => msg.senderId === parseInt(this.selectedUser.id) || msg.senderId === this.currentUser.id
+        ); // Filter messages for the selected user
         this.render();
         this.attachEventListeners();
     }
@@ -52,17 +46,17 @@ class ChatComponent {
     render() {
         this.container.innerHTML = `
             <div class="chat-container">
-                <div class="chat-header post-card">
+                <div class="chat-header">
                     <div class="chat-user-info">
-                        <img src="${this.mockMessages[0].senderAvatar}" alt="User avatar" class="avatar">
-                        <span class="username">${this.mockMessages[0].senderName}</span>
+                        <img src="${this.selectedUser.avatar}" alt="User avatar" class="avatar">
+                        <span class="username">${this.selectedUser.username}</span>
                     </div>
                 </div>
-                <div class="chat-messages post-card" id="chat-messages">
+                <div class="chat-messages" id="chat-messages">
                     ${this.renderMessages()}
                 </div>
-                <div class="chat-input-container post-card">
-                    <input type="text" id="chat-input" class="form-group" placeholder="Type a message...">
+                <div class="chat-input-container">
+                    <input type="text" id="chat-input" placeholder="Type a message...">
                     <button id="send-message" class="btn btn-primary">
                         <i class="fas fa-paper-plane"></i>
                     </button>
@@ -70,7 +64,7 @@ class ChatComponent {
             </div>
         `;
 
-        // Auto scroll to bottom of messages
+        // Auto scroll to the bottom of the messages
         const messagesContainer = document.getElementById('chat-messages');
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
@@ -111,14 +105,16 @@ class ChatComponent {
         const sendMessage = () => {
             const content = input.value.trim();
             if (content) {
-                this.addMessage({
+                const message = {
                     id: this.messages.length + 1,
                     senderId: this.currentUser.id,
                     senderName: this.currentUser.username,
                     senderAvatar: this.currentUser.avatar,
                     content: content,
                     timestamp: new Date().toISOString()
-                });
+                };
+                this.messages.push(message);
+                this.render();
                 input.value = '';
             }
         };
@@ -130,11 +126,7 @@ class ChatComponent {
             }
         });
     }
-
-    addMessage(message) {
-        this.messages.push(message);
-        this.render();
-    }
 }
 
+// Export the component
 export default ChatComponent;
