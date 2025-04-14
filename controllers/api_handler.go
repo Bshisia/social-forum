@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"forum/utils"
+	handlers "forum/authentication"
 )
 
 type APIHandler struct {
@@ -22,6 +23,12 @@ func NewAPIHandler() *APIHandler {
 	return &APIHandler{
 		postHandler: NewPostHandler(),
 	}
+}
+
+func HandleGetOnlineUsers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	users := handlers.GetOnlineUsers()
+	json.NewEncoder(w).Encode(users)
 }
 
 func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
