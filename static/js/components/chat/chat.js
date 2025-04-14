@@ -1,46 +1,78 @@
 class ChatComponent {
-    constructor(container, selectedUser) {
+    constructor(container, selectedUser = null) {
         this.container = container;
-        this.selectedUser = selectedUser; // The user to chat with
+        this.selectedUser = selectedUser; // The user to chat with (null if listing users)
         this.messages = [];
         this.currentUser = {
             id: 1,
             username: "CurrentUser",
             avatar: "https://via.placeholder.com/40"
         };
-
-        // Mock data for testing
-        this.mockMessages = [
-            {
-                id: 1,
-                senderId: 2,
-                senderName: "John Doe",
-                senderAvatar: "https://via.placeholder.com/40",
-                content: "Hey, how are you?",
-                timestamp: "2024-03-24T10:00:00"
-            },
-            {
-                id: 2,
-                senderId: 1,
-                senderName: "CurrentUser",
-                senderAvatar: "https://via.placeholder.com/40",
-                content: "I'm good, thanks! How about you?",
-                timestamp: "2024-03-24T10:01:00"
-            }
-        ];
+        this.users = []; // List of available users
     }
 
-    mount() {
+    async fetchUsers() {
+        try {
+            const response = await fetch('/api/users', { credentials: 'include' });
+            if (!response.ok) {
+                throw new Error('Failed to fetch users');
+            }
+            this.users = await response.json();
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            // Use mock data if API fails
+            this.users = [
+                { id: 2, username: 'John Doe', avatar: 'https://via.placeholder.com/40' },
+                { id: 3, username: 'Jane Smith', avatar: 'https://via.placeholder.com/40' }
+            ];
+        }
+    }
+
+    async mount() {
         if (!this.container) {
             console.error('Cannot mount ChatComponent: container not found');
             return;
         }
 
-        this.messages = this.mockMessages.filter(
-            msg => msg.senderId === parseInt(this.selectedUser.id) || msg.senderId === this.currentUser.id
-        ); // Filter messages for the selected user
-        this.render();
-        this.attachEventListeners();
+        if (!this.selectedUser) {
+            // Fetch and display the list of users
+            await this.fetchUsers();
+            this.renderUserList();
+        } else {
+            // Display the chat interface for the selected user
+            this.render();
+            this.attachEventListeners();
+        }
+    }
+
+    renderUserList() {
+        this.container.innerHTML = `
+            <div class="chat-users-container">
+                <h2>Available Users</h2>
+                <ul class="users-list">
+                    ${this.users.map(user => `
+                        <li class="user-item" data-user-id="${user.id}" data-user-name="${user.username}" data-user-avatar="${user.avatar}">
+                            <img src="${user.avatar}" alt="${user.username}" class="user-avatar">
+                            <span class="user-name">${user.username}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+
+        // Attach click event listeners to user items
+        const userItems = this.container.querySelectorAll('.user-item');
+        userItems.forEach(item => {
+            item.addEventListener('click', (event) => {
+                const userId = event.currentTarget.getAttribute('data-user-id');
+                const userName = event.currentTarget.getAttribute('data-user-name');
+                const userAvatar = event.currentTarget.getAttribute('data-user-avatar');
+
+                // Open chat with the selected user
+                this.selectedUser = { id: userId, username: userName, avatar: userAvatar };
+                this.mount();
+            });
+        });
     }
 
     render() {
@@ -70,32 +102,26 @@ class ChatComponent {
     }
 
     renderMessages() {
-        return this.messages.map(message => {
-            const isCurrentUser = message.senderId === this.currentUser.id;
-            return `
-                <div class="message ${isCurrentUser ? 'message-sent' : 'message-received'}">
-                    ${!isCurrentUser ? `
-                        <img src="${message.senderAvatar}" alt="Avatar" class="message-avatar">
-                    ` : ''}
-                    <div class="message-content">
-                        <div class="message-bubble">
-                            ${message.content}
-                        </div>
-                        <div class="message-info">
-                            <span class="message-time">${this.formatTime(message.timestamp)}</span>
-                        </div>
+        return this.messages.map(message => `
+            <div class="message ${message.senderId === this.currentUser.id ? 'message-sent' : 'message-received'}">
+                ${message.senderId !== this.currentUser.id ? `
+                    <img src="${message.senderAvatar}" alt="Avatar" class="message-avatar">
+                ` : ''}
+                <div class="message-content">
+                    <div class="message-bubble">
+                        ${message.content}
+                    </div>
+                    <div class="message-info">
+                        <span class="message-time">${this.formatTime(message.timestamp)}</span>
                     </div>
                 </div>
-            `;
-        }).join('');
+            </div>
+        `).join('');
     }
 
     formatTime(timestamp) {
         const date = new Date(timestamp);
-        return date.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit'
-        });
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     }
 
     attachEventListeners() {
