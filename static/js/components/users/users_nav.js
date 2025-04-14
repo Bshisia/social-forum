@@ -5,65 +5,53 @@ class UsersNavComponent {
     }
 
     render() {
-        // Debug: Log the users data to see its structure
-        console.log('Users data in UsersNavComponent:', this.users);
-        
-        return `
+        this.container.innerHTML = `
             <div class="users-filter-container">
                 <h3>Users</h3>
                 <ul class="users-list">
                     ${this.users.length > 0 ? this.users.map(user => {
-                        // Handle different field name formats
-                        const userId = user.ID || user.id;
-                        const userName = user.UserName || user.userName || user.Nickname || user.nickname || user.username || 'Unknown User';
-                        
-                        // Handle different profile pic formats
-                        let profilePic = null;
-                        if (user.ProfilePic && user.ProfilePic.Valid) {
-                            profilePic = user.ProfilePic.String;
-                        } else if (user.ProfilePic && typeof user.ProfilePic === 'string') {
-                            profilePic = user.ProfilePic;
-                        } else if (user.profilePic && user.profilePic.Valid) {
-                            profilePic = user.profilePic.String;
-                        } else if (user.profilePic && typeof user.profilePic === 'string') {
-                            profilePic = user.profilePic;
-                        }
-                        
+                        const userId = user.id || user.ID;
+                        const userName = user.username || user.UserName || 'Unknown User';
+                        const profilePic = user.avatar || user.profilePic || 'default-profile-pic.png';
+
                         return `
-                            <li class="user-item">
-                                <a href="/profile?id=${userId}" class="user-link" onclick="event.preventDefault(); window.navigation.navigateTo('/profile?id=${userId}')">
-                                    <div class="user-avatar">
-                                        ${profilePic ? 
-                                            `<img src="${profilePic}" alt="${userName}'s avatar" class="user-avatar-img">` :
-                                            `<div class="user-avatar-placeholder">
-                                                <i class="fas fa-user"></i>
-                                            </div>`
-                                        }
-                                    </div>
-                                    <span class="username">${userName}</span>
-                                </a>
+                            <li class="user-item" data-user-id="${userId}" data-user-name="${userName}" data-user-avatar="${profilePic}">
+                                <img src="${profilePic}" alt="${userName}" class="user-avatar">
+                                <span class="user-name">${userName}</span>
                             </li>
                         `;
-                    }).join('') : `
-                        <li class="user-item no-users">
-                            <div class="no-users-message">
-                                <i class="fas fa-users-slash"></i>
-                                <span>Users not available yet</span>
-                            </div>
-                        </li>
-                    `}
+                    }).join('') : '<li>No users available</li>'}
                 </ul>
-            </div>`;
+            </div>
+        `;
+
+        this.attachEventListeners();
     }
 
-    mount() {
-        if (!this.container) {
-            console.error('Cannot mount UsersNavComponent: container element not found');
-            return;
-        }
-        
-        this.container.innerHTML = this.render();
+    attachEventListeners() {
+        const userItems = this.container.querySelectorAll('.user-item');
+        userItems.forEach(item => {
+            item.addEventListener('click', (event) => {
+                const userId = event.currentTarget.getAttribute('data-user-id');
+                const userName = event.currentTarget.getAttribute('data-user-name');
+                const userAvatar = event.currentTarget.getAttribute('data-user-avatar');
+
+                this.openChat(userId, userName, userAvatar);
+            });
+        });
+    }
+
+    openChat(userId, userName, userAvatar) {
+        // Load the chat component with the selected user's data
+        const chatContainer = document.getElementById('main-content');
+        const chatComponent = new ChatComponent(chatContainer, {
+            id: userId,
+            username: userName,
+            avatar: userAvatar
+        });
+        chatComponent.mount();
     }
 }
 
+// Export the component
 export default UsersNavComponent;
