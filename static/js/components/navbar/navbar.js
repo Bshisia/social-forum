@@ -62,48 +62,12 @@ class NavbarComponent {
 
   renderLoggedInButtons() {
     return `
-            <button class="btn btn-outline notification-btn" onclick="window.navigation.navigateTo('/notifications')">
-                <i class="fas fa-bell"></i>
-                ${
-                  this.unreadCount > 0
-                    ? `<span class="notification-dot">${this.unreadCount}</span>`
-                    : ""
-                }
-            </button>
-            <button class="btn btn-outline" onclick="window.navigation.navigateTo('/profile?id=${
-              this.currentUserID
-            }')">
-                <i class="fas fa-user"></i> ${this.nickname || "Profile"}
-            </button>
-            <button class="btn btn-primary" id="signout-btn">
-                <i class="fas fa-sign-out-alt"></i> Sign Out
-            </button>
-            <button class="btn btn-outline" onclick="window.navigation.navigateTo('/chat')">
-                <i class="fas fa-comments"></i> Chat
-            </button>`;
-  }
-
-  renderLoggedInButtons() {
-    return `
-            <button class="btn btn-outline notification-btn" onclick="window.navigation.navigateTo('/notifications')">
-                <i class="fas fa-bell"></i>
-                ${
-                  this.unreadCount > 0
-                    ? `<span class="notification-dot">${this.unreadCount}</span>`
-                    : ""
-                }
-            </button>
-            <button class="btn btn-outline" onclick="window.navigation.navigateTo('/profile?id=${
-              this.currentUserID
-            }')">
-                <i class="fas fa-user"></i> ${this.nickname || "Profile"}
-            </button>
-            <button class="btn btn-primary" id="signout-btn">
-                <i class="fas fa-sign-out-alt"></i> Sign Out
-            </button>
-            <button class="btn btn-outline" onclick="window.navigation.navigateTo('/chat')">
-                <i class="fas fa-comments"></i> Chat
-            </button>
+        <button class="btn btn-outline" onclick="window.navigation.navigateTo('/chat')">
+            <i class="fas fa-comments"></i> Chat
+        </button>
+        <button class="btn btn-primary" id="signout-btn">
+            <i class="fas fa-sign-out-alt"></i> Sign Out
+        </button>
     `;
   }
 
