@@ -308,27 +308,9 @@ const router = {
         });
     },
     '/chat': () => {
-        AuthService.checkAuthState().then(isAuth => {
-            if (!isAuth) {
-                window.navigation.navigateTo('/signin');
-                return;
-            }
-            
-            if (typeof ChatComponent === 'function') {
-                const chat = new ChatComponent();
-                chat.mount();
-            } else {
-                console.error('ChatComponent is not defined');
-                document.getElementById('main-content').innerHTML = `
-                    <div class="error-message">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <p>Chat component is not available</p>
-                        <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
-                            <i class="fas fa-home"></i> Back to Home
-                        </button>
-                    </div>`;
-            }
-        });
+        const mainContent = document.getElementById('main-content');
+        const chatComponent = new ChatComponent(mainContent);
+        chatComponent.mount();
     }
 }; 
 
