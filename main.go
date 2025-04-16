@@ -47,6 +47,10 @@ func main() {
 		apiHandler.HandleSignout(w, r)
 	})
 
+	// WebSocket route
+	http.HandleFunc("/ws", handlers.WebSocketHandler)
+	go handlers.HandleMessages()
+
 	// 5. SPA catch-all route - serve index.html for all other routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Skip for API and static routes
@@ -62,6 +66,6 @@ func main() {
 		http.ServeFile(w, r, "templates/index.html")
 	})
 
-	fmt.Println("Server opened at port 8000...http://localhost:8000/")
-	log.Fatal(http.ListenAndServe(":8000", nil))
+	fmt.Println("Server opened at port 8080...http://localhost:8080/")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
