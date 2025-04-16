@@ -66,6 +66,6 @@ func main() {
 		http.ServeFile(w, r, "templates/index.html")
 	})
 
-	fmt.Println("Server opened at port 8080...http://localhost:8080/")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	fmt.Println("Server opened at port 8000...http://localhost:8000/")
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }
