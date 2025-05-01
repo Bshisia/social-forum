@@ -47,6 +47,24 @@ type StatusUpdate struct {
 	IsOnline bool   `json:"is_online"`
 }
 
+func handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Invalid session", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := utils.ValidateSession(utils.GlobalDB, token)
+	if err != nil {
+		http.Error(w, "Invalid session", http.StatusUnauthorized)
+		return
+	}
+
+	log.Printf("WebSocket connection established for user: %s", userID)
+
+	// Proceed with WebSocket connection using userID if needed
+}
+
 // WebSocketHandler handles WebSocket connections
 func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
