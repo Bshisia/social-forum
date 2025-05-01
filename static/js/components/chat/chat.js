@@ -1,7 +1,8 @@
 class ChatComponent {
-    constructor(container) {
-        this.container = container;
-        this.users = []; // List of users (online/offline with last message)
+    constructor() {
+        this.mainContent = document.getElementById('main-content');
+        this.usersSidebar = document.getElementById('users-nav');
+        this.users = [];
         this.currentChat = null;
         this.ws = null;
         this.messagePage = 1;
@@ -9,129 +10,9 @@ class ChatComponent {
         this.hasMoreMessages = true;
     }
 
-    async initWebSocket() {
-        // Connect to WebSocket
-        this.ws = new WebSocket(`ws://${window.location.host}/ws`);
-        
-        this.ws.onopen = () => {
-            console.log('WebSocket connected');
-        };
-        
-        this.ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            
-            switch(data.type) {
-                case 'private_message':
-                    this.handleIncomingMessage(data);
-                    break;
-                case 'status_update':
-                    this.handleStatusUpdate(data);
-                    break;
-            }
-        };
-        
-        this.ws.onclose = () => {
-            console.log('WebSocket disconnected');
-            // Try to reconnect after 5 seconds
-            setTimeout(() => this.initWebSocket(), 5000);
-        };
-    }
-
-    async fetchUsers() {
-        try {
-            // Fetch all users with their last message and online status
-            const response = await fetch('/api/users', { credentials: 'include' });
-            if (!response.ok) throw new Error('Failed to fetch users');
-            
-            const allUsers = await response.json();
-            
-            // Fetch online users
-            const onlineResponse = await fetch('/api/online-users', { credentials: 'include' });
-            const onlineUsers = onlineResponse.ok ? await onlineResponse.json() : [];
-            
-            // Fetch last messages for each conversation
-            const currentUser = await AuthService.getCurrentUser();
-            
-            // Process users
-            this.users = await Promise.all(allUsers.map(async user => {
-                if (user.id === currentUser.id) return null;
-                
-                // Get last message in conversation
-                const lastMsgResponse = await fetch(`/api/private-messages?user_id=${user.id}&limit=1`, {
-                    credentials: 'include'
-                });
-                
-                let lastMessage = null;
-                if (lastMsgResponse.ok) {
-                    const messages = await lastMsgResponse.json();
-                    if (messages.length > 0) {
-                        lastMessage = messages[0];
-                    }
-                }
-                
-                return {
-                    id: user.id,
-                    nickname: user.nickname,
-                    profilePic: user.profile_pic || '',
-                    isOnline: onlineUsers.some(u => u.id === user.id),
-                    lastMessage: lastMessage,
-                    unreadCount: 0 // We'll update this later
-                };
-            }));
-            
-            // Filter out current user and null values
-            this.users = this.users.filter(u => u !== null);
-            
-            // Sort users: online first, then by last message date, then alphabetically
-            this.users.sort((a, b) => {
-                // Online users first
-                if (a.isOnline !== b.isOnline) {
-                    return a.isOnline ? -1 : 1;
-                }
-                
-                // Then by last message date (most recent first)
-                if (a.lastMessage && b.lastMessage) {
-                    return new Date(b.lastMessage.sent_at) - new Date(a.lastMessage.sent_at);
-                } else if (a.lastMessage) {
-                    return -1;
-                } else if (b.lastMessage) {
-                    return 1;
-                }
-                
-                // Finally alphabetically
-                return a.nickname.localeCompare(b.nickname);
-            });
-            
-            // Fetch unread counts
-            await this.fetchUnreadCounts();
-            
-        } catch (error) {
-            console.error('Error fetching users:', error);
-            this.users = [];
-        }
-    }
-    
-    async fetchUnreadCounts() {
-        try {
-            const response = await fetch('/api/private-messages/unread-counts', {
-                credentials: 'include'
-            });
-            
-            if (response.ok) {
-                const counts = await response.json();
-                this.users.forEach(user => {
-                    const count = counts[user.id] || 0;
-                    user.unreadCount = count;
-                });
-            }
-        } catch (error) {
-            console.error('Error fetching unread counts:', error);
-        }
-    }
-
     async mount() {
-        if (!this.container) {
-            console.error('Cannot mount ChatComponent: container not found');
+        if (!this.mainContent || !this.usersSidebar) {
+            console.error('Required DOM elements not found');
             return;
         }
 
@@ -141,19 +22,9 @@ class ChatComponent {
     }
 
     render() {
-        this.container.innerHTML = `
+        // Render chat in main content
+        this.mainContent.innerHTML = `
             <div class="chat-container">
-                <div class="users-panel">
-                    <div class="users-header">
-                        <h3>Chat</h3>
-                        <div class="search-box">
-                            <input type="text" placeholder="Search users..." class="search-input">
-                        </div>
-                    </div>
-                    <ul class="users-list">
-                        ${this.users.map(user => this.renderUserItem(user)).join('')}
-                    </ul>
-                </div>
                 <div class="chat-panel">
                     <div class="chat-header">
                         ${this.currentChat ? `
@@ -180,10 +51,23 @@ class ChatComponent {
             </div>
         `;
 
-        // Add event listeners
+        // Render users list in right sidebar
+        this.usersSidebar.innerHTML = `
+            <div class="users-panel">
+                <div class="users-header">
+                    <h3>Online Users</h3>
+                    <div class="search-box">
+                        <input type="text" placeholder="Search users..." class="search-input">
+                    </div>
+                </div>
+                <ul class="users-list">
+                    ${this.users.map(user => this.renderUserItem(user)).join('')}
+                </ul>
+            </div>
+        `;
+
         this.addEventListeners();
         
-        // If there's a current chat, scroll to bottom
         if (this.currentChat) {
             this.scrollToBottom();
         }
