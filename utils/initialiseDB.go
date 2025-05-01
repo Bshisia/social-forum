@@ -332,8 +332,40 @@ END;
 		return nil, fmt.Errorf("failed to create sessions table: %v", err)
 	}
 
-	return db, nil
-}
+	_, err = db.Exec(`
+    CREATE TABLE IF NOT EXISTS private_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sender_id TEXT NOT NULL,
+        receiver_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        is_read BOOLEAN DEFAULT FALSE,
+        FOREIGN KEY (sender_id) REFERENCES users(id),
+        FOREIGN KEY (receiver_id) REFERENCES users(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_private_messages_sender ON private_messages(sender_id);
+    CREATE INDEX IF NOT EXISTS idx_private_messages_receiver ON private_messages(receiver_id);
+    CREATE INDEX IF NOT EXISTS idx_private_messages_sent_at ON private_messages(sent_at);
+    `)
+        if err != nil {
+            return nil, fmt.Errorf("failed to create private_messages table: %v", err)
+        }
+
+        // Create user_status table to track online users
+        _, err = db.Exec(`
+    CREATE TABLE IF NOT EXISTS user_status (
+        user_id TEXT PRIMARY KEY,
+        is_online BOOLEAN DEFAULT FALSE,
+        last_seen DATETIME,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+    `)
+        if err != nil {
+            return nil, fmt.Errorf("failed to create user_status table: %v", err)
+        }
+
+        return db, nil
+    }
 
 func InsertDefaultCategories() error {
 	categories := []string{
