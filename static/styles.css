@@ -2309,3 +2309,136 @@ input[type="file"] {
   height: auto;
   border-radius: 4px;
 }
+
+/* Chat Component Styles */
+.chat-container {
+  max-width: 600px; /* Match the width of #main-content */
+  margin: 50px auto; /* Center the chat container */
+  padding: 20px; /* Add padding similar to #main-content */
+  background-image: url('/static/images/MuchaTseBle.jpeg'); /* Match the background */
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Add shadow for consistency */
+  border-radius: 8px; /* Match the border radius */
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 120px); /* Adjust height to fit the viewport */
+  overflow: hidden;
+}
+
+.chat-header {
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.1); /* Match the background style */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2); /* Subtle border */
+  display: flex;
+  align-items: center;
+}
+
+.chat-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  flex-grow: 1;
+  text-align: center;
+  color: white; /* Match text color */
+}
+
+.back-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #007bff;
+  padding: 5px;
+}
+
+.messages-container {
+  flex-grow: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.05); /* Subtle background */
+  border-radius: 8px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1); /* Inner shadow for depth */
+}
+
+.message {
+  margin-bottom: 15px;
+  display: flex;
+}
+
+.message.sent {
+  justify-content: flex-end;
+}
+
+.message.received {
+  justify-content: flex-start;
+}
+
+.message-content {
+  max-width: 70%;
+  padding: 10px 15px;
+  border-radius: 18px;
+  position: relative;
+}
+
+.message.sent .message-content {
+  background: #007bff;
+  color: white;
+}
+
+.message.received .message-content {
+  background: #e9ecef;
+  color: #333;
+}
+
+.message-time {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  display: block;
+  margin-top: 5px;
+  text-align: right;
+}
+
+.no-messages {
+  text-align: center;
+  padding: 20px;
+  color: #6c757d;
+}
+
+.message-input-container {
+  display: flex;
+  padding: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2); /* Match the border style */
+  background: rgba(255, 255, 255, 0.1); /* Match the background style */
+  border-radius: 8px;
+}
+
+.message-input {
+  flex-grow: 1;
+  padding: 10px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.2); /* Match the border style */
+  border-radius: 20px;
+  resize: none;
+  margin-right: 10px;
+  min-height: 40px;
+  max-height: 100px;
+  background: rgba(255, 255, 255, 0.1); /* Match the background style */
+  color: white; /* Match text color */
+}
+
+.message-input:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+#send-message-btn {
+  border-radius: 20px;
+  padding: 0 20px;
+  height: 40px;
+  background: #007bff;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+#send-message-btn:hover {
+  background: #0056b3;
+}
