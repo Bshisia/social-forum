@@ -1,11 +1,11 @@
 class UsersNavComponent {
-    constructor(users = []) {
+    constructor(users = [], currentUserId = null) {
         this.users = users;
+        this.currentUserId = currentUserId;
         this.container = document.getElementById('users-nav');
     }
 
     render() {
-        // Debug: Log the users data to see its structure
         console.log('Users data in UsersNavComponent:', this.users);
         
         return `
@@ -13,11 +13,9 @@ class UsersNavComponent {
                 <h3>Users</h3>
                 <ul class="users-list">
                     ${this.users.length > 0 ? this.users.map(user => {
-                        // Handle different field name formats
                         const userId = user.ID || user.id;
                         const userName = user.UserName || user.userName || user.Nickname || user.nickname || user.username || 'Unknown User';
                         
-                        // Handle different profile pic formats
                         let profilePic = null;
                         if (user.ProfilePic && user.ProfilePic.Valid) {
                             profilePic = user.ProfilePic.String;
@@ -31,7 +29,7 @@ class UsersNavComponent {
                         
                         return `
                             <li class="user-item">
-                                <a href="/profile?id=${userId}" class="user-link" onclick="event.preventDefault(); window.navigation.navigateTo('/profile?id=${userId}')">
+                                <a href="/chat?user1=${this.currentUserId}&user2=${userId}" class="user-link" onclick="event.preventDefault(); window.navigation.navigateTo('/chat?user1=${this.currentUserId}&user2=${userId}')">
                                     <div class="user-avatar">
                                         ${profilePic ? 
                                             `<img src="${profilePic}" alt="${userName}'s avatar" class="user-avatar-img">` :
