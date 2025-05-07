@@ -3,9 +3,9 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
-	"forum/utils"
 	"net/http"
+
+	"forum/utils"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -28,13 +28,13 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user struct {
-		Nickname  string      `json:"nickname"`
-		Age       json.Number `json:"age"`
-		Gender    string      `json:"gender"`
-		FirstName string      `json:"firstName"`
-		LastName  string      `json:"lastName"`
-		Email     string      `json:"email"`
-		Password  string      `json:"password"`
+		Nickname  string `json:"nickname"`
+		Age       int    `json:"age"`
+		Gender    string `json:"gender"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Email     string `json:"email"`
+		Password  string `json:"password"`
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&user)
@@ -72,12 +72,13 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"message": fmt.Sprintf("Failed to register user: %v", err),
+			"message": "Failed to create user",
 			"success": false,
 		})
 		return
 	}
 
+	// Respond with success
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
