@@ -94,10 +94,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Name:     "session_token",
 		Value:    sessionToken,
 		Path:     "/",
-		HttpOnly: true,                    // Changed to true for security
-		Secure:   r.TLS != nil,            // Set based on connection
-		SameSite: http.SameSiteStrictMode, // Match API handler
-		MaxAge:   24 * 60 * 60,            // 1 day
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   24 * 60 * 60,
 	})
 
 	log.Printf("Login successful for user: %s, session created: %s", userId, sessionToken)
