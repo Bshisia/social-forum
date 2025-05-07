@@ -1543,16 +1543,17 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
 	var userData struct {
 		Nickname  string `json:"nickname"`
 		Age       int    `json:"age"`
 		Gender    string `json:"gender"`
-		FirstName string `json:"firstName"`
-		LastName  string `json:"lastName"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
 		Email     string `json:"email"`
 		Password  string `json:"password"`
 	}
+
+	log.Printf("Registration request received: %+v", userData)
 
 	err := json.NewDecoder(r.Body).Decode(&userData)
 	if err != nil {
@@ -1691,8 +1692,8 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Debug: Log successful registration
-	log.Printf("Registration successful - User ID: %s, Email: %s, Nickname: %s",
-		userID, userData.Email, userData.Nickname)
+	log.Printf("Registration successful - User ID: %s, Email: %s, Nickname: %s, firstName: %s, lastName: %s",
+		userID, userData.Email, userData.Nickname, userData.FirstName, userData.LastName)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
