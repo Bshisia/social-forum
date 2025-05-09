@@ -22,54 +22,54 @@ func GenerateSessionToken() string {
 }
 
 func CreateSession(db *sql.DB, userID string) (string, error) {
-	// Delete any existing session for the user
-	_, err := db.Exec(`
+    // Delete any existing session for the user
+    _, err := db.Exec(`
         DELETE FROM sessions
         WHERE user_id = ?
     `, userID)
-	if err != nil {
-		return "", fmt.Errorf("failed to delete existing session: %v", err)
-	}
+    if err != nil {
+        return "", fmt.Errorf("failed to delete existing session: %v", err)
+    }
 
-	// Generate new session
-	SessionToken := GenerateSessionToken()
-	ExpiresAt := time.Now().Add(24 * time.Hour)
+    // Generate new session
+    sessionToken := GenerateSessionToken()
+    expiresAt := time.Now().Add(24 * time.Hour)
 
-	// Create new session
-	_, err = db.Exec(`
+    // Create new session
+    _, err = db.Exec(`
         INSERT INTO sessions(id, user_id, expires_at)
         VALUES (?, ?, ?)
-    `, SessionToken, userID, ExpiresAt)
-	if err != nil {
-		return "", fmt.Errorf("failed to create session: %v", err)
-	}
+    `, sessionToken, userID, expiresAt)
+    if err != nil {
+        return "", fmt.Errorf("failed to create session: %v", err)
+    }
 
-	var username string
-	err = db.QueryRow(`
-		SELECT nickname FROM users 
-		WHERE id = ?
-	`, userID).Scan(&username)
-	if err != nil {
-		return "", fmt.Errorf("failed to retrieve username: %v", err)
-	}
+    // Set user as online
+    _, err = db.Exec(`
+        UPDATE users
+        SET is_online = 1
+        WHERE id = ?
+    `, userID)
+    if err != nil {
+        return "", fmt.Errorf("failed to update user online status: %v", err)
+    }
 
-	log.Printf("Created new session for user %s", username)
-	return SessionToken, nil
+    return sessionToken, nil
 }
 
 func ValidateSession(db *sql.DB, sessionToken string) (string, error) {
-	var userID string
-	err := db.QueryRow(`
-		SELECT user_id FROM sessions 
-		WHERE id = ? AND expires_at > ?
-	`, sessionToken, time.Now()).Scan(&userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return "", fmt.Errorf("session expired or invalid")
-		}
-		return "", fmt.Errorf("error validating session: %v", err)
-	}
-	return userID, nil
+    var userID string
+    err := db.QueryRow(`
+        SELECT user_id FROM sessions 
+        WHERE id = ? AND expires_at > ?
+    `, sessionToken, time.Now()).Scan(&userID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return "", fmt.Errorf("session expired or invalid")
+        }
+        return "", fmt.Errorf("error validating session: %v", err)
+    }
+    return userID, nil
 }
 
 func DeleteExpiredSessions(db *sql.DB) (int64, error) {
