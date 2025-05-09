@@ -16,6 +16,8 @@ type User struct {
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 	ProfilePic string    `json:"profilePic"` // Changed from sql.NullString to string
+	IsOnline   bool      `json:"isOnline"`
+	LastSeen   time.Time `json:"lastSeen"` // Changed from sql.NullBool to time.Time
 }
 
 type Post struct {
