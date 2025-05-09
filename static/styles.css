@@ -550,7 +550,7 @@ body::before {
 
   .categories-filter-container,
   .users-filter-container {
-      display: none; /* Hide sidebars on mobile */
+      display: none;
   }
 
   .main-content {
@@ -2443,16 +2443,23 @@ input[type="file"] {
   background: #0056b3;
 }
 
+.user-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  border-bottom: 1px solid #eeeeee;
+}
+
 .user-item .status {
   font-size: 0.9rem;
   margin-left: 8px;
-  font-weight: bold;
 }
 
-.user-item .status.online {
-  color: green;
+.user-item.online .status {
+  color: #2ecc71;
 }
 
-.user-item .status.offline {
-  color: gray;
+.user-item.offline .status {
+  color: #95a5a6;
 }
