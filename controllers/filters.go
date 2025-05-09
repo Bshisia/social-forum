@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
@@ -68,12 +69,11 @@ func LikedPosts(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// getAllUsers fetches all users from the database
 func getAllUsers() ([]utils.User, error) {
 	rows, err := utils.GlobalDB.Query(`
-		SELECT id, username, profile_pic 
+		SELECT id, username, profile_pic, is_online
 		FROM users
-		ORDER BY username
+		ORDER BY username ASC
 	`)
 	if err != nil {
 		return nil, err
@@ -83,13 +83,51 @@ func getAllUsers() ([]utils.User, error) {
 	var users []utils.User
 	for rows.Next() {
 		var user utils.User
-		err := rows.Scan(&user.ID, &user.Nickname, &user.ProfilePic)
-		if err != nil {
+		if err := rows.Scan(&user.ID, &user.Nickname, &user.ProfilePic, &user.IsOnline); err != nil {
 			return nil, err
 		}
 		users = append(users, user)
 	}
+
 	return users, nil
+}
+
+// getAllUsers fetches all users from the database
+func GetAllUsers(w http.ResponseWriter, r *http.Request) {
+	rows, err := utils.GlobalDB.Query(`
+        SELECT id, username, profile_pic, is_online
+        FROM users
+        ORDER BY username ASC
+    `)
+	if err != nil {
+		http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var users []struct {
+		ID         string `json:"id"`
+		Username   string `json:"username"`
+		ProfilePic string `json:"profile_pic"`
+		IsOnline   bool   `json:"is_online"`
+	}
+
+	for rows.Next() {
+		var user struct {
+			ID         string `json:"id"`
+			Username   string `json:"username"`
+			ProfilePic string `json:"profile_pic"`
+			IsOnline   bool   `json:"is_online"`
+		}
+		if err := rows.Scan(&user.ID, &user.Username, &user.ProfilePic, &user.IsOnline); err != nil {
+			http.Error(w, "Failed to parse user data", http.StatusInternalServerError)
+			return
+		}
+		users = append(users, user)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
 }
 
 func CommentedPosts(w http.ResponseWriter, r *http.Request) {
