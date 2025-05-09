@@ -503,6 +503,15 @@ document.addEventListener('DOMContentLoaded', () => {
             initializeUI();
         }
     });
+
+    // Get current user ID from localStorage or your auth service
+    const currentUserId = localStorage.getItem('userId');
+    
+    if (currentUserId) {
+        const usersNav = new UsersNavComponent([], currentUserId);
+    } else {
+        console.warn('No user ID found. User might not be logged in.');
+    }
 });
 
 // Make initializeUI function global so it can be called from auth component
