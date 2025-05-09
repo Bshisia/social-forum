@@ -47,6 +47,9 @@ func main() {
 		apiHandler.HandleSignout(w, r)
 	})
 
+	// handle websocket connetion
+	http.HandleFunc("/ws", handlers.HandleWebSocket)
+
 	// 5. SPA catch-all route - serve index.html for all other routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Skip for API and static routes
