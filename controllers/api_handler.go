@@ -393,7 +393,7 @@ func (ah *APIHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Get all users from the database
 	query := `
-		SELECT id, nickname, email, first_name, last_name, age, gender, profile_pic, created_at
+		SELECT id, nickname, email, first_name, last_name, age, gender, profile_pic, created_at, is_online, last_seen
 		FROM users
 		ORDER BY created_at DESC
 	`
@@ -415,7 +415,7 @@ func (ah *APIHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 		// Scan into the User struct with proper handling for NULL profile_pic
 		err := rows.Scan(
 			&user.ID, &user.Nickname, &user.Email, &user.FirstName, &user.LastName,
-			&user.Age, &user.Gender, &profilePic, &createdAt,
+			&user.Age, &user.Gender, &profilePic, &createdAt, &user.IsOnline, &user.LastSeen,
 		)
 		if err != nil {
 			log.Printf("Error scanning user row: %v", err)
@@ -2281,4 +2281,42 @@ func (ah *APIHandler) handleCommentedPosts(w http.ResponseWriter, r *http.Reques
 	// Return posts as JSON
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
+}
+
+func (ah *APIHandler) handleOnlineUsers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	rows, err := utils.GlobalDB.Query(`
+        SELECT id, nickname, first_name || ' ' || last_name as user_name, profile_pic 
+        FROM users 
+        WHERE is_online = 1
+    `)
+	if err != nil {
+		http.Error(w, "Failed to fetch online users", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var users []struct {
+		ID         string         `json:"id"`
+		UserName   string         `json:"user_name"`
+		Nickname   string         `json:"nickname"`
+		ProfilePic sql.NullString `json:"profile_pic"`
+	}
+
+	for rows.Next() {
+		var user struct {
+			ID         string         `json:"id"`
+			UserName   string         `json:"user_name"`
+			Nickname   string         `json:"nickname"`
+			ProfilePic sql.NullString `json:"profile_pic"`
+		}
+		if err := rows.Scan(&user.ID, &user.Nickname, &user.UserName, &user.ProfilePic); err != nil {
+			http.Error(w, "Failed to parse user data", http.StatusInternalServerError)
+			return
+		}
+		users = append(users, user)
+	}
+
+	json.NewEncoder(w).Encode(users)
 }
