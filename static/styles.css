@@ -2442,3 +2442,17 @@ input[type="file"] {
 #send-message-btn:hover {
   background: #0056b3;
 }
+
+.user-item .status {
+  font-size: 0.9rem;
+  margin-left: 8px;
+  font-weight: bold;
+}
+
+.user-item .status.online {
+  color: green;
+}
+
+.user-item .status.offline {
+  color: gray;
+}
