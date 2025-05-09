@@ -20,19 +20,22 @@ func InitialiseDB() (*sql.DB, error) {
 	// Create Users table
 	_, err = db.Exec(`
         CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY NOT NULL,
-            nickname TEXT UNIQUE NOT NULL,
-            age INTEGER,
-            gender TEXT,
-            first_name TEXT,
-            last_name TEXT,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            profile_pic TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS idx_users_nickname ON users(nickname);
-        CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+        id TEXT PRIMARY KEY NOT NULL,
+        nickname TEXT UNIQUE NOT NULL,
+        age INTEGER,
+        gender TEXT,
+        first_name TEXT,
+        last_name TEXT,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        profile_pic TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        is_online INTEGER DEFAULT 0,
+        last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_users_nickname ON users(nickname);
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
     `)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create users table: %v", err)
@@ -330,6 +333,31 @@ END;
     `)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sessions table: %v", err)
+	}
+
+	_, err = db.Exec(`
+    -- Update user online status when session is created
+    CREATE TRIGGER IF NOT EXISTS update_user_online_on_session_create
+    AFTER INSERT ON sessions
+    BEGIN
+        UPDATE users 
+        SET is_online = 1,
+            last_seen = CURRENT_TIMESTAMP
+        WHERE id = NEW.user_id;
+    END;
+
+    -- Update user offline status when session is deleted
+    CREATE TRIGGER IF NOT EXISTS update_user_offline_on_session_delete
+    AFTER DELETE ON sessions
+    BEGIN
+        UPDATE users 
+        SET is_online = 0,
+            last_seen = CURRENT_TIMESTAMP
+        WHERE id = OLD.user_id;
+    END;
+`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user status triggers: %v", err)
 	}
 
 	return db, nil
