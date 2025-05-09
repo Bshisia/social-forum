@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -15,6 +16,7 @@ type Message struct {
 	SentAt     time.Time `json:"sent_at"`
 }
 
+// GetChatHistoryHandler fetches full chat history between two users
 func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	// Get query parameters
 	senderID := r.URL.Query().Get("sender_id")
@@ -51,6 +53,116 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"messages": messages,
+	})
+}
+
+// GetNewMessagesHandler fetches only new messages since a specific message ID
+func GetNewMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	// Get query parameters
+	senderID := r.URL.Query().Get("sender_id")
+	receiverID := r.URL.Query().Get("receiver_id")
+	lastIDStr := r.URL.Query().Get("last_id")
+
+	if senderID == "" || receiverID == "" {
+		http.Error(w, "Both sender_id and receiver_id are required", http.StatusBadRequest)
+		return
+	}
+
+	lastID, err := strconv.Atoi(lastIDStr)
+	if err != nil {
+		lastID = 0 // Default to 0 if not provided or invalid
+	}
+
+	// Query the database for new messages between these users
+	rows, err := GlobalDB.Query(`
+		SELECT id, sender_id, receiver_id, content, sent_at 
+		FROM messages 
+		WHERE ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
+		AND id > ?
+		ORDER BY sent_at ASC
+	`, senderID, receiverID, receiverID, senderID, lastID)
+	if err != nil {
+		http.Error(w, "Failed to query new messages", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var messages []Message
+	for rows.Next() {
+		var msg Message
+		if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.ReceiverID, &msg.Content, &msg.SentAt); err != nil {
+			http.Error(w, "Failed to scan message", http.StatusInternalServerError)
+			return
+		}
+		messages = append(messages, msg)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"messages": messages,
+	})
+}
+
+// SendMessageHandler handles sending a new message
+func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
+	// Only allow POST method
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse request body
+	var requestBody struct {
+		SenderID   string `json:"sender_id"`
+		ReceiverID string `json:"receiver_id"`
+		Content    string `json:"content"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate request data
+	if requestBody.SenderID == "" || requestBody.ReceiverID == "" || requestBody.Content == "" {
+		http.Error(w, "sender_id, receiver_id, and content are required", http.StatusBadRequest)
+		return
+	}
+
+	// Get current time for message timestamp
+	now := time.Now()
+
+	// Insert message into database
+	result, err := GlobalDB.Exec(`
+		INSERT INTO messages (sender_id, receiver_id, content, sent_at)
+		VALUES (?, ?, ?, ?)
+	`, requestBody.SenderID, requestBody.ReceiverID, requestBody.Content, now)
+	if err != nil {
+		http.Error(w, "Failed to save message", http.StatusInternalServerError)
+		return
+	}
+
+	// Get the ID of the inserted message
+	messageID, err := result.LastInsertId()
+	if err != nil {
+		http.Error(w, "Failed to get message ID", http.StatusInternalServerError)
+		return
+	}
+
+	// Create response message
+	message := Message{
+		ID:         int(messageID),
+		SenderID:   requestBody.SenderID,
+		ReceiverID: requestBody.ReceiverID,
+		Content:    requestBody.Content,
+		SentAt:     now,
+	}
+
+	// Return success response with the saved message
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": message,
 	})
 }
 
