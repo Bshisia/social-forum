@@ -6,16 +6,16 @@ class UsersNavComponent {
     }
 
     render() {
-        console.log('Users data in UsersNavComponent:', this.users);
-        
         return `
             <div class="users-filter-container">
                 <h3>Users</h3>
                 <ul class="users-list">
-                    ${this.users.length > 0 ? this.users.map(user => {
+                    ${this.users.map(user => {
                         const userId = user.ID || user.id;
                         const userName = user.UserName || user.userName || user.Nickname || user.nickname || user.username || 'Unknown User';
-                        
+                        const isOnline = user.isOnline || user.is_online || false;
+                    
+    
                         let profilePic = null;
                         if (user.ProfilePic && user.ProfilePic.Valid) {
                             profilePic = user.ProfilePic.String;
@@ -26,9 +26,9 @@ class UsersNavComponent {
                         } else if (user.profilePic && typeof user.profilePic === 'string') {
                             profilePic = user.profilePic;
                         }
-                        
+    
                         return `
-                            <li class="user-item">
+                            <li class="user-item" data-online="${isOnline}">
                                 <a href="/chat?user1=${this.currentUserId}&user2=${userId}" class="user-link" onclick="event.preventDefault(); window.navigation.navigateTo('/chat?user1=${this.currentUserId}&user2=${userId}')">
                                     <div class="user-avatar">
                                         ${profilePic ? 
@@ -38,18 +38,16 @@ class UsersNavComponent {
                                             </div>`
                                         }
                                     </div>
-                                    <span class="username">${userName}</span>
+                                    <div class="user-info">
+                                        <span class="username">${userName}</span>
+                                        <span class="status ${isOnline ? 'online' : 'offline'}">
+                                            ${isOnline ? 'Online' : 'Offline'}
+                                        </span>
+                                    </div>
                                 </a>
                             </li>
                         `;
-                    }).join('') : `
-                        <li class="user-item no-users">
-                            <div class="no-users-message">
-                                <i class="fas fa-users-slash"></i>
-                                <span>Users not available yet</span>
-                            </div>
-                        </li>
-                    `}
+                    }).join('')}
                 </ul>
             </div>`;
     }
@@ -61,6 +59,32 @@ class UsersNavComponent {
         }
         
         this.container.innerHTML = this.render();
+        
+        // Add event listeners for filter buttons
+        const filterButtons = this.container.querySelectorAll('.filter-btn');
+        filterButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Toggle active class
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                
+                // Filter users
+                const filter = button.dataset.filter;
+                const userItems = this.container.querySelectorAll('.user-item');
+                
+                userItems.forEach(item => {
+                    if (filter === 'all') {
+                        item.style.display = 'block';
+                    } else if (filter === 'online') {
+                        if (item.dataset.online === 'true') {
+                            item.style.display = 'block';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    }
+                });
+            });
+        });
     }
 }
 
