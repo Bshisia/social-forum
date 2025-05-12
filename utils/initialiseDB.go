@@ -41,6 +41,22 @@ func InitialiseDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create users table: %v", err)
 	}
 
+	_, err = db.Exec(`
+        CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sender_id TEXT NOT NULL,
+        receiver_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        sent_at TIMESTAMP NOT NULL,
+        read BOOLEAN DEFAULT 0,
+        FOREIGN KEY (sender_id) REFERENCES users(id),
+        FOREIGN KEY (receiver_id) REFERENCES users(id)
+    );
+    `)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create messages table: %v", err)
+    }
+
 	// Create Posts table
 	_, err = db.Exec(`
         CREATE TABLE IF NOT EXISTS posts (
