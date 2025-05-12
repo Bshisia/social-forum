@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -17,23 +16,24 @@ type Message struct {
 }
 
 // GetChatHistoryHandler fetches full chat history between two users
+// GetChatHistoryHandler fetches full chat history between two users
 func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	// Get query parameters
-	senderID := r.URL.Query().Get("sender_id")
-	receiverID := r.URL.Query().Get("receiver_id")
+	user1 := r.URL.Query().Get("user1")
+	user2 := r.URL.Query().Get("user2")
 
-	if senderID == "" || receiverID == "" {
-		http.Error(w, "Both sender_id and receiver_id are required", http.StatusBadRequest)
+	if user1 == "" || user2 == "" {
+		http.Error(w, "Both user1 and user2 are required", http.StatusBadRequest)
 		return
 	}
 
 	// Query the database for messages between these users
 	rows, err := GlobalDB.Query(`
-		SELECT id, sender_id, receiver_id, content, sent_at 
-		FROM messages 
-		WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
-		ORDER BY sent_at ASC
-	`, senderID, receiverID, receiverID, senderID)
+        SELECT id, sender_id, receiver_id, content, sent_at 
+        FROM messages 
+        WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+        ORDER BY sent_at ASC
+    `, user1, user2, user2, user1)
 	if err != nil {
 		http.Error(w, "Failed to query messages", http.StatusInternalServerError)
 		return
@@ -51,9 +51,7 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"messages": messages,
-	})
+	json.NewEncoder(w).Encode(messages)
 }
 
 // GetNewMessagesHandler fetches only new messages since a specific message ID
@@ -166,34 +164,35 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func GetUserHandler(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Path[len("/api/users/"):]
-	if userID == "" {
-		http.Error(w, "User ID is required", http.StatusBadRequest)
-		return
-	}
+// GetUserHandler fetches user details by ID
+// func GetUserHandler(w http.ResponseWriter, r *http.Request) {
+// 	userID := r.URL.Path[len("/api/users/"):]
+// 	if userID == "" {
+// 		http.Error(w, "User ID is required", http.StatusBadRequest)
+// 		return
+// 	}
 
-	var user struct {
-		ID         string         `json:"id"`
-		Nickname   string         `json:"nickname"`
-		UserName   string         `json:"user_name"`
-		ProfilePic sql.NullString `json:"profile_pic"`
-	}
+// 	var user struct {
+// 		ID         string         `json:"id"`
+// 		Nickname   string         `json:"nickname"`
+// 		UserName   string         `json:"user_name"`
+// 		ProfilePic sql.NullString `json:"profile_pic"`
+// 	}
 
-	err := GlobalDB.QueryRow(`
-		SELECT id, nickname, first_name || ' ' || last_name as user_name, profile_pic 
-		FROM users 
-		WHERE id = ?
-	`, userID).Scan(&user.ID, &user.Nickname, &user.UserName, &user.ProfilePic)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "Failed to query user", http.StatusInternalServerError)
-		return
-	}
+// 	err := GlobalDB.QueryRow(`
+// 		SELECT id, nickname, first_name || ' ' || last_name as user_name, profile_pic
+// 		FROM users
+// 		WHERE id = ?
+// 	`, userID).Scan(&user.ID, &user.Nickname, &user.UserName, &user.ProfilePic)
+// 	if err != nil {
+// 		if err == sql.ErrNoRows {
+// 			http.Error(w, "User not found", http.StatusNotFound)
+// 			return
+// 		}
+// 		http.Error(w, "Failed to query user", http.StatusInternalServerError)
+// 		return
+// 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
-}
+// 	w.Header().Set("Content-Type", "application/json")
+// 	json.NewEncoder(w).Encode(user)
+// }
