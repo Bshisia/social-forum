@@ -72,8 +72,9 @@ class UsersNavComponent {
         // Initialize WebSocket connection with status update callback
         if (this.currentUserId) {
             console.log('Initializing UsersNavigation with currentUserId:', this.currentUserId);
-            // Pass the updateUserStatus method as a callback
+            // Pass the updateUserStatus method bound to this component's context
             this.usersNav = new UsersNavigation((userId, isOnline) => {
+                console.log('Updating user status:', userId, isOnline);
                 this.updateUserStatus(userId, isOnline);
             });
         } else {
@@ -84,6 +85,7 @@ class UsersNavComponent {
                 this.currentUserId = currentUser.id;
                 console.log('Retrieved currentUserId from AuthService:', this.currentUserId);
                 this.usersNav = new UsersNavigation((userId, isOnline) => {
+                    console.log('Updating user status:', userId, isOnline);
                     this.updateUserStatus(userId, isOnline);
                 });
             }

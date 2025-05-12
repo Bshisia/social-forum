@@ -76,6 +76,12 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func broadcastUserStatus(userID string, isOnline bool) {
+	// Update database first
+	_, err := GlobalDB.Exec("UPDATE users SET is_online = ? WHERE id = ?", isOnline, userID)
+	if err != nil {
+		log.Printf("Error updating user online status in database: %v", err)
+	}
+
 	status := StatusMessage{
 		Type:     "user_status",
 		UserID:   userID,
@@ -89,6 +95,8 @@ func broadcastUserStatus(userID string, isOnline bool) {
 		err := conn.WriteJSON(status)
 		if err != nil {
 			log.Printf("Error broadcasting status: %v", err)
+			continue
 		}
 	}
+	log.Printf("Broadcasted status update for user %s: online=%v", userID, isOnline)
 }

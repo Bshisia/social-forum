@@ -33,6 +33,7 @@ class UsersNavigation {
         this.socket.addEventListener('message', (event) => {
             try {
                 const data = JSON.parse(event.data);
+                console.log('Received WebSocket message:', data);
                 if (data.type === 'user_status' && this.updateCallback) {
                     console.log('Received status update:', data);
                     this.updateCallback(data.user_id, data.is_online);
