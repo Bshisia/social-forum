@@ -76,6 +76,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go broadcastUserStatus(userId, true)
+
 	// ✅ Mark user as online
 	_, err = GlobalDB.Exec("UPDATE users SET is_online = TRUE WHERE id = ?", userId)
 	if err != nil {
