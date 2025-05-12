@@ -51,26 +51,93 @@ class ChatComponent {
 
     async fetchOtherUserName() {
         try {
-            const response = await fetch(`/api/users/${this.otherUserId}`, {
+            console.log(`Fetching details for user ID: ${this.otherUserId}`);
+            
+            // Add a timestamp to prevent caching
+            const timestamp = new Date().getTime();
+            const response = await fetch(`/api/users/${this.otherUserId}?_=${timestamp}`, {
                 credentials: 'include',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
             });
 
             if (!response.ok) {
-                throw new Error('Failed to fetch user details');
+                const errorText = await response.text();
+                console.error(`Server error (${response.status}): ${errorText}`);
+                throw new Error(`Failed to fetch user details: ${response.status}`);
             }
 
             const user = await response.json();
-            // Handle different API response formats
-            this.otherUserName = user.username || user.UserName || user.name || user.Nickname || user.nickname || 'Unknown User';
+            console.log('User details received:', user);
+            
+            // Use the first available name property
+            this.otherUserName = user.nickname || user.username || user.email || `User ${this.otherUserId.substring(0, 8)}`;
             
             // Update the header with the user's name
             const chatHeader = document.querySelector('.chat-header h2');
             if (chatHeader) {
                 chatHeader.textContent = `Chat with ${this.otherUserName}`;
             }
+            
+            return true;
         } catch (error) {
             console.error('Error fetching user details:', error);
-            this.otherUserName = 'Unknown User'; // Fallback in case of an error
+            
+            // Try fetching all users and finding the one we need
+            try {
+                const allUsersResponse = await fetch('/api/users', {
+                    credentials: 'include',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
+                if (allUsersResponse.ok) {
+                    const allUsers = await allUsersResponse.json();
+                    const matchingUser = allUsers.find(u => u.id === this.otherUserId);
+                    
+                    if (matchingUser) {
+                        this.otherUserName = matchingUser.nickname || matchingUser.username || 
+                                            matchingUser.email || `User ${this.otherUserId.substring(0, 8)}`;
+                        
+                        // Update the header with the user's name
+                        const chatHeader = document.querySelector('.chat-header h2');
+                        if (chatHeader) {
+                            chatHeader.textContent = `Chat with ${this.otherUserName}`;
+                        }
+                        
+                        return true;
+                    }
+                }
+            } catch (fallbackError) {
+                console.error('Error in fallback user fetch:', fallbackError);
+            }
+            
+            // Use a fallback name if all else fails
+            this.otherUserName = `User ${this.otherUserId.substring(0, 8)}`;
+            
+            // Update the header with the fallback name
+            const chatHeader = document.querySelector('.chat-header h2');
+            if (chatHeader) {
+                chatHeader.textContent = `Chat with ${this.otherUserName}`;
+            }
+            
+            // Show error message in the chat
+            const messagesContainer = document.getElementById('messages-container');
+            if (messagesContainer) {
+                messagesContainer.innerHTML = `
+                    <div class="chat-error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>Could not load user details. The user may not exist or there might be a connection issue.</p>
+                        <button onclick="window.location.reload()" class="retry-button">
+                            <i class="fas fa-sync"></i> Retry
+                        </button>
+                    </div>
+                `;
+            }
+            
+            return false;
         }
     }
 
@@ -163,9 +230,6 @@ class ChatComponent {
                     break;
                 case 'stop_typing':
                     this.showTypingIndicator(false);
-                    break;
-                case 'user_status':
-                    this.updateUserStatus(data.status === 'online');
                     break;
                 default:
                     console.log('Unknown message type:', data.type);
