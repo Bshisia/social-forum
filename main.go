@@ -49,6 +49,10 @@ func main() {
 
 	// handle websocket connetion
 	http.HandleFunc("/ws", handlers.HandleWebSocket)
+	http.HandleFunc("/ws/chat", handlers.HandleChatWebSocket)
+
+	// Add this to your routes
+	http.HandleFunc("/api/users/", handlers.GetUserHandler)
 
 	// 5. SPA catch-all route - serve index.html for all other routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
