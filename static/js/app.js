@@ -506,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Get current user ID from localStorage or your auth service
     const currentUserId = localStorage.getItem('userId');
-    
+
     if (currentUserId) {
         const usersNav = new UsersNavComponent([], currentUserId);
     } else {
@@ -515,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Make initializeUI function global so it can be called from auth component
-window.initializeUI = function () {
+function initializeUI() {
     const currentUser = AuthService.getCurrentUser();
 
     if (!currentUser) {
@@ -572,12 +572,21 @@ function initializeOptionalComponents() {
     // Initialize users nav with mock data if API fails
     const usersNavElement = document.getElementById('users-nav');
     if (usersNavElement && typeof UsersNavComponent === 'function') {
+        // Get current user ID
+        const currentUserId = AuthService.getCurrentUser()?.id;
+
         // First try to load real users
         loadUsers()
             .then(usersData => {
                 try {
                     console.log('Users data loaded:', usersData);
-                    const usersNav = new UsersNavComponent(usersData);
+                    // Filter out current user
+                    const filteredUsers = usersData.filter(user => {
+                        const userId = user.ID || user.id;
+                        return userId !== currentUserId;
+                    });
+
+                    const usersNav = new UsersNavComponent(filteredUsers, currentUserId);
                     usersNav.mount(usersNavElement);
                 } catch (error) {
                     console.error('Error mounting users nav:', error);
