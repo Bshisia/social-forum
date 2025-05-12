@@ -146,7 +146,8 @@ class NavbarComponent {
         if (signoutBtn) {
             signoutBtn.addEventListener('click', () => {
                 AuthService.signOut().then(() => {
-                    window.navigation.navigateTo('/signin');
+                    // Force a full page reload instead of using navigation
+                    window.location.href = '/signin';
                 }).catch(error => {
                     console.error('Error signing out:', error);
                 });
