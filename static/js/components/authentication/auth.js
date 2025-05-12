@@ -240,12 +240,9 @@ class AuthComponent {
                     nickname: data.nickname
                 });
                 
-                // Initialize UI before navigating
-                initializeUI();
-                
-                // Navigate to home page
+                // Force a full page reload instead of using navigation
                 setTimeout(() => {
-                    window.navigation.navigateTo('/');
+                    window.location.href = '/';
                 }, 500);
             }
         })
