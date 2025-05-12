@@ -10,11 +10,17 @@ class UsersNavComponent {
 
 
     render() {
+        // Filter out the current user from the users list
+        const filteredUsers = this.users.filter(user => {
+            const userId = user.ID || user.id;
+            return userId !== this.currentUserId;
+        });
+
         return `
             <div class="users-filter-container">
                 <h3>Users</h3>
                 <ul class="users-list">
-                    ${this.users.map(user => {
+                    ${filteredUsers.map(user => {
             const userId = user.ID || user.id;
             const userName = user.UserName || user.userName || user.Nickname || user.nickname || user.username || 'Unknown User';
             const isOnline = user.isOnline || user.is_online || false;
@@ -67,8 +73,48 @@ class UsersNavComponent {
             this.currentUserId = localStorage.getItem('userId');
         }
 
-        this.container.innerHTML = this.render();
+        // If we don't have users data yet, fetch it
+        if (!this.users || this.users.length === 0) {
+            this.fetchUsers().then(() => {
+                this.container.innerHTML = this.render();
+                this.initializeWebSocket();
+            });
+        } else {
+            this.container.innerHTML = this.render();
+            this.initializeWebSocket();
+        }
+    }
 
+    async fetchUsers() {
+        try {
+            console.log('Fetching users for navigation...');
+            const response = await fetch('/api/users', {
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch users: ${response.status}`);
+            }
+            
+            const users = await response.json();
+            console.log('Users fetched successfully:', users);
+            
+            // Filter out current user
+            this.users = users.filter(user => {
+                const userId = user.id || user.ID;
+                return userId !== this.currentUserId;
+            });
+            
+            return this.users;
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            // Use empty array if fetch fails
+            this.users = [];
+            return this.users;
+        }
+    }
+
+    initializeWebSocket() {
         // Initialize WebSocket connection with status update callback
         if (this.currentUserId) {
             console.log('Initializing UsersNavigation with currentUserId:', this.currentUserId);
