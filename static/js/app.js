@@ -439,6 +439,13 @@ function toggleNavigationElements(show) {
     const navbarElement = document.getElementById('navbar');
     const filterNavElement = document.getElementById('filter-nav');
     const usersNavElement = document.getElementById('users-nav');
+    
+    // Add or remove auth-page class to body
+    if (!show) {
+        document.body.classList.add('auth-page');
+    } else {
+        document.body.classList.remove('auth-page');
+    }
 
     // Show/hide elements if they exist
     if (navbarElement) {
