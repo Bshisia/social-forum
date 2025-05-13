@@ -2463,3 +2463,117 @@ input[type="file"] {
 .user-item.offline .status {
   color: #95a5a6;
 }
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-form label {
+  margin-bottom: 5px;
+  color: whitesmoke;
+}
+
+.auth-form input,
+.auth-form select {
+  margin-bottom: 15px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.auth-form input:focus,
+.auth-form select:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+.auth-form button {
+  padding: 10px;
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.auth-form button:hover {
+  background-color: #0056b3;
+}
+
+#main-content p {
+  color: whitesmoke;
+}
+
+#main-content p  a {
+  text-decoration: none;
+  color : #007bff;
+}
+
+.google-signin {
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+  margin-top: 20px;
+}
+
+.google-signin-btn,
+.github-signin-btn {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background-color: #4285f4;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.github-signin-btn {
+  background-color: #333;
+}
+
+.google-signin-btn i,
+.github-signin-btn i {
+  margin-right: 10px;
+}
+
+.google-signin-btn:hover {
+  background-color: #357ae8;
+}
+
+.github-signin-btn:hover {
+  background-color: #24292e;
+}
+
+.form-footer {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.form-footer a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.form-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Hide side navigation on auth pages */
+body.auth-page .categories-filter-container,
+body.auth-page .users-filter-container {
+  display: none !important;
+}
+
+/* Add specific styling for auth pages */
+.auth-page .main-layout {
+  grid-template-columns: 1fr;
+  max-width: 450px;
+  margin: 0 auto;
+  padding-top: 20px;
+}
