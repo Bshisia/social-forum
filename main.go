@@ -57,6 +57,7 @@ func main() {
 	// Add these routes to your main.go file
 	http.HandleFunc("/api/chat/history", handlers.GetChatHistoryHandler)
 	http.HandleFunc("/api/chat/send", handlers.SendMessageHandler)
+	http.HandleFunc("/api/chat/users", handlers.GetChatUsersHandler)
 
 	// 5. SPA catch-all route - serve index.html for all other routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
