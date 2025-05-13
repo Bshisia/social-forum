@@ -12,6 +12,7 @@ import (
 
 var (
 	// Chat clients map - maps user IDs to their WebSocket connections
+	// The key is a combination of userID and chatPartnerID to ensure messages go to the right chat window
 	chatClients    = make(map[string]*websocket.Conn)
 	chatClientsMux sync.RWMutex
 )
@@ -51,20 +52,24 @@ func HandleChatWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Register client with their user ID
+	// Create a composite key for this specific chat connection
+	// Format: "userID:chatPartnerID" to ensure messages go to the right chat window
+	chatKey := user1 + ":" + user2
+
+	// Register client with the composite key
 	chatClientsMux.Lock()
-	chatClients[user1] = conn
+	chatClients[chatKey] = conn
 	chatClientsMux.Unlock()
 
-	log.Printf("Chat WebSocket connection established for user: %s", user1)
+	log.Printf("Chat WebSocket connection established for user: %s chatting with: %s (key: %s)", user1, user2, chatKey)
 
 	// Clean up on disconnect
 	defer func() {
 		chatClientsMux.Lock()
-		delete(chatClients, user1)
+		delete(chatClients, chatKey)
 		chatClientsMux.Unlock()
 		conn.Close()
-		log.Printf("Chat WebSocket connection closed for user: %s", user1)
+		log.Printf("Chat WebSocket connection closed for user: %s chatting with: %s (key: %s)", user1, user2, chatKey)
 	}()
 
 	// Listen for messages
@@ -96,7 +101,7 @@ func HandleChatWebSocket(w http.ResponseWriter, r *http.Request) {
 				recipient := msgObj["recipient"].(string)
 				content := msgObj["content"].(string)
 				timestamp := msgObj["timestamp"].(string)
-				
+
 				log.Printf("WebSocket: Saving message from %s to %s: %s", sender, recipient, content)
 
 				// Parse the timestamp
@@ -135,7 +140,7 @@ func HandleChatWebSocket(w http.ResponseWriter, r *http.Request) {
 				} else {
 					if id, err := result.LastInsertId(); err == nil {
 						log.Printf("Message saved via WebSocket with ID: %d", id)
-						
+
 						// Verify the message was saved
 						var savedID int
 						var savedContent string
@@ -161,14 +166,52 @@ func HandleChatWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 // forwardMessageToUser sends a message to a specific user if they're connected
-func forwardMessageToUser(userID string, message []byte) {
+func forwardMessageToUser(recipientID string, message []byte) {
+	// Parse the message to get the sender ID
+	var msg map[string]interface{}
+	if err := json.Unmarshal(message, &msg); err != nil {
+		log.Printf("Error parsing message in forwardMessageToUser: %v", err)
+		return
+	}
+
+	var senderID string
+
+	// Extract sender ID based on message type
+	if msgType, ok := msg["type"].(string); ok {
+		switch msgType {
+		case "message":
+			if msgObj, ok := msg["message"].(map[string]interface{}); ok {
+				if sender, ok := msgObj["sender"].(string); ok {
+					senderID = sender
+				}
+			}
+		case "typing", "stop_typing":
+			if sender, ok := msg["sender"].(string); ok {
+				senderID = sender
+			}
+		}
+	}
+
+	if senderID == "" {
+		log.Printf("Could not determine sender ID from message")
+		return
+	}
+
+	// Create the composite key for the recipient's connection
+	// The recipient should be connected to a chat with the sender
+	chatKey := recipientID + ":" + senderID
+
 	chatClientsMux.RLock()
-	conn, exists := chatClients[userID]
+	conn, exists := chatClients[chatKey]
 	chatClientsMux.RUnlock()
 
 	if exists {
 		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
-			log.Printf("Error forwarding message to user %s: %v", userID, err)
+			log.Printf("Error forwarding message to user %s (key: %s): %v", recipientID, chatKey, err)
+		} else {
+			log.Printf("Successfully forwarded message to user %s (key: %s)", recipientID, chatKey)
 		}
+	} else {
+		log.Printf("Recipient %s not connected to chat with %s (key: %s not found)", recipientID, senderID, chatKey)
 	}
 }
