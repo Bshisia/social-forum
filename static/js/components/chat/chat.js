@@ -8,44 +8,99 @@ class ChatComponent {
         this.socket = null; // WebSocket connection
         this.isTyping = false; // Typing indicator state
         this.typingTimer = null; // Timer for typing indicator
+        this.page = 1;
+        this.messagesPerPage = 10;
+        this.hasMoreMessages = true;
+        this.isLoadingMore = false;
+        this.scrollThrottleTimer = null;
     }
 
-    async fetchMessageHistory() {
+    async fetchMessageHistory(loadMore = false) {
+        if (this.isLoadingMore) return;
+        
         try {
-            // Show loading state
-            const messagesContainer = document.getElementById('messages-container');
-            if (messagesContainer) {
-                messagesContainer.innerHTML = `
-                    <div class="loading-messages">
-                        <div class="loading-spinner"></div>
-                        <p>Loading messages...</p>
-                    </div>
-                `;
+            this.isLoadingMore = true;
+            
+            // Show loading state only on initial load
+            if (!loadMore) {
+                const messagesContainer = document.getElementById('messages-container');
+                if (messagesContainer) {
+                    messagesContainer.innerHTML = `
+                        <div class="loading-messages">
+                            <div class="loading-spinner"></div>
+                            <p>Loading messages...</p>
+                        </div>
+                    `;
+                }
             }
 
-            const response = await fetch(`/api/chat/history?user1=${this.currentUserId}&user2=${this.otherUserId}`, {
-                credentials: 'include',
-            });
+            console.log(`Fetching message history between ${this.currentUserId} and ${this.otherUserId}, page ${this.page}`);
+            const timestamp = new Date().getTime();
+            const response = await fetch(
+                `/api/chat/history?user1=${this.currentUserId}&user2=${this.otherUserId}&page=${this.page}&limit=${this.messagesPerPage}&_=${timestamp}`, 
+                {
+                    credentials: 'include',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                }
+            );
 
             if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Server error (${response.status}): ${errorText}`);
                 throw new Error('Failed to fetch message history');
             }
 
-            this.messages = await response.json();
-            this.renderMessages();
+            const data = await response.json();
+            console.log('Message history received:', data);
+            
+            // Check if we have more messages to load
+            this.hasMoreMessages = data.length === this.messagesPerPage;
+            
+            // Ensure messages is always an array
+            const newMessages = Array.isArray(data) ? data : [];
+            
+            if (loadMore) {
+                // Prepend new messages to existing ones
+                this.messages = [...newMessages, ...this.messages];
+            } else {
+                // Replace messages on initial load
+                this.messages = newMessages;
+            }
+            
+            // Log each message for debugging
+            this.messages.forEach((msg, index) => {
+                console.log(`Message ${index + 1}:`, JSON.stringify(msg));
+            });
+            
+            if (loadMore) {
+                this.renderAdditionalMessages(newMessages);
+            } else {
+                this.renderMessages();
+            }
+            
+            return true;
         } catch (error) {
             console.error('Error fetching message history:', error);
-            const messagesContainer = document.getElementById('messages-container');
-            if (messagesContainer) {
-                messagesContainer.innerHTML = `
-                    <div class="message-error">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <button onclick="window.chatComponent.fetchMessageHistory()" class="retry-button">
-                            <i class="fas fa-sync"></i> Retry
-                        </button>
-                    </div>
-                `;
+            if (!loadMore) {
+                const messagesContainer = document.getElementById('messages-container');
+                if (messagesContainer) {
+                    messagesContainer.innerHTML = `
+                        <div class="message-error">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <p>Failed to load message history. Please try again.</p>
+                            <button onclick="window.chatComponent.fetchMessageHistory()" class="retry-button">
+                                <i class="fas fa-sync"></i> Retry
+                            </button>
+                        </div>
+                    `;
+                }
             }
+            return false;
+        } finally {
+            this.isLoadingMore = false;
         }
     }
 
@@ -157,10 +212,23 @@ class ChatComponent {
         await this.fetchOtherUserName();
         
         // Fetch message history
-        await this.fetchMessageHistory();
+        this.page = 1; // Reset to first page
+        const historyLoaded = await this.fetchMessageHistory();
+        
+        if (!historyLoaded) {
+            console.warn('Failed to load message history, will try again after WebSocket connection');
+        }
         
         // Initialize WebSocket connection
         this.initializeWebSocket();
+        
+        // Setup scroll listener for pagination
+        this.setupScrollListener();
+        
+        // Add event listener for page unload to clean up resources
+        window.addEventListener('beforeunload', () => {
+            this.cleanup();
+        });
     }
 
     render() {
@@ -333,10 +401,12 @@ class ChatComponent {
         if (!content) return;
 
         try {
+            console.log(`Sending message to ${this.otherUserId}: ${content}`);
+            
             // Create message object
             const messageObj = {
-                sender: this.currentUserId,
-                recipient: this.otherUserId,
+                sender_id: this.currentUserId,
+                receiver_id: this.otherUserId,
                 content,
                 timestamp: new Date().toISOString()
             };
@@ -349,16 +419,30 @@ class ChatComponent {
             this.sendTypingStatus(false);
             
             // Add message to UI immediately for better UX
-            this.addMessageToUI(messageObj, true);
+            const uiMessage = {
+                id: Date.now(), // Temporary ID
+                sender: this.currentUserId,
+                recipient: this.otherUserId,
+                content,
+                timestamp: messageObj.timestamp
+            };
+            this.addMessageToUI(uiMessage, true);
 
             // Send message via WebSocket if connected
             if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                console.log('Sending message via WebSocket');
                 this.socket.send(JSON.stringify({
                     type: 'message',
-                    message: messageObj
+                    message: {
+                        sender: this.currentUserId,
+                        recipient: this.otherUserId,
+                        content,
+                        timestamp: messageObj.timestamp
+                    }
                 }));
             } else {
                 // Fallback to REST API if WebSocket is not connected
+                console.log('WebSocket not connected, using REST API fallback');
                 const response = await fetch('/api/chat/send', {
                     method: 'POST',
                     headers: {
@@ -369,11 +453,26 @@ class ChatComponent {
                 });
 
                 if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`Server error (${response.status}): ${errorText}`);
                     throw new Error('Failed to send message');
                 }
+                
+                const result = await response.json();
+                console.log('Message sent successfully via REST API:', result);
+                
+                // If the message was sent via REST API, add it to our messages array
+                if (result.success && result.message) {
+                    const savedMessage = {
+                        id: result.message.id,
+                        sender: result.message.sender_id,
+                        recipient: result.message.receiver_id,
+                        content: result.message.content,
+                        timestamp: result.message.sent_at
+                    };
+                    this.messages.push(savedMessage);
+                }
             }
-
-            console.log('Message sent successfully');
         } catch (error) {
             console.error('Error sending message:', error);
             // Show error message
@@ -396,11 +495,14 @@ class ChatComponent {
     }
 
     handleIncomingMessage(message) {
+        console.log('Received message:', JSON.stringify(message));
+        
         // Add the new message to our messages array
         this.messages.push(message);
         
         // Add message to the UI
-        this.addMessageToUI(message, false);
+        const isSent = message.sender === this.currentUserId;
+        this.addMessageToUI(message, isSent);
         
         // Play notification sound if the message is from the other user
         if (message.sender === this.otherUserId) {
@@ -427,10 +529,28 @@ class ChatComponent {
         // Create message element
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+        messageDiv.dataset.id = message.id; // Store message ID for reference
         
         // Format the timestamp
-        const timestamp = new Date(message.timestamp);
-        const formattedTime = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        let formattedTime = 'Unknown time';
+        try {
+            const timestamp = new Date(message.timestamp);
+            if (!isNaN(timestamp.getTime())) {
+                formattedTime = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } else {
+                console.warn('Invalid timestamp format:', message.timestamp);
+                // Try alternative format (SQLite format)
+                const parts = message.timestamp.split(/[- :]/);
+                if (parts.length >= 6) {
+                    const altTimestamp = new Date(
+                        parts[0], parts[1]-1, parts[2], parts[3], parts[4], parts[5]
+                    );
+                    formattedTime = altTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+            }
+        } catch (e) {
+            console.error('Error formatting timestamp:', e, message.timestamp);
+        }
         
         // Set message content
         messageDiv.innerHTML = `
@@ -460,6 +580,8 @@ class ChatComponent {
         // Clear messages container
         messagesContainer.innerHTML = '';
         
+        console.log(`Rendering ${this.messages.length} messages`);
+        
         if (this.messages.length === 0) {
             // Show empty state
             messagesContainer.innerHTML = `
@@ -473,6 +595,8 @@ class ChatComponent {
         
         // Render all messages
         this.messages.forEach(message => {
+            console.log('Rendering message:', JSON.stringify(message));
+            // Determine if this message was sent by the current user
             const isSent = message.sender === this.currentUserId;
             this.addMessageToUI(message, isSent);
         });
@@ -497,6 +621,92 @@ class ChatComponent {
         
         // Remove global reference
         delete window.chatComponent;
+    }
+
+    async checkDatabaseConnection() {
+        try {
+            console.log('Checking database connection...');
+            const response = await fetch(`/api/debug/messages?user1=${this.currentUserId}&user2=${this.otherUserId}`, {
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                console.error('Database check failed:', response.status);
+                return false;
+            }
+            
+            const data = await response.json();
+            console.log('Database check result:', data);
+            
+            // Display the result in the UI for debugging
+            const messagesContainer = document.getElementById('messages-container');
+            if (messagesContainer) {
+                messagesContainer.innerHTML = `
+                    <div class="debug-info">
+                        <h3>Database Check</h3>
+                        <p>Found ${data.count} messages between users</p>
+                        <pre>${JSON.stringify(data.messages, null, 2)}</pre>
+                        <button onclick="window.chatComponent.fetchMessageHistory()" class="retry-button">
+                            <i class="fas fa-sync"></i> Load Normal Chat
+                        </button>
+                    </div>
+                `;
+            }
+            
+            return data.count > 0;
+        } catch (error) {
+            console.error('Error checking database:', error);
+            return false;
+        }
+    }
+
+    setupScrollListener() {
+        const messagesContainer = document.getElementById('messages-container');
+        if (!messagesContainer) return;
+        
+        messagesContainer.addEventListener('scroll', () => {
+            // Throttle scroll events
+            if (this.scrollThrottleTimer) return;
+            
+            this.scrollThrottleTimer = setTimeout(() => {
+                this.scrollThrottleTimer = null;
+                
+                // Check if we're near the top and have more messages to load
+                if (messagesContainer.scrollTop < 50 && this.hasMoreMessages && !this.isLoadingMore) {
+                    this.page++;
+                    this.fetchMessageHistory(true);
+                }
+            }, 200); // 200ms throttle
+        });
+    }
+
+    renderAdditionalMessages(newMessages) {
+        const messagesContainer = document.getElementById('messages-container');
+        if (!messagesContainer) return;
+        
+        // Remember scroll height before adding new messages
+        const scrollHeightBefore = messagesContainer.scrollHeight;
+        
+        // Create document fragment for better performance
+        const fragment = document.createDocumentFragment();
+        
+        // Render new messages at the top
+        newMessages.forEach(message => {
+            const isSent = message.sender === this.currentUserId;
+            const messageDiv = this.createMessageElement(message, isSent);
+            fragment.appendChild(messageDiv);
+        });
+        
+        // Insert at the beginning
+        if (messagesContainer.firstChild) {
+            messagesContainer.insertBefore(fragment, messagesContainer.firstChild);
+        } else {
+            messagesContainer.appendChild(fragment);
+        }
+        
+        // Adjust scroll position to maintain view
+        const newScrollHeight = messagesContainer.scrollHeight;
+        messagesContainer.scrollTop = newScrollHeight - scrollHeightBefore;
     }
 }
 
