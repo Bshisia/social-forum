@@ -21,7 +21,7 @@ type Message struct {
 // GetChatHistoryHandler fetches chat history between two users
 func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	// Get query parameters
 	user1 := r.URL.Query().Get("user1")
 	log.Printf("User1: %s", user1)
@@ -39,11 +39,11 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	// Query the database for messages between these users
 	rows, err := GlobalDB.Query(`
 		SELECT id, sender_id, receiver_id, content, sent_at, read
-		FROM messages 
+		FROM messages
 		WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
 		ORDER BY sent_at ASC
 	`, user1, user2, user2, user1)
-	
+
 	if err != nil {
 		log.Printf("Database error querying messages: %v", err)
 		http.Error(w, "Failed to query messages", http.StatusInternalServerError)
@@ -57,15 +57,15 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		var senderID, receiverID, content string
 		var sentAt string
 		var read bool
-		
+
 		if err := rows.Scan(&id, &senderID, &receiverID, &content, &sentAt, &read); err != nil {
 			log.Printf("Error scanning message row: %v", err)
 			continue
 		}
-		
-		log.Printf("Found message: ID=%d, Sender=%s, Receiver=%s, Content=%s, SentAt=%s", 
+
+		log.Printf("Found message: ID=%d, Sender=%s, Receiver=%s, Content=%s, SentAt=%s",
 			id, senderID, receiverID, content, sentAt)
-		
+
 		// Format the message in the format expected by the client
 		messages = append(messages, map[string]interface{}{
 			"id":         id,
@@ -113,8 +113,8 @@ func GetNewMessagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Query the database for new messages between these users
 	rows, err := GlobalDB.Query(`
-		SELECT id, sender_id, receiver_id, content, sent_at 
-		FROM messages 
+		SELECT id, sender_id, receiver_id, content, sent_at
+		FROM messages
 		WHERE ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
 		AND id > ?
 		ORDER BY sent_at ASC
@@ -194,7 +194,7 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO messages (sender_id, receiver_id, content, sent_at, read)
 		VALUES (?, ?, ?, ?, 0)
 	`, requestBody.SenderID, requestBody.ReceiverID, requestBody.Content, sentAtStr)
-	
+
 	if err != nil {
 		log.Printf("Database error saving message: %v", err)
 		http.Error(w, "Failed to save message", http.StatusInternalServerError)
@@ -220,6 +220,9 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		log.Printf("Verified saved message: ID=%d, Content=%s", savedID, savedContent)
 	}
+
+	// Notify any connected WebSocket clients about the new message
+	// This would be a good place to trigger a WebSocket event
 
 	// Return success response with the saved message in the format expected by the client
 	w.Header().Set("Content-Type", "application/json")
