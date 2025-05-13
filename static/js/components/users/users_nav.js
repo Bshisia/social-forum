@@ -68,6 +68,9 @@ class UsersNavComponent {
             return;
         }
 
+        // Make the component accessible globally for event handlers
+        window.usersNavComponent = this;
+
         // Get currentUserId if not set in constructor
         if (!this.currentUserId) {
             this.currentUserId = localStorage.getItem('userId');
@@ -77,21 +80,58 @@ class UsersNavComponent {
         if (!this.users || this.users.length === 0) {
             this.fetchUsers().then(() => {
                 this.container.innerHTML = this.render();
-                this.initializeWebSocket();
+                
+                // Use existing WebSocket if available, otherwise initialize a new one
+                if (window.globalUsersNav) {
+                    console.log('Using existing WebSocket connection');
+                    this.usersNav = window.globalUsersNav;
+                    // Update the callback to point to this component
+                    this.usersNav.updateCallback = (updateType, data) => {
+                        if (updateType === 'refresh') {
+                            console.log('Refreshing users list due to WebSocket notification');
+                            this.refreshUsersList();
+                        } else if (updateType === 'new_user' && data) {
+                            console.log('Adding new user to list:', data);
+                            this.addNewUser(data);
+                        } else {
+                            console.log('Updating user status:', updateType, data);
+                            this.updateUserStatus(updateType, data);
+                        }
+                    };
+                } else {
+                    this.initializeWebSocket();
+                }
             });
         } else {
             this.container.innerHTML = this.render();
-            this.initializeWebSocket();
+            
+            // Use existing WebSocket if available, otherwise initialize a new one
+            if (window.globalUsersNav) {
+                console.log('Using existing WebSocket connection');
+                this.usersNav = window.globalUsersNav;
+                // Update the callback to point to this component
+                this.usersNav.updateCallback = (updateType, data) => {
+                    if (updateType === 'refresh') {
+                        console.log('Refreshing users list due to WebSocket notification');
+                        this.refreshUsersList();
+                    } else if (updateType === 'new_user' && data) {
+                        console.log('Adding new user to list:', data);
+                        this.addNewUser(data);
+                    } else {
+                        console.log('Updating user status:', updateType, data);
+                        this.updateUserStatus(updateType, data);
+                    }
+                };
+            } else {
+                this.initializeWebSocket();
+            }
         }
     }
 
     async fetchUsers() {
         try {
-            console.log('Fetching users for navigation...');
-            const response = await fetch('/api/users', {
-                credentials: 'include'
-            });
-            
+            // Fetch all users with their last message timestamp
+            const response = await fetch('/api/users/with-last-message?current_user=' + this.currentUserId);
             if (!response.ok) {
                 throw new Error(`Failed to fetch users: ${response.status}`);
             }
@@ -118,10 +158,21 @@ class UsersNavComponent {
         // Initialize WebSocket connection with status update callback
         if (this.currentUserId) {
             console.log('Initializing UsersNavigation with currentUserId:', this.currentUserId);
-            // Pass the updateUserStatus method bound to this component's context
-            this.usersNav = new UsersNavigation((userId, isOnline) => {
-                console.log('Updating user status:', userId, isOnline);
-                this.updateUserStatus(userId, isOnline);
+            // Pass the callback function that handles different types of updates
+            this.usersNav = new UsersNavigation((updateType, data) => {
+                if (updateType === 'refresh') {
+                    // Refresh the entire users list
+                    console.log('Refreshing users list due to WebSocket notification');
+                    this.refreshUsersList();
+                } else if (updateType === 'new_user' && data) {
+                    // Add the new user to the list without a full refresh
+                    console.log('Adding new user to list:', data);
+                    this.addNewUser(data);
+                } else {
+                    // Regular status update
+                    console.log('Updating user status:', updateType, data);
+                    this.updateUserStatus(updateType, data);
+                }
             });
         } else {
             console.error('No currentUserId available for WebSocket initialization');
@@ -130,9 +181,20 @@ class UsersNavComponent {
             if (currentUser?.id) {
                 this.currentUserId = currentUser.id;
                 console.log('Retrieved currentUserId from AuthService:', this.currentUserId);
-                this.usersNav = new UsersNavigation((userId, isOnline) => {
-                    console.log('Updating user status:', userId, isOnline);
-                    this.updateUserStatus(userId, isOnline);
+                this.usersNav = new UsersNavigation((updateType, data) => {
+                    if (updateType === 'refresh') {
+                        // Refresh the entire users list
+                        console.log('Refreshing users list due to WebSocket notification');
+                        this.refreshUsersList();
+                    } else if (updateType === 'new_user' && data) {
+                        // Add the new user to the list without a full refresh
+                        console.log('Adding new user to list:', data);
+                        this.addNewUser(data);
+                    } else {
+                        // Regular status update
+                        console.log('Updating user status:', updateType, data);
+                        this.updateUserStatus(updateType, data);
+                    }
                 });
             }
         }
@@ -193,6 +255,95 @@ class UsersNavComponent {
                 userElement.style.display = isOnline ? 'block' : 'none';
             }
         }
+    }
+
+    // Add a method to refresh the users list
+    async refreshUsersList() {
+        console.log('Refreshing users list...');
+        try {
+            await this.fetchUsers();
+            this.container.innerHTML = this.render();
+            console.log('Users list refreshed successfully');
+            return true;
+        } catch (error) {
+            console.error('Error refreshing users list:', error);
+            return false;
+        }
+    }
+
+    // Add a method to add a new user to the list without refreshing
+    addNewUser(userData) {
+        console.log('Adding new user to list:', userData);
+        
+        // Check if this user is already in our list
+        const existingUser = this.users.find(user => {
+            const userId = user.ID || user.id;
+            return userId === userData.id;
+        });
+        
+        if (existingUser) {
+            console.log('User already exists in list, skipping add');
+            return;
+        }
+        
+        // Format the user data to match our expected format
+        const newUser = {
+            ID: userData.id,
+            UserName: userData.nickname || userData.username || 'New User',
+            ProfilePic: userData.profile_pic || '',
+            isOnline: userData.is_online || false
+        };
+        
+        // Add to our users array
+        this.users.push(newUser);
+        
+        // Get the users list element
+        const usersList = this.container.querySelector('.users-list');
+        if (!usersList) {
+            console.error('Users list element not found');
+            return;
+        }
+        
+        // Create the new user HTML
+        const userId = newUser.ID;
+        const userName = newUser.UserName;
+        const isOnline = newUser.isOnline;
+        const profilePic = newUser.ProfilePic;
+        
+        const userHTML = `
+            <li class="user-item" data-online="${isOnline}" data-user-id="${userId}">
+                <a href="/chat?user1=${this.currentUserId}&user2=${userId}" class="user-link" onclick="event.preventDefault(); window.navigation.navigateTo('/chat?user1=${this.currentUserId}&user2=${userId}')">
+                    <div class="user-avatar">
+                        ${profilePic ?
+                        `<img src="${profilePic}" alt="${userName}'s avatar" class="user-avatar-img">` :
+                        `<div class="user-avatar-placeholder">
+                            <i class="fas fa-user"></i>
+                        </div>`
+                        }
+                    </div>
+                    <div class="user-info">
+                        <span class="username">${userName}</span>
+                        <span class="status" id="status-${userId}">
+                            ${isOnline ? '🟢 Online' : '⚫ Offline'}
+                        </span>
+                    </div>
+                </a>
+            </li>
+        `;
+        
+        // Add the new user to the list with a highlight effect
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = userHTML;
+        const newUserElement = tempDiv.firstElementChild;
+        newUserElement.classList.add('new-user-highlight');
+        usersList.appendChild(newUserElement);
+        
+        // Remove the highlight effect after a delay
+        setTimeout(() => {
+            newUserElement.classList.remove('new-user-highlight');
+        }, 3000);
+        
+        console.log('New user added to list successfully');
     }
 }
 
