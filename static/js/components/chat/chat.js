@@ -515,6 +515,9 @@ class ChatComponent {
             // Simulate status updates (in a real app, these would come from the server)
             this.simulateMessageStatusUpdates(tempId);
 
+            // Refresh the users list to update the sorting based on last message
+            this.refreshUsersNav();
+
             // Send message via WebSocket if connected
             if (this.socket && this.socket.readyState === WebSocket.OPEN) {
                 console.log('Sending message via WebSocket');
@@ -598,6 +601,9 @@ class ChatComponent {
             // Play notification sound if the message is from the other user
             if (message.sender === this.otherUserId) {
                 this.playNotificationSound();
+
+                // Refresh the users list to update the sorting based on last message
+                this.refreshUsersNav();
             }
         } else {
             console.log('Ignoring message not related to this chat conversation');
@@ -877,6 +883,19 @@ class ChatComponent {
                 }
             }, 200); // 200ms throttle
         });
+    }
+
+    // Refresh the users navigation component to update sorting
+    refreshUsersNav() {
+        console.log('Chat component is triggering users nav refresh to update sorting');
+
+        // Check if the global usersNavComponent exists
+        if (window.usersNavComponent && typeof window.usersNavComponent.refreshUsersList === 'function') {
+            console.log('Calling refreshUsersList to update user order based on latest messages');
+            window.usersNavComponent.refreshUsersList();
+        } else {
+            console.warn('UsersNavComponent not available for refresh');
+        }
     }
 
     renderAdditionalMessages(newMessages) {
