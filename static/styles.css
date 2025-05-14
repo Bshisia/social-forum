@@ -646,6 +646,10 @@ a:hover {
   position: relative;
 }
 
+.post-card a {
+  text-decoration: none;
+}
+
 .post-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--hover-shadow);
