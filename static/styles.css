@@ -919,6 +919,7 @@ a:hover {
 }
 
 /* Add smooth loading animation */
+/* Single fadeIn animation for the entire application */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -1602,9 +1603,7 @@ a:hover {
   top: 100px;
   height: calc(100vh - 120px);
   overflow-y: auto;
-  background-color: rgba(75, 72, 72, 0.8);
-  background-image: url('images/MuchaTseBle.jpeg');
-  background-blend-mode: multiply;
+  background-color: rgba(30, 30, 30, 0.95);
   padding: 20px;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -1662,9 +1661,7 @@ a:hover {
 /* create post page */
 .create-post-form {
   width: 100%;
-  background-color: rgba(75, 72, 72, 0.8);
-  background-image: url('images/MuchaTseBle.jpeg');
-  background-blend-mode: multiply;
+  background-color: rgba(30, 30, 30, 0.95);
   border-radius: 16px;
   padding: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -1907,9 +1904,7 @@ input[type="file"] {
   top: 100px;
   height: fit-content;
   overflow: hidden;
-  background-color: rgba(75, 72, 72, 0.8);
-  background-image: url('images/MuchaTseBle.jpeg');
-  background-blend-mode: multiply;
+  background-color: rgba(30, 30, 30, 0.95);
   padding: 20px;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -2109,7 +2104,7 @@ input[type="file"] {
   align-items: center;
   gap: 15px;
   padding: 15px;
-  background-image: url('images/MuchaTseBle.jpeg');
+  background-color: rgba(30, 30, 30, 0.95);
   border-radius: 8px;
   transition: background-color 0.2s;
 }
@@ -2310,8 +2305,7 @@ input[type="file"] {
 .post-card {
   background-color: rgba(75, 72, 72, 0.8);
   /* Darker background */
-  background-image: url('images/MuchaTseBle.jpeg');
-  background-blend-mode: multiply;
+  background-color: rgba(30, 30, 30, 0.95);
   /* This helps blend the background color with the image */
   border: 1px solid var(--border-color);
   border-radius: 16px;
@@ -2638,8 +2632,7 @@ input[type="file"] {
     align-items: center;
     justify-content: center;
     padding: 40px;
-    background-color: rgb(75, 72, 72);
-    background-image: url('images/MuchaTseBle.jpeg');
+    background-color: rgba(30, 30, 30, 0.95);
     border-radius: 8px;
     margin: 20px 0;
     text-align: center;
@@ -2657,30 +2650,7 @@ input[type="file"] {
     margin: 0;
 }
 
-.no-posts-message {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px;
-    background-color: rgb(75, 72, 72);
-    background-image: url('images/MuchaTseBle.jpeg');
-    border-radius: 8px;
-    margin: 20px 0;
-    text-align: center;
-}
-
-.no-posts-message i {
-    font-size: 48px;
-    color: #fff;
-    margin-bottom: 16px;
-}
-
-.no-posts-message p {
-    font-size: 18px;
-    color: #fff;
-    margin: 0;
-}
+/* Duplicate no-posts-message removed */
 @media (max-width: 480px) {
   .post-footer {
     padding: 8px;
@@ -2847,9 +2817,7 @@ input[type="file"] {
 
 .create-post-form {
     width: 100%;
-    background-color: rgba(75, 72, 72, 0.8);
-    background-image: url('images/MuchaTseBle.jpeg');
-    background-blend-mode: multiply;
+    background-color: rgba(30, 30, 30, 0.95);
     border-radius: 16px;
     padding: 24px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -3082,10 +3050,7 @@ input[type="file"] {
   animation: fadeIn 0.3s ease-out;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+/* Using the global fadeIn animation defined earlier */
 
 .message.sent {
   justify-content: flex-end;
@@ -3544,4 +3509,77 @@ body.auth-page .users-filter-container {
   max-width: 450px;
   margin: 0 auto;
   padding-top: 20px;
+}
+
+/* Add a new class for the user who is typing */
+.user-link.is-typing {
+  background-color: rgba(139, 92, 246, 0.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15),
+              0 0 0 1px rgba(139, 92, 246, 0.2) inset;
+  animation: pulse 2s infinite cubic-bezier(0.45, 0.05, 0.55, 0.95);
+}
+
+/* Notification styling for users nav */
+.users-nav-notification {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background-color: rgba(30, 30, 30, 0.95);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2),
+              0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  z-index: 1000;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  max-width: 90%;
+  text-align: center;
+}
+
+.users-nav-notification.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.users-nav-notification.success {
+  background-color: rgba(16, 185, 129, 0.2);
+  border-left: 3px solid #10b981;
+}
+
+.users-nav-notification.error {
+  background-color: rgba(239, 68, 68, 0.2);
+  border-left: 3px solid #ef4444;
+}
+
+.users-nav-notification.info {
+  background-color: rgba(59, 130, 246, 0.2);
+  border-left: 3px solid #3b82f6;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
 }
