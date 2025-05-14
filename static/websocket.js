@@ -36,7 +36,8 @@ class UsersNavigation {
         this.socket.addEventListener('message', (event) => {
             try {
                 const data = JSON.parse(event.data);
-                console.log('Received WebSocket message:', data);
+                console.log('Received WebSocket message type:', data.type);
+
                 if (data.type === 'user_status') {
                     console.log('Received status update:', data);
 
@@ -53,6 +54,63 @@ class UsersNavigation {
                         userId: data.user_id,
                         isOnline: data.is_online
                     });
+                }
+                else if (data.type === 'new_user') {
+                    console.log('Received new user notification:', data);
+
+                    // Store the user status
+                    if (data.user && data.user.id) {
+                        this.userStatuses.set(data.user.id, data.user.is_online || true);
+
+                        // Call the callback with special type for new user
+                        if (this.updateCallback) {
+                            this.updateCallback('new_user', data.user);
+                        }
+
+                        // Also emit an event for other components to listen to
+                        eventBus.emit('user_signup', data.user);
+
+                        // Force a refresh of the users list
+                        eventBus.emit('refresh_users_list');
+                    }
+                }
+                else if (data.type === 'refresh_users') {
+                    console.log('Received refresh users notification:', data);
+
+                    // Call the callback with refresh type
+                    if (this.updateCallback) {
+                        this.updateCallback('refresh', null);
+                    }
+
+                    // Also emit an event for other components to listen to
+                    eventBus.emit('new_message_sent', {
+                        senderID: data.sender_id,
+                        receiverID: data.receiver_id
+                    });
+
+                    // Force a refresh of the users list
+                    eventBus.emit('refresh_users_list');
+                }
+                else if (data.type === 'users_list') {
+                    console.log('Received users list update:', data);
+
+                    // Update user statuses from the list
+                    if (data.users && Array.isArray(data.users)) {
+                        data.users.forEach(user => {
+                            if (user.ID || user.id) {
+                                const userId = user.ID || user.id;
+                                this.userStatuses.set(userId, user.isOnline || user.is_online || false);
+                            }
+                        });
+                    }
+
+                    // Call the callback with the users list
+                    if (this.updateCallback) {
+                        this.updateCallback('users_list', data.users);
+                    }
+
+                    // Emit an event for the users_nav component
+                    eventBus.emit('users_list_update', data.users);
                 }
             } catch (error) {
                 console.error('Error processing WebSocket message:', error);
