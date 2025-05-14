@@ -1,17 +1,5 @@
 import AuthService from '../../services/auth-service.js';
 
-// Function to initialize UI after successful login
-function initializeUI() {
-    // Get current user data from AuthService
-    const currentUser = AuthService.getCurrentUser();
-
-    // Update navigation or other UI elements as needed
-    console.log('Initializing UI with user data:', currentUser);
-
-    // You can add more UI initialization logic here
-    // For example, showing/hiding elements based on login status
-}
-
 class AuthComponent {
     constructor(type = 'signin') {
         this.type = type; // 'signin' or 'signup'
@@ -49,29 +37,45 @@ class AuthComponent {
     renderSignIn() {
         this.container.innerHTML = `
             <div class="auth-container">
-                <h2>Welcome Back</h2>
-                <form id="signin-form" class="auth-form">
-                    <div class="form-group">
-                        <label for="email">Email</label>
-                        <input type="email" id="email" name="email" placeholder="Enter your email" required>
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <div class="auth-logo">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <h2 class="auth-title">Welcome Back</h2>
+                        <p class="auth-subtitle">Sign in to continue to Real-Time Forum</p>
                     </div>
-                    <div class="form-group">
-                        <label for="password">Password</label>
-                        <input type="password" id="password" name="password" placeholder="Enter your password" required>
+
+                    <form id="signin-form" class="auth-form">
+                        <div class="form-group">
+                            <label for="email">Email Address</label>
+                            <input type="email" id="email" name="email" placeholder="Enter your email" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                        </div>
+
                         <div class="visibility-toggle">
                             <input type="checkbox" id="show-password">
                             <label for="show-password">Show password</label>
                         </div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Sign In</button>
-                    </div>
-                    <div id="signin-message" class="auth-message"></div>
 
-                    <div class="auth-links">
-                        <p>Don't have an account? <a href="/signup" onclick="event.preventDefault(); window.navigation.navigateTo('/signup')">Sign Up</a></p>
-                    </div>
-                </form>
+                        <div id="signin-message" class="auth-message"></div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-sign-in-alt"></i>
+                                Sign In
+                            </button>
+                        </div>
+
+                        <div class="form-footer">
+                            Don't have an account? <a href="/signup" onclick="event.preventDefault(); window.location.href = '/signup'">Create Account</a>
+                        </div>
+                    </form>
+                </div>
             </div>
         `;
     }
@@ -79,71 +83,83 @@ class AuthComponent {
     renderSignUp() {
         this.container.innerHTML = `
             <div class="auth-container">
-                <h2>Create Account</h2>
-                <form id="signup-form" class="auth-form">
-                    <div class="form-group">
-                        <label for="nickname">Nickname</label>
-                        <input type="text" id="nickname" name="nickname" placeholder="Choose a nickname" required>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="firstName">First Name</label>
-                            <input type="text" id="firstName" name="firstName" placeholder="First name" required>
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <div class="auth-logo">
+                            <i class="fas fa-user-plus"></i>
                         </div>
+                        <h2 class="auth-title">Create Account</h2>
+                        <p class="auth-subtitle">Join our Real-Time Forum community</p>
+                    </div>
+
+                    <form id="signup-form" class="auth-form">
                         <div class="form-group">
-                            <label for="lastName">Last Name</label>
-                            <input type="text" id="lastName" name="lastName" placeholder="Last name" required>
+                            <label for="nickname">Nickname</label>
+                            <input type="text" id="nickname" name="nickname" placeholder="Choose a nickname" required>
                         </div>
-                    </div>
 
-                    <div class="form-row">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="firstName">First Name</label>
+                                <input type="text" id="firstName" name="firstName" placeholder="First name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="lastName">Last Name</label>
+                                <input type="text" id="lastName" name="lastName" placeholder="Last name" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="age">Age</label>
+                                <input type="number" id="age" name="age" min="13" max="120" placeholder="Your age" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="gender">Gender</label>
+                                <select id="gender" name="gender" required>
+                                    <option value="" disabled selected>Select Gender</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div class="form-group">
-                            <label for="age">Age</label>
-                            <input type="number" id="age" name="age" min="13" max="120" placeholder="Your age" required>
+                            <label for="email">Email Address</label>
+                            <input type="email" id="email" name="email" placeholder="Your email address" required>
                         </div>
+
                         <div class="form-group">
-                            <label for="gender">Gender</label>
-                            <select id="gender" name="gender" required>
-                                <option value="" disabled selected>Select Gender</option>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="other">Other</option>
-                            </select>
+                            <label for="password">Password</label>
+                            <input type="password" id="password" name="password" placeholder="Create a password" required>
                         </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label for="email">Email</label>
-                        <input type="email" id="email" name="email" placeholder="Your email address" required>
-                    </div>
+                        <div class="form-group">
+                            <label for="confirm-password">Confirm Password</label>
+                            <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirm your password" required>
+                            <div id="password-match-message" class="password-feedback"></div>
+                        </div>
 
-                    <div class="form-group">
-                        <label for="password">Password</label>
-                        <input type="password" id="password" name="password" placeholder="Create a password" required>
-                    </div>
+                        <div class="visibility-toggle">
+                            <input type="checkbox" id="show-password-signup">
+                            <label for="show-password-signup">Show passwords</label>
+                        </div>
 
-                    <div class="form-group">
-                        <label for="confirm-password">Confirm Password</label>
-                        <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirm your password" required>
-                        <div id="password-match-message" class="password-feedback"></div>
-                    </div>
+                        <div id="signup-message" class="auth-message"></div>
 
-                    <div class="visibility-toggle">
-                        <input type="checkbox" id="show-password-signup">
-                        <label for="show-password-signup">Show passwords</label>
-                    </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-user-plus"></i>
+                                Create Account
+                            </button>
+                        </div>
 
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Create Account</button>
-                    </div>
-
-                    <div id="signup-message" class="auth-message"></div>
-
-                    <div class="auth-links">
-                        <p>Already have an account? <a href="/signin" onclick="event.preventDefault(); window.navigation.navigateTo('/signin')">Sign In</a></p>
-                    </div>
-                </form>
+                        <div class="form-footer">
+                            Already have an account? <a href="/signin" onclick="event.preventDefault(); window.location.href = '/signin'">Sign In</a>
+                        </div>
+                    </form>
+                </div>
             </div>
         `;
     }
@@ -235,7 +251,14 @@ class AuthComponent {
 
         // Show loading state
         messageElement.textContent = 'Signing in...';
-        messageElement.style.color = 'blue';
+        messageElement.className = 'auth-message info';
+
+        // Add loading class to button
+        const submitButton = document.querySelector('#signin-form button[type="submit"]');
+        if (submitButton) {
+            submitButton.classList.add('loading');
+            submitButton.innerHTML = '<span>Signing in</span>';
+        }
 
         // Send the request with email and password to match backend expectations
         fetch('/login', {
@@ -262,7 +285,14 @@ class AuthComponent {
             console.log('Login response data:', data);
 
             messageElement.textContent = data.message || 'Login successful';
-            messageElement.style.color = data.success ? 'green' : 'red';
+            messageElement.className = data.success ? 'auth-message success' : 'auth-message error';
+
+            // Remove loading state from button
+            const submitButton = document.querySelector('#signin-form button[type="submit"]');
+            if (submitButton) {
+                submitButton.classList.remove('loading');
+                submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+            }
 
             if (data.success) {
                 // Store user data in localStorage
@@ -288,7 +318,14 @@ class AuthComponent {
         .catch(error => {
             console.error('Login error:', error);
             messageElement.textContent = error.message || 'An error occurred during sign in. Please try again.';
-            messageElement.style.color = 'red';
+            messageElement.className = 'auth-message error';
+
+            // Remove loading state from button
+            const submitButton = document.querySelector('#signin-form button[type="submit"]');
+            if (submitButton) {
+                submitButton.classList.remove('loading');
+                submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+            }
         });
     }
 
@@ -307,13 +344,20 @@ class AuthComponent {
 
         if (password !== confirmPassword) {
             messageElement.textContent = 'Passwords do not match';
-            messageElement.style.color = 'red';
+            messageElement.className = 'auth-message error';
             return;
         }
 
         // Show loading state
         messageElement.textContent = 'Creating account...';
-        messageElement.style.color = 'blue';
+        messageElement.className = 'auth-message info';
+
+        // Add loading class to button
+        const submitButton = document.querySelector('#signup-form button[type="submit"]');
+        if (submitButton) {
+            submitButton.classList.add('loading');
+            submitButton.innerHTML = '<span>Creating account</span>';
+        }
 
         const userData = {
             nickname: document.getElementById('nickname').value,
@@ -362,19 +406,34 @@ class AuthComponent {
             console.log('Registration response data:', data);
 
             messageElement.textContent = data.message || 'Registration successful';
-            messageElement.style.color = data.success ? 'green' : 'red';
+            messageElement.className = data.success ? 'auth-message success' : 'auth-message error';
+
+            // Remove loading state from button
+            const submitButton = document.querySelector('#signup-form button[type="submit"]');
+            if (submitButton) {
+                submitButton.classList.remove('loading');
+                submitButton.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
+            }
 
             if (data.success) {
                 // Redirect to signin page after successful registration
                 setTimeout(() => {
-                    window.navigation.navigateTo('/signin');
+                    // Use window.location for navigation instead of window.navigation
+                    window.location.href = '/signin';
                 }, 1500);
             }
         })
         .catch(error => {
             console.error('Registration error:', error);
             messageElement.textContent = error.message || 'An error occurred during registration. Please try again.';
-            messageElement.style.color = 'red';
+            messageElement.className = 'auth-message error';
+
+            // Remove loading state from button
+            const submitButton = document.querySelector('#signup-form button[type="submit"]');
+            if (submitButton) {
+                submitButton.classList.remove('loading');
+                submitButton.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
+            }
         });
     }
 }
