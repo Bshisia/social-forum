@@ -50,6 +50,7 @@ func main() {
 	// handle websocket connetion
 	http.HandleFunc("/ws", handlers.HandleWebSocket)
 	http.HandleFunc("/ws/chat", handlers.HandleChatWebSocket)
+	http.HandleFunc("/api/users/refresh", handlers.TriggerUsersListBroadcast)
 
 	// Add this to your routes
 	http.HandleFunc("/api/users/", handlers.GetUserHandler)
