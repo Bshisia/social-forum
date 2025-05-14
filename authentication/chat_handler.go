@@ -222,7 +222,8 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Notify any connected WebSocket clients about the new message
-	// This would be a good place to trigger a WebSocket event
+	// Broadcast a notification to update the users_nav component
+	go BroadcastNewMessage(requestBody.SenderID, requestBody.ReceiverID)
 
 	// Return success response with the saved message in the format expected by the client
 	w.Header().Set("Content-Type", "application/json")
