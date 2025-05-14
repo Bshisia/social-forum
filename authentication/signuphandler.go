@@ -78,11 +78,15 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Broadcast new user notification to all connected clients
+	go BroadcastNewUser(userID, user.Nickname)
+
 	// Respond with success
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "User registered successfully",
 		"success": true,
+		"userId":  userID,
 	})
 }
