@@ -18,15 +18,34 @@ type Message struct {
 	Read       bool      `json:"read"`
 }
 
-// GetChatHistoryHandler fetches chat history between two users
+// GetChatHistoryHandler fetches chat history between two users with pagination
 func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
+	
 	// Get query parameters
 	user1 := r.URL.Query().Get("user1")
-	log.Printf("User1: %s", user1)
 	user2 := r.URL.Query().Get("user2")
-	log.Printf("User2: %s", user2)
+	
+	// Pagination parameters
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
+	
+	page := 1
+	limit := 10
+	
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+	
+	offset := (page - 1) * limit
 
 	if user1 == "" || user2 == "" {
 		log.Printf("Missing user parameters: user1=%s, user2=%s", user1, user2)
@@ -34,16 +53,17 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Fetching chat history between users %s and %s", user1, user2)
+	log.Printf("Fetching chat history between users %s and %s (page %d, limit %d)", user1, user2, page, limit)
 
-	// Query the database for messages between these users
+	// Query the database for messages between these users with pagination
 	rows, err := GlobalDB.Query(`
 		SELECT id, sender_id, receiver_id, content, sent_at, read
-		FROM messages
+		FROM messages 
 		WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
-		ORDER BY sent_at ASC
-	`, user1, user2, user2, user1)
-
+		ORDER BY sent_at DESC
+		LIMIT ? OFFSET ?
+	`, user1, user2, user2, user1, limit, offset)
+	
 	if err != nil {
 		log.Printf("Database error querying messages: %v", err)
 		http.Error(w, "Failed to query messages", http.StatusInternalServerError)
@@ -57,15 +77,12 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		var senderID, receiverID, content string
 		var sentAt string
 		var read bool
-
+		
 		if err := rows.Scan(&id, &senderID, &receiverID, &content, &sentAt, &read); err != nil {
 			log.Printf("Error scanning message row: %v", err)
 			continue
 		}
-
-		log.Printf("Found message: ID=%d, Sender=%s, Receiver=%s, Content=%s, SentAt=%s",
-			id, senderID, receiverID, content, sentAt)
-
+		
 		// Format the message in the format expected by the client
 		messages = append(messages, map[string]interface{}{
 			"id":         id,
@@ -80,9 +97,13 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	// If no messages were found, return an empty array rather than null
 	if messages == nil {
 		messages = []map[string]interface{}{}
-		log.Printf("No messages found between users %s and %s", user1, user2)
+		log.Printf("No messages found between users %s and %s for page %d", user1, user2, page)
 	} else {
-		log.Printf("Found %d messages between users %s and %s", len(messages), user1, user2)
+		log.Printf("Found %d messages between users %s and %s for page %d", len(messages), user1, user2, page)
+		// Reverse the order to get chronological order (oldest first)
+		for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+			messages[i], messages[j] = messages[j], messages[i]
+		}
 	}
 
 	// Return the messages as JSON
