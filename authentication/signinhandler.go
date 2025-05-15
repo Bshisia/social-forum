@@ -9,6 +9,8 @@ import (
 	"forum/utils"
 )
 
+// LoginHandler authenticates a user and creates a session
+// Accepts POST requests with email and password in JSON format
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Content-Type", "application/json")
@@ -78,13 +80,13 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	go broadcastUserStatus(userId, true)
 
-	// ✅ Mark user as online
+	// Mark user as online
 	_, err = GlobalDB.Exec("UPDATE users SET is_online = TRUE WHERE id = ?", userId)
 	if err != nil {
 		log.Printf("Error updating user online status: %v", err)
 	}
 
-	// ✅ Create session
+	// Create session
 	sessionToken, err := utils.CreateSession(GlobalDB, userId)
 	if err != nil {
 		log.Printf("Failed to create session: %v", err)
@@ -118,10 +120,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetUsersWithStatus returns a list of all users with their online status
+// Users are sorted by online status (online first) and then alphabetically by nickname
 func GetUsersWithStatus(w http.ResponseWriter, r *http.Request) {
     // Query users with their online status
     rows, err := GlobalDB.Query(`
-        SELECT id, nickname, first_name || ' ' || last_name as user_name, profile_pic, is_online 
+        SELECT id, nickname, first_name || ' ' || last_name as user_name, profile_pic, is_online
         FROM users
         ORDER BY is_online DESC, nickname ASC
     `)
