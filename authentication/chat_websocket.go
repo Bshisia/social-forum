@@ -10,10 +10,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Chat WebSocket connection management
 var (
-	// Chat clients map - maps user IDs to their WebSocket connections
-	// The key is a combination of userID and chatPartnerID to ensure messages go to the right chat window
+	// chatClients maps user chat connections using a composite key format "userID:chatPartnerID"
 	chatClients    = make(map[string]*websocket.Conn)
+	// chatClientsMux protects concurrent access to the chatClients map
 	chatClientsMux sync.RWMutex
 )
 
@@ -33,7 +34,7 @@ type TypingIndicator struct {
 	Recipient string `json:"recipient"`
 }
 
-// HandleChatWebSocket handles WebSocket connections for chat
+// HandleChatWebSocket handles WebSocket connections for real-time chat messaging
 func HandleChatWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Get user IDs from query parameters
 	user1 := r.URL.Query().Get("user1")
@@ -53,7 +54,6 @@ func HandleChatWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a composite key for this specific chat connection
-	// Format: "userID:chatPartnerID" to ensure messages go to the right chat window
 	chatKey := user1 + ":" + user2
 
 	// Register client with the composite key
@@ -198,7 +198,6 @@ func forwardMessageToUser(recipientID string, message []byte) {
 	}
 
 	// Create the composite key for the recipient's connection
-	// The recipient should be connected to a chat with the sender
 	chatKey := recipientID + ":" + senderID
 
 	chatClientsMux.RLock()
@@ -210,16 +209,14 @@ func forwardMessageToUser(recipientID string, message []byte) {
 			log.Printf("Error forwarding message to user %s (key: %s): %v", recipientID, chatKey, err)
 		} else {
 			log.Printf("Successfully forwarded message to user %s (key: %s)", recipientID, chatKey)
-			
-			// After forwarding the message, trigger a refresh of the users list
-			// This ensures the recipient's UI updates with the new message
+
+			// Trigger a refresh of the users list
 			go BroadcastNewMessage(senderID, recipientID)
 		}
 	} else {
 		log.Printf("Recipient %s not connected to chat with %s (key: %s not found)", recipientID, senderID, chatKey)
-		
-		// Even if the recipient is not connected to the chat,
-		// we should still broadcast the notification to update other UIs
+
+		// Broadcast notification even if recipient is not connected
 		go BroadcastNewMessage(senderID, recipientID)
 	}
 }
