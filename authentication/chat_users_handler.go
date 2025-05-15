@@ -8,6 +8,7 @@ import (
 )
 
 // GetChatUsersHandler returns a list of users with their last message timestamps
+// for display in the chat users navigation panel
 func GetChatUsersHandler(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET method
 	if r.Method != http.MethodGet {
