@@ -210,8 +210,16 @@ func forwardMessageToUser(recipientID string, message []byte) {
 			log.Printf("Error forwarding message to user %s (key: %s): %v", recipientID, chatKey, err)
 		} else {
 			log.Printf("Successfully forwarded message to user %s (key: %s)", recipientID, chatKey)
+			
+			// After forwarding the message, trigger a refresh of the users list
+			// This ensures the recipient's UI updates with the new message
+			go BroadcastNewMessage(senderID, recipientID)
 		}
 	} else {
 		log.Printf("Recipient %s not connected to chat with %s (key: %s not found)", recipientID, senderID, chatKey)
+		
+		// Even if the recipient is not connected to the chat,
+		// we should still broadcast the notification to update other UIs
+		go BroadcastNewMessage(senderID, recipientID)
 	}
 }
