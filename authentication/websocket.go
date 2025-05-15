@@ -10,7 +10,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// WebSocket configuration and client management
 var (
+	// upgrader handles WebSocket protocol upgrade
 	upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -18,16 +20,20 @@ var (
 			return true
 		},
 	}
+	// clients maps user IDs to their WebSocket connections
 	clients    = make(map[string]*websocket.Conn)
+	// clientsMux protects concurrent access to the clients map
 	clientsMux sync.RWMutex
 )
 
+// StatusMessage represents a user's online status update
 type StatusMessage struct {
 	Type     string `json:"type"`
 	UserID   string `json:"user_id"`
 	IsOnline bool   `json:"is_online"`
 }
 
+// NewUserMessage represents a notification about a new user registration
 type NewUserMessage struct {
 	Type string `json:"type"`
 	User struct {
@@ -37,19 +43,21 @@ type NewUserMessage struct {
 	} `json:"user"`
 }
 
+// NewMessageNotification represents a notification about a new chat message
 type NewMessageNotification struct {
 	Type       string `json:"type"`
 	SenderID   string `json:"sender_id"`
 	ReceiverID string `json:"receiver_id"`
 }
 
+// UsersListMessage represents a list of all users and their statuses
 type UsersListMessage struct {
 	Type  string      `json:"type"`
 	Users interface{} `json:"users"`
 }
 
+// HandleWebSocket upgrades HTTP connection to WebSocket and manages user connections
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Add debug logging
 	log.Printf("Received WebSocket connection request from: %s", r.RemoteAddr)
 
 	userID := r.URL.Query().Get("user_id")
@@ -97,6 +105,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// broadcastUserStatus updates a user's online status and notifies all clients
 func broadcastUserStatus(userID string, isOnline bool) {
 	// Update database first
 	_, err := GlobalDB.Exec("UPDATE users SET is_online = ? WHERE id = ?", isOnline, userID)
@@ -130,7 +139,6 @@ func broadcastUserStatus(userID string, isOnline bool) {
 func BroadcastNewUser(userID string, nickname string) {
 	log.Printf("Broadcasting new user notification for user %s (%s)", userID, nickname)
 
-	// Create the notification message
 	newUserMsg := NewUserMessage{
 		Type: "new_user",
 	}
