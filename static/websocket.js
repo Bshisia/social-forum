@@ -69,26 +69,17 @@ class UsersNavigation {
 
                         // Also emit an event for other components to listen to
                         eventBus.emit('user_signup', data.user);
-
-                        // Force a refresh of the users list
-                        eventBus.emit('refresh_users_list');
                     }
                 }
-                else if (data.type === 'refresh_users') {
-                    console.log('Received refresh users notification:', data);
+                else if (data.type === 'message' || data.type === 'refresh_users') {
+                    console.log('Received message or refresh notification:', data);
 
                     // Call the callback with refresh type
                     if (this.updateCallback) {
                         this.updateCallback('refresh', null);
                     }
 
-                    // Also emit an event for other components to listen to
-                    eventBus.emit('new_message_sent', {
-                        senderID: data.sender_id,
-                        receiverID: data.receiver_id
-                    });
-
-                    // Force a refresh of the users list
+                    // Emit an event to refresh the users list
                     eventBus.emit('refresh_users_list');
                 }
                 else if (data.type === 'users_list') {
