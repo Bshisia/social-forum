@@ -23,7 +23,7 @@ class UsersNavComponent {
         return `
             <div class="users-filter-container">
                 <div class="users-nav-header">
-                    <h3>Users</h3>
+                    <h3><i class="fas fa-users"></i> Users</h3>
                     <button class="refresh-btn" id="refresh-users-btn" title="Refresh users list" onclick="window.usersNavComponent.refreshUsersList()">
                         <i class="fas fa-sync-alt"></i>
                     </button>
@@ -78,7 +78,7 @@ class UsersNavComponent {
 
             return `
                 <li class="user-item" data-online="${isOnline}" data-user-id="${userId}">
-                    <a href="/chat?user1=${this.currentUserId}&user2=${userId}" class="user-link" onclick="event.preventDefault(); window.navigation.navigateTo('/chat?user1=${this.currentUserId}&user2=${userId}')">
+                    <a href="/chat?user1=${this.currentUserId}&user2=${userId}" class="user-link" onclick="event.preventDefault(); window.location.href = '/chat?user1=${this.currentUserId}&user2=${userId}'">
                         <div class="user-avatar">
                             ${profilePic ?
                     `<img src="${profilePic}" alt="${userName}'s avatar" class="user-avatar-img">` :
@@ -86,7 +86,7 @@ class UsersNavComponent {
                         <i class="fas fa-user"></i>
                     </div>`
                 }
-                            <div class="user-status-indicator"></div>
+                            <span class="status-indicator ${isOnline ? 'online' : 'offline'}"></span>
                         </div>
                         <div class="user-info">
                             <div class="user-info-row">
@@ -96,7 +96,8 @@ class UsersNavComponent {
                             <span class="status" id="status-${userId}">
                                 ${this.typingUsers.has(userId) ?
                                     '<span class="typing-indicator-text">typing<span class="typing-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></span>' :
-                                    isOnline ? '🟢 Online' : '⚫ Offline'
+                                    isOnline ? '<span class="status-text online"><i class="fas fa-circle"></i> Online</span>' :
+                                    '<span class="status-text offline"><i class="fas fa-circle"></i> Offline</span>'
                                 }
                             </span>
                         </div>
@@ -431,7 +432,9 @@ class UsersNavComponent {
             }
         } else {
             // Update status text
-            statusElement.innerHTML = isOnline ? '🟢 Online' : '⚫ Offline';
+            statusElement.innerHTML = isOnline ?
+                '<span class="status-text online"><i class="fas fa-circle"></i> Online</span>' :
+                '<span class="status-text offline"><i class="fas fa-circle"></i> Offline</span>';
 
             // Remove is-typing class from the user link
             if (userLink) {
@@ -450,7 +453,15 @@ class UsersNavComponent {
             // Update the status text
             const statusElement = userElement.querySelector('.status');
             if (statusElement) {
-                statusElement.innerHTML = isOnline ? '🟢 Online' : '⚫ Offline';
+                statusElement.innerHTML = isOnline ?
+                    '<span class="status-text online"><i class="fas fa-circle"></i> Online</span>' :
+                    '<span class="status-text offline"><i class="fas fa-circle"></i> Offline</span>';
+            }
+
+            // Update the status indicator
+            const statusIndicator = userElement.querySelector('.status-indicator');
+            if (statusIndicator) {
+                statusIndicator.className = `status-indicator ${isOnline ? 'online' : 'offline'}`;
             }
 
             // If we're filtering by online users, show/hide accordingly
@@ -580,7 +591,7 @@ class UsersNavComponent {
 
         const userHTML = `
             <li class="user-item" data-online="${isOnline}" data-user-id="${userId}">
-                <a href="/chat?user1=${this.currentUserId}&user2=${userId}" class="user-link" onclick="event.preventDefault(); window.navigation.navigateTo('/chat?user1=${this.currentUserId}&user2=${userId}')">
+                <a href="/chat?user1=${this.currentUserId}&user2=${userId}" class="user-link" onclick="event.preventDefault(); window.location.href = '/chat?user1=${this.currentUserId}&user2=${userId}'">
                     <div class="user-avatar">
                         ${profilePic ?
                         `<img src="${profilePic}" alt="${userName}'s avatar" class="user-avatar-img">` :
@@ -588,7 +599,7 @@ class UsersNavComponent {
                             <i class="fas fa-user"></i>
                         </div>`
                         }
-                        <div class="user-status-indicator"></div>
+                        <span class="status-indicator ${isOnline ? 'online' : 'offline'}"></span>
                     </div>
                     <div class="user-info">
                         <div class="user-info-row">
@@ -596,7 +607,9 @@ class UsersNavComponent {
                             <!-- New users won't have a last message time -->
                         </div>
                         <span class="status" id="status-${userId}">
-                            ${isOnline ? '🟢 Online' : '⚫ Offline'}
+                            ${isOnline ?
+                            '<span class="status-text online"><i class="fas fa-circle"></i> Online</span>' :
+                            '<span class="status-text offline"><i class="fas fa-circle"></i> Offline</span>'}
                         </span>
                     </div>
                 </a>
