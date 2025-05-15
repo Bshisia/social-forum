@@ -19,8 +19,8 @@ class ChatComponent {
     }
 
     async fetchMessageHistory(loadMore = false) {
-        if (this.isLoadingMore) return;
-
+        if (this.isLoadingMore) return false;
+        
         try {
             this.isLoadingMore = true;
 
@@ -925,6 +925,41 @@ class ChatComponent {
         // Adjust scroll position to maintain view
         const newScrollHeight = messagesContainer.scrollHeight;
         messagesContainer.scrollTop = newScrollHeight - scrollHeightBefore;
+    }
+
+    createMessageElement(message, isSent) {
+        // Create message element
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+        messageDiv.dataset.id = message.id; // Store message ID for reference
+
+        // Format timestamp
+        let formattedTime = 'Unknown time';
+        try {
+            const messageDate = new Date(message.timestamp);
+            formattedTime = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            // Add date if message is from a different day
+            const today = new Date();
+            if (messageDate.toDateString() !== today.toDateString()) {
+                formattedTime = `${messageDate.toLocaleDateString()} ${formattedTime}`;
+            }
+        } catch (e) {
+            console.error('Error formatting message time:', e);
+        }
+
+        // Set message content with status indicator for sent messages
+        messageDiv.innerHTML = `
+            <div class="message-content">${this.formatMessageContent(message.content)}</div>
+            <div class="message-time">
+                ${formattedTime}
+                ${isSent ? `<span class="message-status sent" data-message-id="${message.id}">
+                    <i class="fas fa-check"></i>
+                </span>` : ''}
+            </div>
+        `;
+
+        return messageDiv;
     }
 }
 
