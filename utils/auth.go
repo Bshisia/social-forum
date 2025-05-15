@@ -7,12 +7,20 @@ import (
 	"github.com/gofrs/uuid"
 )
 
+// ValidateEmail checks if the provided email address is valid
+// Uses a regular expression to validate the email format
+// @param email - The email address to validate
+// @returns bool - True if the email is valid, false otherwise
 func ValidateEmail(email string) bool {
 	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 	match, _ := regexp.MatchString(pattern, email)
 	return match
 }
 
+// ValidateUsername checks if the provided username is valid
+// Username must be 3-30 characters long and contain at least one letter
+// @param username - The username to validate
+// @returns bool - True if the username is valid, false otherwise
 func ValidateUsername(username string) bool {
 	hasLetter := false
 	hasNumber := false
@@ -27,6 +35,14 @@ func ValidateUsername(username string) bool {
 	return len(username) >= 3 && len(username) <= 30 && hasLetter && hasNumber || hasLetter
 }
 
+// ValidatePassword checks if the provided password meets security requirements
+// Password must be at least 8 characters long and contain:
+// - At least one lowercase letter
+// - At least one uppercase letter
+// - At least one number
+// - At least one special character
+// @param password - The password to validate
+// @returns bool - True if the password is valid, false otherwise
 func ValidatePassword(password string) bool {
 	if len(password) < 8 {
 		return false
@@ -50,6 +66,9 @@ func ValidatePassword(password string) bool {
 	return hasLower && hasUpper && hasNumber && hasSpecial
 }
 
+// GenerateId creates a new unique identifier using UUID v4
+// Used for generating user IDs and other unique identifiers in the application
+// @returns string - A new UUID as a string
 func GenerateId() string {
 	Uid, _ := uuid.NewV4()
 	return Uid.String()

@@ -7,8 +7,13 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// GlobalDB is the shared database connection used throughout the application
 var GlobalDB *sql.DB
 
+// InitialiseDB initializes the database connection and creates all required tables
+// Sets up the database schema, indexes, triggers, and default data
+// @returns *sql.DB - The database connection
+// @returns error - Any error that occurred during initialization
 func InitialiseDB() (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", "./forum.db")
 	if err != nil {
@@ -126,13 +131,13 @@ CREATE TRIGGER IF NOT EXISTS AfterReactionInsert
 AFTER INSERT ON reaction
 BEGIN
     UPDATE posts SET
-        likes = CASE 
-            WHEN NEW.like = 1 THEN likes + 1 
-            ELSE likes 
+        likes = CASE
+            WHEN NEW.like = 1 THEN likes + 1
+            ELSE likes
         END,
-        dislikes = CASE 
-            WHEN NEW.like = 0 THEN dislikes + 1 
-            ELSE dislikes 
+        dislikes = CASE
+            WHEN NEW.like = 0 THEN dislikes + 1
+            ELSE dislikes
         END
     WHERE id = NEW.post_id;
 END;
@@ -146,15 +151,15 @@ CREATE TRIGGER IF NOT EXISTS AfterReactionUpdate
 AFTER UPDATE ON reaction
 BEGIN
     UPDATE posts SET
-        likes = CASE 
+        likes = CASE
             WHEN OLD.like = 1 THEN likes - 1
             WHEN NEW.like = 1 THEN likes + 1
-            ELSE likes 
+            ELSE likes
         END,
-        dislikes = CASE 
+        dislikes = CASE
             WHEN OLD.like = 0 THEN dislikes - 1
             WHEN NEW.like = 0 THEN dislikes + 1
-            ELSE dislikes 
+            ELSE dislikes
         END
     WHERE id = NEW.post_id;
 END;
@@ -168,13 +173,13 @@ CREATE TRIGGER IF NOT EXISTS AfterReactionDelete
 AFTER DELETE ON reaction
 BEGIN
     UPDATE posts SET
-        likes = CASE 
-            WHEN OLD.like = 1 THEN likes - 1 
-            ELSE likes 
+        likes = CASE
+            WHEN OLD.like = 1 THEN likes - 1
+            ELSE likes
         END,
-        dislikes = CASE 
-            WHEN OLD.like = 0 THEN dislikes - 1 
-            ELSE dislikes 
+        dislikes = CASE
+            WHEN OLD.like = 0 THEN dislikes - 1
+            ELSE dislikes
         END
     WHERE id = OLD.post_id;
 END;
@@ -208,11 +213,11 @@ CREATE TRIGGER IF NOT EXISTS AfterPostReaction
 AFTER INSERT ON reaction
 BEGIN
     INSERT INTO notifications (user_id, actor_id, post_id, type)
-    SELECT 
+    SELECT
         p.user_id,     -- Post owner (receiver of notification)
         NEW.user_id,   -- Person who reacted (actor)
         NEW.post_id,   -- Post that was reacted to
-        CASE 
+        CASE
             WHEN NEW.like = 1 THEN 'like'
             ELSE 'dislike'
         END
@@ -225,7 +230,7 @@ CREATE TRIGGER IF NOT EXISTS AfterPostComment
 AFTER INSERT ON comments
 BEGIN
     INSERT INTO notifications (user_id, actor_id, post_id, type)
-    SELECT 
+    SELECT
         p.user_id,     -- Post owner (receiver of notification)
         NEW.user_id,   -- Person who commented (actor)
         NEW.post_id,   -- Post that was commented on
@@ -279,15 +284,15 @@ CREATE TRIGGER IF NOT EXISTS AfterCommentReactionUpdate
 AFTER UPDATE ON comment_reaction
 BEGIN
     UPDATE comments SET
-        likes = CASE 
+        likes = CASE
                     WHEN OLD.is_like = 1 THEN likes - 1
                     WHEN NEW.is_like = 1 THEN likes + 1
-                    ELSE likes 
+                    ELSE likes
                 END,
-        dislikes = CASE 
+        dislikes = CASE
                     WHEN OLD.is_like = 0 THEN dislikes - 1
                     WHEN NEW.is_like = 0 THEN dislikes + 1
-                    ELSE dislikes 
+                    ELSE dislikes
                 END
     WHERE id = NEW.comment_id;
 END;
@@ -359,7 +364,7 @@ END;
     CREATE TRIGGER IF NOT EXISTS update_user_online_on_session_create
     AFTER INSERT ON sessions
     BEGIN
-        UPDATE users 
+        UPDATE users
         SET is_online = 1,
             last_seen = CURRENT_TIMESTAMP
         WHERE id = NEW.user_id;
@@ -369,7 +374,7 @@ END;
     CREATE TRIGGER IF NOT EXISTS update_user_offline_on_session_delete
     AFTER DELETE ON sessions
     BEGIN
-        UPDATE users 
+        UPDATE users
         SET is_online = 0,
             last_seen = CURRENT_TIMESTAMP
         WHERE id = OLD.user_id;
@@ -382,6 +387,9 @@ END;
 	return db, nil
 }
 
+// InsertDefaultCategories adds default post categories to the database
+// Uses INSERT OR IGNORE to avoid duplicates if categories already exist
+// @returns error - Any error that occurred during insertion
 func InsertDefaultCategories() error {
 	categories := []string{
 		"Tech",

@@ -4,80 +4,83 @@ import (
 	"time"
 )
 
+// User represents a user in the system
 type User struct {
-	ID         string    `json:"id"`
-	Nickname   string    `json:"nickname"`
-	Age        int       `json:"age"`
-	Gender     string    `json:"gender"`
-	FirstName  string    `json:"firstName"`
-	LastName   string    `json:"lastName"`
-	Email      string    `json:"email"`
-	Password   string    `json:"-"` // Don't include in JSON responses
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
-	ProfilePic string    `json:"profilePic"` // Changed from sql.NullString to string
-	IsOnline   bool      `json:"isOnline"`
-	LastSeen   time.Time `json:"lastSeen"` // Changed from sql.NullBool to time.Time
+	ID         string    `json:"id"`         // Unique identifier
+	Nickname   string    `json:"nickname"`   // Display name
+	Age        int       `json:"age"`        // User's age
+	Gender     string    `json:"gender"`     // User's gender
+	FirstName  string    `json:"firstName"`  // User's first name
+	LastName   string    `json:"lastName"`   // User's last name
+	Email      string    `json:"email"`      // Email address (must be unique)
+	Password   string    `json:"-"`          // Password (not included in JSON)
+	CreatedAt  time.Time `json:"createdAt"`  // Account creation timestamp
+	UpdatedAt  time.Time `json:"updatedAt"`  // Last update timestamp
+	ProfilePic string    `json:"profilePic"` // Profile picture path
+	IsOnline   bool      `json:"isOnline"`   // Online status
+	LastSeen   time.Time `json:"lastSeen"`   // Last activity timestamp
 }
 
+// Post represents a post in the forum
 type Post struct {
-	ID         int64      `json:"id"`
-	Title      string     `json:"title"`
-	Content    string     `json:"content"`
-	ImagePath  string     `json:"imagePath"`
-	PostTime   string     `json:"postTime"` // Store formatted time string
-	UserID     string     `json:"userID"`
-	Username   string     `json:"username"`
-	ProfilePic string     `json:"profilePic"` // Add ProfilePic field
-	Likes      int        `json:"likes"`
-	Dislikes   int        `json:"dislikes"`
-	Comments   int        `json:"comments"`
-	Categories []Category `json:"categories"`
+	ID         int64      `json:"id"`         // Unique identifier
+	Title      string     `json:"title"`      // Post title
+	Content    string     `json:"content"`    // Post content
+	ImagePath  string     `json:"imagePath"`  // Path to attached image
+	PostTime   string     `json:"postTime"`   // Formatted timestamp
+	UserID     string     `json:"userID"`     // ID of post author
+	Username   string     `json:"username"`   // Username of post author
+	ProfilePic string     `json:"profilePic"` // Author's profile picture
+	Likes      int        `json:"likes"`      // Number of likes
+	Dislikes   int        `json:"dislikes"`   // Number of dislikes
+	Comments   int        `json:"comments"`   // Number of comments
+	Categories []Category `json:"categories"` // Post categories
 }
 
+// Comment represents a comment on a post
 type Comment struct {
-	ID          int       `json:"id"`
-	PostID      int       `json:"postID"`
-	UserID      string    `json:"userID"`
-	Username    string    `json:"username"`
-	Content     string    `json:"content"`
-	CommentTime time.Time `json:"commentTime"`
-	Likes       int       `json:"likes"`
-	Dislikes    int       `json:"dislikes"`
-	ProfilePic  string    `json:"profilePic"` // Changed from sql.NullString to string
+	ID          int       `json:"id"`          // Unique identifier
+	PostID      int       `json:"postID"`      // ID of the parent post
+	UserID      string    `json:"userID"`      // ID of comment author
+	Username    string    `json:"username"`    // Username of comment author
+	Content     string    `json:"content"`     // Comment content
+	CommentTime time.Time `json:"commentTime"` // Timestamp
+	Likes       int       `json:"likes"`       // Number of likes
+	Dislikes    int       `json:"dislikes"`    // Number of dislikes
+	ProfilePic  string    `json:"profilePic"`  // Author's profile picture
 }
 
+// Category represents a post category
 type Category struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID   int    `json:"id"`   // Unique identifier
+	Name string `json:"name"` // Category name
 }
 
+// Session represents a user session
 type Session struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"userID"` // Changed to string to match User.ID
-	CreatedAt time.Time `json:"createdAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
-}
-type ErrorPageData struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	ID        string    `json:"id"`        // Session token
+	UserID    string    `json:"userID"`    // Associated user ID
+	CreatedAt time.Time `json:"createdAt"` // Creation timestamp
+	ExpiresAt time.Time `json:"expiresAt"` // Expiration timestamp
 }
 
+// PageData contains data for rendering page templates
 type PageData struct {
-	IsLoggedIn    bool   `json:"isLoggedIn"`
-	Posts         []Post `json:"posts"`
-	CurrentUserID string `json:"currentUserID"`
-	Users         []User `json:"users"`
-	UnreadCount   int    `json:"unreadCount"`
+	IsLoggedIn    bool   `json:"isLoggedIn"`    // Whether user is logged in
+	Posts         []Post `json:"posts"`         // Posts to display
+	CurrentUserID string `json:"currentUserID"` // Current user's ID
+	Users         []User `json:"users"`         // List of users
+	UnreadCount   int    `json:"unreadCount"`   // Unread notification count
 }
 
+// Notification represents a user notification
 type Notification struct {
-	ID                 int       `json:"id"`
-	Type               string    `json:"type"`
-	PostID             int       `json:"postID"`
-	ActorName          string    `json:"actorName"`
-	ActorProfilePic    string    `json:"actorProfilePic"` // Changed from sql.NullString to string
-	CreatedAt          time.Time `json:"createdAt"`
-	CreatedAtFormatted string    `json:"createdAtFormatted"`
-	IsRead             bool      `json:"isRead"`
+	ID                 int       `json:"id"`                 // Unique identifier
+	Type               string    `json:"type"`               // Notification type (like, comment, etc.)
+	PostID             int       `json:"postID"`             // Related post ID
+	ActorName          string    `json:"actorName"`          // Username of the actor
+	ActorProfilePic    string    `json:"actorProfilePic"`    // Actor's profile picture
+	CreatedAt          time.Time `json:"createdAt"`          // Creation timestamp
+	CreatedAtFormatted string    `json:"createdAtFormatted"` // Formatted timestamp for display
+	IsRead             bool      `json:"isRead"`             // Whether notification has been read
 }
