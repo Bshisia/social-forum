@@ -585,7 +585,7 @@ class ChatComponent {
     }
 
     handleIncomingMessage(message) {
-        console.log('Received message:', JSON.stringify(message));
+        console.log('Handling incoming message:', message);
 
         // Verify this message belongs to the current chat conversation
         if ((message.sender === this.currentUserId && message.recipient === this.otherUserId) ||
@@ -601,12 +601,16 @@ class ChatComponent {
             // Play notification sound if the message is from the other user
             if (message.sender === this.otherUserId) {
                 this.playNotificationSound();
-
-                // Refresh the users list to update the sorting based on last message
-                this.refreshUsersNav();
             }
+            
+            // Refresh the users list to update the sorting based on last message
+            this.refreshUsersNav();
         } else {
             console.log('Ignoring message not related to this chat conversation');
+            
+            // Even if the message is not for this chat, we should refresh the users list
+            // to update the sorting for the sender in the users navigation
+            this.refreshUsersNav();
         }
     }
 
@@ -881,7 +885,7 @@ class ChatComponent {
                     this.page++;
                     this.fetchMessageHistory(true);
                 }
-            }, 200); // 200ms throttle
+            }, 2000); // 200ms throttle
         });
     }
 
@@ -895,6 +899,9 @@ class ChatComponent {
             window.usersNavComponent.refreshUsersList();
         } else {
             console.warn('UsersNavComponent not available for refresh');
+            
+            // Emit an event for any component that might be listening
+            eventBus.emit('refresh_users_list');
         }
     }
 
