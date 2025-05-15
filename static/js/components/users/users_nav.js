@@ -186,32 +186,101 @@ class UsersNavComponent {
     async fetchUsers() {
         try {
             // Fetch all users with their last message timestamp
-            const response = await fetch(`/api/users/with-last-message?current_user=${this.currentUserId}`);
+            const response = await fetch(`/api/chat/users?currentUserId=${this.currentUserId}`);
             if (!response.ok) {
-                // Fallback to regular users endpoint if the with-last-message endpoint is not available
-                console.warn('Falling back to regular users endpoint');
-                return this.fetchUsersWithoutMessages();
+                throw new Error('Failed to fetch users');
             }
-
+            
             const users = await response.json();
             console.log('Users with last messages fetched successfully:', users);
-
+            
             // Filter out current user
-            this.users = users.filter(user => {
-                const userId = user.id || user.ID;
-                return userId !== this.currentUserId;
-            });
-
-            // Sort users by last message timestamp (most recent first)
-            // Users without messages (last_message_time is null) will be sorted alphabetically
-            this.sortUsers();
-
-            return this.users;
+            this.users = users.filter(user => user.id !== this.currentUserId);
+            
+            // Render the users list
+            this.renderUsers();
         } catch (error) {
-            console.error('Error fetching users with messages:', error);
-            // Fallback to regular users endpoint
-            return this.fetchUsersWithoutMessages();
+            console.error('Error fetching users:', error);
+            // Fallback to regular users endpoint if needed
+            this.fetchUsersWithoutMessages();
         }
+    }
+
+    renderUsers() {
+        if (!this.container) return;
+        
+        // Clear the container
+        this.container.innerHTML = '';
+        
+        // Create the users list
+        const usersList = document.createElement('div');
+        usersList.className = 'users-list';
+        
+        if (this.users.length === 0) {
+            usersList.innerHTML = '<div class="no-users">No users found</div>';
+        } else {
+            // Sort users: first by online status, then by last message time, then alphabetically
+            const sortedUsers = [...this.users].sort((a, b) => {
+                // First sort by online status
+                if (a.isOnline && !b.isOnline) return -1;
+                if (!a.isOnline && b.isOnline) return 1;
+                
+                // Then by last message time
+                if (a.lastMessage && b.lastMessage) {
+                    return new Date(b.lastMessage) - new Date(a.lastMessage);
+                } else if (a.lastMessage) {
+                    return -1;
+                } else if (b.lastMessage) {
+                    return 1;
+                }
+                
+                // Finally alphabetically
+                return a.userName.localeCompare(b.userName);
+            });
+            
+            // Create user items
+            sortedUsers.forEach(user => {
+                const userItem = document.createElement('div');
+                userItem.className = `user-item ${user.isOnline ? 'online' : 'offline'}`;
+                userItem.dataset.userId = user.id;
+                
+                // Format last message time if exists
+                let lastMessageTime = '';
+                if (user.lastMessage) {
+                    const messageDate = new Date(user.lastMessage);
+                    const today = new Date();
+                    
+                    if (messageDate.toDateString() === today.toDateString()) {
+                        // Today - show time
+                        lastMessageTime = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    } else {
+                        // Not today - show date
+                        lastMessageTime = messageDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    }
+                }
+                
+                userItem.innerHTML = `
+                    <div class="user-avatar">
+                        ${user.profilePic ? `<img src="${user.profilePic}" alt="${user.userName}">` : 
+                        `<div class="default-avatar">${user.userName.charAt(0).toUpperCase()}</div>`}
+                        <span class="status-indicator ${user.isOnline ? 'online' : 'offline'}"></span>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">${user.userName}</div>
+                        ${lastMessageTime ? `<div class="last-message-time">${lastMessageTime}</div>` : ''}
+                    </div>
+                `;
+                
+                // Add click event to open chat
+                userItem.addEventListener('click', () => {
+                    window.location.href = `/chat?user=${user.id}`;
+                });
+                
+                usersList.appendChild(userItem);
+            });
+        }
+        
+        this.container.appendChild(usersList);
     }
 
     async fetchUsersWithoutMessages() {
