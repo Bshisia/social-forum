@@ -25,6 +25,10 @@ type UserResponseWithLastMessage struct {
 }
 
 // GetUserHandler handles both listing all users and getting a single user
+// Routes:
+// - GET /api/users/ - Get all users
+// - GET /api/users/{id} - Get a specific user
+// - GET /api/users/with-last-message - Get all users with their last message timestamps
 func GetUserHandler(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
 
@@ -49,6 +53,7 @@ func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // getUsersWithLastMessage fetches all users with their last message timestamp
+// Used for sorting users in chat interface by most recent conversation
 func getUsersWithLastMessage(w http.ResponseWriter, r *http.Request) {
     log.Printf("Fetching all users with last message timestamps")
 
@@ -125,6 +130,7 @@ func getUsersWithLastMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 // getAllUsers fetches all users from the database
+// Returns a list of all users sorted alphabetically by nickname
 func getAllUsers(w http.ResponseWriter, r *http.Request) {
     log.Printf("Fetching all users")
 
@@ -176,6 +182,7 @@ func getAllUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 // getSingleUser fetches a single user by ID
+// Returns detailed information about a specific user
 func getSingleUser(w http.ResponseWriter, r *http.Request, userID string) {
     log.Printf("Fetching user details for ID: %s", userID)
 
