@@ -10,12 +10,16 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// GlobalDB is the shared database connection used by all handlers
 var GlobalDB *sql.DB
 
+// InitDB initializes the global database connection
 func InitDB(database *sql.DB) {
 	GlobalDB = database
 }
 
+// RegisterHandler creates a new user account
+// Accepts POST requests with user registration data in JSON format
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Content-Type", "application/json")
