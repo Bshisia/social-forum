@@ -10,6 +10,7 @@ class UsersNavComponent {
         this.typingUsers = new Map(); // Track which users are typing
         this.typingTimers = new Map(); // Timers to auto-clear typing status
         this.typingEventUnsubscribe = null; // For event bus cleanup
+        this.refreshEventUnsubscribe = null; // For event bus cleanup
     }
 
 
@@ -24,7 +25,7 @@ class UsersNavComponent {
             <div class="users-filter-container">
                 <div class="users-nav-header">
                     <h3><i class="fas fa-users"></i> Users</h3>
-                    <button class="refresh-btn" id="refresh-users-btn" title="Refresh users list" onclick="window.usersNavComponent.refreshUsersList()">
+                    <button class="refresh-btn" id="refresh-users-btn" title="Refresh users list" onclick="window.usersNavComponent.refreshUsersList(true)">
                         <i class="fas fa-sync-alt"></i>
                     </button>
                 </div>
@@ -130,6 +131,12 @@ class UsersNavComponent {
                 this.handleTypingStatus(data.userId, data.isTyping);
             }
         });
+        
+        // Subscribe to refresh users list events
+        this.refreshEventUnsubscribe = eventBus.on('refresh_users_list', () => {
+            console.log('Received refresh_users_list event');
+            this.refreshUsersList(false); // Don't show notification for automatic refreshes
+        });
 
         // If we don't have users data yet, fetch it
         if (!this.users || this.users.length === 0) {
@@ -144,7 +151,7 @@ class UsersNavComponent {
                     this.usersNav.updateCallback = (updateType, data) => {
                         if (updateType === 'refresh') {
                             console.log('Refreshing users list due to WebSocket notification');
-                            this.refreshUsersList();
+                            this.refreshUsersList(false); // Don't show notification for automatic refreshes
                         } else if (updateType === 'new_user' && data) {
                             console.log('Adding new user to list:', data);
                             this.addNewUser(data);
@@ -168,7 +175,7 @@ class UsersNavComponent {
                 this.usersNav.updateCallback = (updateType, data) => {
                     if (updateType === 'refresh') {
                         console.log('Refreshing users list due to WebSocket notification');
-                        this.refreshUsersList();
+                        this.refreshUsersList(false); // Don't show notification for automatic refreshes
                     } else if (updateType === 'new_user' && data) {
                         console.log('Adding new user to list:', data);
                         this.addNewUser(data);
@@ -430,17 +437,27 @@ class UsersNavComponent {
         this.typingTimers.forEach(timer => clearTimeout(timer));
         this.typingTimers.clear();
 
-        // Unsubscribe from typing events
+        // Unsubscribe from events
         if (this.typingEventUnsubscribe) {
             this.typingEventUnsubscribe();
+            this.typingEventUnsubscribe = null;
+        }
+        
+        if (this.refreshEventUnsubscribe) {
+            this.refreshEventUnsubscribe();
+            this.refreshEventUnsubscribe = null;
         }
 
         if (this.usersNav) {
             this.usersNav.cleanup();
         }
+        
         if (this.container) {
             this.container.innerHTML = '';
         }
+        
+        // Remove global reference
+        delete window.usersNavComponent;
     }
 
     // Handle typing status updates
@@ -542,7 +559,7 @@ class UsersNavComponent {
     }
 
     // Add a method to refresh the users list
-    async refreshUsersList() {
+    async refreshUsersList(showNotification = false) {
         console.log('Refreshing users list...');
 
         // Add rotating animation to the refresh button
@@ -565,8 +582,10 @@ class UsersNavComponent {
                 }
             }, 1000);
 
-            // Show a success notification
-            this.showNotification('Users list refreshed successfully', 'success');
+            // Show a success notification only if explicitly requested (manual refresh)
+            if (showNotification) {
+                this.showNotification('Users list refreshed successfully', 'success');
+            }
 
             return true;
         } catch (error) {
@@ -580,8 +599,10 @@ class UsersNavComponent {
                 }
             }, 1000);
 
-            // Show an error notification
-            this.showNotification('Failed to refresh users list. Please try again.', 'error');
+            // Show an error notification only if explicitly requested (manual refresh)
+            if (showNotification) {
+                this.showNotification('Failed to refresh users list. Please try again.', 'error');
+            }
 
             return false;
         }
