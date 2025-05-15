@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 // Message represents a chat message
@@ -21,30 +23,30 @@ type Message struct {
 // GetChatHistoryHandler fetches chat history between two users with pagination
 func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	// Get query parameters
 	user1 := r.URL.Query().Get("user1")
 	user2 := r.URL.Query().Get("user2")
-	
+
 	// Pagination parameters
 	pageStr := r.URL.Query().Get("page")
 	limitStr := r.URL.Query().Get("limit")
-	
+
 	page := 1
 	limit := 10
-	
+
 	if pageStr != "" {
 		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
 			page = p
 		}
 	}
-	
+
 	if limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
 		}
 	}
-	
+
 	offset := (page - 1) * limit
 
 	if user1 == "" || user2 == "" {
@@ -63,7 +65,6 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		ORDER BY sent_at DESC
 		LIMIT ? OFFSET ?
 	`, user1, user2, user2, user1, limit, offset)
-	
 	if err != nil {
 		log.Printf("Database error querying messages: %v", err)
 		http.Error(w, "Failed to query messages", http.StatusInternalServerError)
@@ -77,20 +78,20 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		var senderID, receiverID, content string
 		var sentAt string
 		var read bool
-		
+
 		if err := rows.Scan(&id, &senderID, &receiverID, &content, &sentAt, &read); err != nil {
 			log.Printf("Error scanning message row: %v", err)
 			continue
 		}
-		
+
 		// Format the message in the format expected by the client
 		messages = append(messages, map[string]interface{}{
-			"id":         id,
-			"sender":     senderID,
-			"recipient":  receiverID,
-			"content":    content,
-			"timestamp":  sentAt,
-			"read":       read,
+			"id":        id,
+			"sender":    senderID,
+			"recipient": receiverID,
+			"content":   content,
+			"timestamp": sentAt,
+			"read":      read,
 		})
 	}
 
@@ -215,7 +216,6 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO messages (sender_id, receiver_id, content, sent_at, read)
 		VALUES (?, ?, ?, ?, 0)
 	`, requestBody.SenderID, requestBody.ReceiverID, requestBody.Content, sentAtStr)
-
 	if err != nil {
 		log.Printf("Database error saving message: %v", err)
 		http.Error(w, "Failed to save message", http.StatusInternalServerError)
@@ -251,11 +251,125 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": map[string]interface{}{
-			"id":         messageID,
-			"sender":     requestBody.SenderID,
-			"recipient":  requestBody.ReceiverID,
-			"content":    requestBody.Content,
-			"timestamp":  sentAt.Format(time.RFC3339),
+			"id":        messageID,
+			"sender":    requestBody.SenderID,
+			"recipient": requestBody.ReceiverID,
+			"content":   requestBody.Content,
+			"timestamp": sentAt.Format(time.RFC3339),
 		},
 	})
+}
+
+// HandleChatMessage processes an incoming chat message
+func HandleChatMessage(conn *websocket.Conn, message map[string]interface{}) {
+	// Extract message data
+	messageData, ok := message["message"].(map[string]interface{})
+	if !ok {
+		log.Printf("Invalid message format: %v", message)
+		return
+	}
+
+	// Extract sender and recipient
+	sender, ok1 := messageData["sender"].(string)
+	recipient, ok2 := messageData["recipient"].(string)
+	content, ok3 := messageData["content"].(string)
+
+	if !ok1 || !ok2 || !ok3 {
+		log.Printf("Missing required message fields: %v", messageData)
+		return
+	}
+
+	// Get timestamp or use current time
+	var timestamp string
+	if ts, ok := messageData["timestamp"].(string); ok && ts != "" {
+		timestamp = ts
+	} else {
+		timestamp = time.Now().Format(time.RFC3339)
+	}
+
+	log.Printf("Processing chat message from %s to %s: %s", sender, recipient, content)
+
+	// Store message in database
+	var messageID int64
+	result, err := GlobalDB.Exec(`
+		INSERT INTO messages (sender_id, receiver_id, content, sent_at, read)
+		VALUES (?, ?, ?, ?, false)
+	`, sender, recipient, content, timestamp)
+	if err != nil {
+		log.Printf("Error storing message in database: %v", err)
+		return
+	}
+
+	messageID, err = result.LastInsertId()
+	if err != nil {
+		log.Printf("Error getting last insert ID: %v", err)
+		return
+	}
+
+	log.Printf("Message stored in database with ID: %d", messageID)
+
+	// Create response message
+	responseMessage := map[string]interface{}{
+		"type": "message",
+		"message": map[string]interface{}{
+			"id":        messageID,
+			"sender":    sender,
+			"recipient": recipient,
+			"content":   content,
+			"timestamp": timestamp,
+			"read":      false,
+		},
+	}
+
+	// Send to sender for confirmation
+	err = conn.WriteJSON(responseMessage)
+	if err != nil {
+		log.Printf("Error sending message confirmation to sender: %v", err)
+	}
+
+	// Find recipient's connection and send message
+	clientsMux.RLock()
+	recipientConn, exists := clients[recipient]
+	clientsMux.RUnlock()
+
+	if exists {
+		err = recipientConn.WriteJSON(responseMessage)
+		if err != nil {
+			log.Printf("Error sending message to recipient: %v", err)
+		} else {
+			log.Printf("Message delivered to recipient %s", recipient)
+		}
+	} else {
+		log.Printf("Recipient %s is not connected, message will be delivered when they connect", recipient)
+	}
+
+	// Broadcast to all clients that a new message was sent to update their user lists
+	go BroadcastMessageNotification(sender, recipient)
+}
+
+// BroadcastMessageNotification notifies all clients that a new message has been sent
+// This is a separate function from BroadcastNewMessage in websocket.go to avoid name conflicts
+func BroadcastMessageNotification(senderID string, receiverID string) {
+	log.Printf("Broadcasting new message notification from %s to %s", senderID, receiverID)
+
+	notification := NewMessageNotification{
+		Type:       "refresh_users",
+		SenderID:   senderID,
+		ReceiverID: receiverID,
+	}
+
+	clientsMux.RLock()
+	defer clientsMux.RUnlock()
+
+	for _, conn := range clients {
+		err := conn.WriteJSON(notification)
+		if err != nil {
+			log.Printf("Error broadcasting message notification: %v", err)
+			continue
+		}
+	}
+	log.Printf("Broadcasted message notification from %s to %s", senderID, receiverID)
+
+	// After sending the notification, also broadcast the updated users list
+	go BroadcastUsersList()
 }
