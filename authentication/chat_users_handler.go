@@ -1,21 +1,11 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
-	"sort"
-	"time"
 )
-
-// UserWithLastMessage represents a user with their last message timestamp
-type UserWithLastMessage struct {
-	ID         string     `json:"id"`
-	UserName   string     `json:"userName"`
-	ProfilePic string     `json:"profilePic"`
-	IsOnline   bool       `json:"isOnline"`
-	LastMessage *time.Time `json:"lastMessage,omitempty"`
-}
 
 // GetChatUsersHandler returns a list of users with their last message timestamps
 func GetChatUsersHandler(w http.ResponseWriter, r *http.Request) {
@@ -34,84 +24,69 @@ func GetChatUsersHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Fetching chat users for user ID: %s", currentUserID)
 
-	// First, get all users except the current user
+	// Query all users with their last message timestamp
 	rows, err := GlobalDB.Query(`
-		SELECT id, nickname, profile_pic, is_online
-		FROM users
-		WHERE id != ?
-	`, currentUserID)
-	
+		SELECT u.id, u.nickname, u.profile_pic, u.is_online,
+			   (SELECT MAX(sent_at)
+				FROM messages
+				WHERE (sender_id = u.id AND receiver_id = ?)
+				   OR (sender_id = ? AND receiver_id = u.id)) as last_message_time
+		FROM users u
+		WHERE u.id != ?
+		ORDER BY
+			CASE WHEN (SELECT MAX(sent_at)
+					  FROM messages
+					  WHERE (sender_id = u.id AND receiver_id = ?)
+						 OR (sender_id = ? AND receiver_id = u.id)) IS NULL THEN 1 ELSE 0 END,
+			last_message_time DESC,
+			nickname ASC
+	`, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID)
 	if err != nil {
-		log.Printf("Database error querying users: %v", err)
-		http.Error(w, "Failed to query users", http.StatusInternalServerError)
+		log.Printf("Error querying users with messages: %v", err)
+		http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	var users []UserWithLastMessage
+	var users []map[string]interface{}
 	for rows.Next() {
-		var user UserWithLastMessage
-		var profilePic interface{} // Use interface{} to handle NULL values
-		
-		if err := rows.Scan(&user.ID, &user.UserName, &profilePic, &user.IsOnline); err != nil {
+		var id, nickname string
+		var profilePic sql.NullString
+		var isOnline bool
+		var lastMessageTime sql.NullString
+
+		if err := rows.Scan(&id, &nickname, &profilePic, &isOnline, &lastMessageTime); err != nil {
 			log.Printf("Error scanning user row: %v", err)
 			continue
 		}
-		
-		// Handle NULL profile_pic
-		if profilePic != nil {
-			if s, ok := profilePic.(string); ok {
-				user.ProfilePic = s
-			}
+
+		user := map[string]interface{}{
+			"id":       id,
+			"userName": nickname,
+			"isOnline": isOnline,
 		}
-		
+
+		if profilePic.Valid {
+			user["profilePic"] = profilePic.String
+		} else {
+			user["profilePic"] = ""
+		}
+
+		if lastMessageTime.Valid {
+			user["lastMessage"] = lastMessageTime.String
+		} else {
+			user["lastMessage"] = nil
+		}
+
 		users = append(users, user)
 	}
 
-	// For each user, get the timestamp of their last message with the current user
-	for i := range users {
-		var lastMessageTime string
-		err := GlobalDB.QueryRow(`
-			SELECT MAX(sent_at) 
-			FROM messages 
-			WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
-		`, currentUserID, users[i].ID, users[i].ID, currentUserID).Scan(&lastMessageTime)
-		
-		if err != nil || lastMessageTime == "" {
-			// No messages between these users
-			continue
-		}
-		
-		// Parse the timestamp
-		parsedTime, err := time.Parse("2006-01-02 15:04:05", lastMessageTime)
-		if err != nil {
-			log.Printf("Error parsing timestamp %s: %v", lastMessageTime, err)
-			continue
-		}
-		
-		users[i].LastMessage = &parsedTime
+	// If no users were found, return an empty array rather than null
+	if users == nil {
+		users = []map[string]interface{}{}
 	}
 
-	// Sort users: first by last message time (most recent first), then alphabetically
-	sort.Slice(users, func(i, j int) bool {
-		// If both have messages, sort by most recent
-		if users[i].LastMessage != nil && users[j].LastMessage != nil {
-			return users[i].LastMessage.After(*users[j].LastMessage)
-		}
-		
-		// If only one has messages, that one comes first
-		if users[i].LastMessage != nil {
-			return true
-		}
-		if users[j].LastMessage != nil {
-			return false
-		}
-		
-		// If neither has messages, sort alphabetically
-		return users[i].UserName < users[j].UserName
-	})
-
-	// Return the sorted users as JSON
+	// Return the users as JSON
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(users); err != nil {
 		log.Printf("Error encoding users to JSON: %v", err)
