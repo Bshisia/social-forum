@@ -9,12 +9,18 @@ import (
 	"forum/utils"
 )
 
+// NotificationHandler manages user notifications
 type NotificationHandler struct{}
 
+// NewNotificationHandler creates a new notification handler instance
 func NewNotificationHandler() *NotificationHandler {
 	return &NotificationHandler{}
 }
 
+// ServeHTTP handles HTTP requests for notifications
+// Routes:
+// - GET /notifications - Display user notifications
+// - POST /notifications/mark-read - Mark a notification as read
 func (nh *NotificationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -30,6 +36,8 @@ func (nh *NotificationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// handleGetNotifications displays the user's notifications page
+// Fetches all notifications for the authenticated user and marks them as read
 func (nh *NotificationHandler) handleGetNotifications(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session_token")
 	if err != nil {
@@ -53,8 +61,8 @@ func (nh *NotificationHandler) handleGetNotifications(w http.ResponseWriter, r *
 	// Mark all notifications as read when viewing the page
 	if unreadCount > 0 {
 		_, err = utils.GlobalDB.Exec(`
-            UPDATE notifications 
-            SET is_read = true 
+            UPDATE notifications
+            SET is_read = true
             WHERE user_id = ? AND is_read = false
         `, userID)
 		if err != nil {
@@ -86,6 +94,12 @@ func (nh *NotificationHandler) handleGetNotifications(w http.ResponseWriter, r *
 		utils.RenderErrorPage(w, http.StatusInternalServerError, utils.ErrTemplateExec)
 	}
 }
+// getUserNotifications retrieves all notifications for a user
+// Returns the notifications, unread count, and any error
+// @param userID - The ID of the user to get notifications for
+// @returns []utils.Notification - Array of notification objects
+// @returns int - Count of unread notifications
+// @returns error - Any error that occurred
 func (nh *NotificationHandler) getUserNotifications(userID string) ([]utils.Notification, int, error) {
 	rows, err := utils.GlobalDB.Query(`
 		SELECT n.id, n.type, n.created_at, n.post_id, u.username, u.profile_pic, n.is_read
@@ -118,6 +132,8 @@ func (nh *NotificationHandler) getUserNotifications(userID string) ([]utils.Noti
 	return notifications, unreadCount, nil
 }
 
+// handleMarkAsRead marks a specific notification as read
+// Accepts POST requests with notification_id in the request body
 func (nh *NotificationHandler) handleMarkAsRead(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session_token")
 	if err != nil {
@@ -141,8 +157,8 @@ func (nh *NotificationHandler) handleMarkAsRead(w http.ResponseWriter, r *http.R
 	}
 
 	_, err = utils.GlobalDB.Exec(`
-		UPDATE notifications 
-		SET is_read = true 
+		UPDATE notifications
+		SET is_read = true
 		WHERE id = ? AND user_id = ?
 	`, requestData.NotificationID, userID)
 
@@ -155,11 +171,14 @@ func (nh *NotificationHandler) handleMarkAsRead(w http.ResponseWriter, r *http.R
 }
 
 // GetUnreadCount returns the number of unread notifications for a user
+// @param userID - The ID of the user to get the unread count for
+// @returns int - The number of unread notifications
+// @returns error - Any error that occurred during the query
 func (nh *NotificationHandler) GetUnreadCount(userID string) (int, error) {
 	var count int
 	err := utils.GlobalDB.QueryRow(`
-		SELECT COUNT(*) 
-		FROM notifications 
+		SELECT COUNT(*)
+		FROM notifications
 		WHERE user_id = ? AND is_read = false
 	`, userID).Scan(&count)
 
