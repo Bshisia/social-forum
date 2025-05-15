@@ -11,6 +11,7 @@ import (
 	"forum/utils"
 )
 
+// main is the entry point of the application
 func main() {
 	// Initialize database
 	db, err := utils.InitialiseDB()
@@ -23,46 +24,45 @@ func main() {
 	handlers.InitDB(db)
 	utils.InitSessionManager(utils.GlobalDB)
 
-	// 1. Auth routes - OAuth providers
+	// Auth routes - OAuth providers
 	http.HandleFunc("/auth/github", handlers.HandleGitHubLogin)
 	http.HandleFunc("/auth/github/callback", handlers.HandleGitHubCallback)
 	http.HandleFunc("/auth/google", handlers.HandleGoogleLogin)
 	http.HandleFunc("/auth/google/callback", handlers.HandleGoogleCallback)
 
-	// 2. Static file serving
+	// Static file serving
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
-	// 3. API Routes - Use the APIHandler for all API routes
+	// API Routes
 	apiHandler := controllers.NewAPIHandler()
 	http.Handle("/api/", apiHandler)
 	http.HandleFunc("/api/user-status", controllers.GetUserStatus)
 
-	// 4. Auth routes - Use the APIHandler for login/register
+	// Auth routes
 	http.Handle("/login", apiHandler)
 	http.Handle("/register", apiHandler)
 
-	// Handle signout separately to ensure proper session management
+	// Signout route
 	http.HandleFunc("/signout", func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Signout request received")
 		apiHandler.HandleSignout(w, r)
 	})
 
-	// handle websocket connetion
+	// WebSocket routes
 	http.HandleFunc("/ws", handlers.HandleWebSocket)
 	http.HandleFunc("/ws/chat", handlers.HandleChatWebSocket)
 	http.HandleFunc("/api/users/refresh", handlers.TriggerUsersListBroadcast)
 
-	// Add this to your routes
+	// User routes
 	http.HandleFunc("/api/users/", handlers.GetUserHandler)
 
-	// Add these routes to your main.go file
+	// Chat routes
 	http.HandleFunc("/api/chat/history", handlers.GetChatHistoryHandler)
 	http.HandleFunc("/api/chat/send", handlers.SendMessageHandler)
 	http.HandleFunc("/api/chat/users", handlers.GetChatUsersHandler)
 
-	// 5. SPA catch-all route - serve index.html for all other routes
+	// SPA catch-all route - serve index.html for all other routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Skip for API and static routes
 		if strings.HasPrefix(r.URL.Path, "/api/") ||
 			strings.HasPrefix(r.URL.Path, "/static/") ||
 			strings.HasPrefix(r.URL.Path, "/auth/") ||
