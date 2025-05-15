@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Message represents a chat message
+// Message represents a chat message structure
 type Message struct {
 	ID         int       `json:"id"`
 	SenderID   string    `json:"sender_id"`
@@ -60,7 +60,7 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	// Query the database for messages between these users with pagination
 	rows, err := GlobalDB.Query(`
 		SELECT id, sender_id, receiver_id, content, sent_at, read
-		FROM messages 
+		FROM messages
 		WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
 		ORDER BY sent_at DESC
 		LIMIT ? OFFSET ?
@@ -118,7 +118,6 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 
 // GetNewMessagesHandler fetches only new messages since a specific message ID
 func GetNewMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	// Get query parameters
 	senderID := r.URL.Query().Get("sender_id")
 	receiverID := r.URL.Query().Get("receiver_id")
 	lastIDStr := r.URL.Query().Get("last_id")
@@ -163,7 +162,7 @@ func GetNewMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// SendMessageHandler handles sending a new message
+// SendMessageHandler handles sending a new message via HTTP API
 func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 	// Only allow POST method
 	if r.Method != http.MethodPost {
@@ -260,7 +259,7 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleChatMessage processes an incoming chat message
+// HandleChatMessage processes an incoming chat message from WebSocket
 func HandleChatMessage(conn *websocket.Conn, message map[string]interface{}) {
 	// Extract message data
 	messageData, ok := message["message"].(map[string]interface{})
