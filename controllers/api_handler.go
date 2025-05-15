@@ -14,16 +14,20 @@ import (
 	"forum/utils"
 )
 
+// APIHandler handles all API requests for the application
 type APIHandler struct {
 	postHandler *PostHandler
 }
 
+// NewAPIHandler creates a new API handler instance
 func NewAPIHandler() *APIHandler {
 	return &APIHandler{
 		postHandler: NewPostHandler(),
 	}
 }
 
+// ServeHTTP handles all HTTP requests to the API
+// Routes requests to the appropriate handler based on the URL path
 func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Set CORS headers for API requests
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -128,8 +132,10 @@ func (ah *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// checkAuth verifies that the request has a valid session
+// If authenticated, adds the user ID to the request context
+// @returns {boolean} True if authenticated, false otherwise
 func (ah *APIHandler) checkAuth(w http.ResponseWriter, r *http.Request) bool {
-	// Get the session cookie
 	cookie, err := r.Cookie("session_token")
 	if err != nil {
 		log.Printf("Authentication failed: No session cookie found - Error: %v", err)
@@ -139,7 +145,6 @@ func (ah *APIHandler) checkAuth(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 
-	// Log the cookie value for debugging (partial for security)
 	cookiePreview := ""
 	if len(cookie.Value) > 10 {
 		cookiePreview = cookie.Value[:10] + "..."
@@ -148,7 +153,6 @@ func (ah *APIHandler) checkAuth(w http.ResponseWriter, r *http.Request) bool {
 	}
 	log.Printf("Found session cookie: %s", cookiePreview)
 
-	// Validate the session
 	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
 	if err != nil {
 		log.Printf("Session validation failed: %v", err)
@@ -160,19 +164,18 @@ func (ah *APIHandler) checkAuth(w http.ResponseWriter, r *http.Request) bool {
 
 	log.Printf("Session validated successfully for user: %s", userID)
 
-	// Add userID to request context
 	ctx := context.WithValue(r.Context(), "userID", userID)
 	*r = *r.WithContext(ctx)
 	return true
 }
 
-// Update the handlePosts function to include profile pictures correctly
+// handlePosts returns a list of all posts with their associated data
+// Includes user information, reaction counts, and categories
 func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Query posts with user information including profile pictures
 	query := `
-        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id,
                u.nickname, u.profile_pic,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
@@ -237,11 +240,11 @@ func (ah *APIHandler) handlePosts(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(posts)
 }
 
-// Update the handleSinglePost function to include profile pictures correctly
+// handleSinglePost returns detailed information about a specific post
+// Includes the post data, user information, categories, and comments
 func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Get post ID from query parameter
 	postIDStr := r.URL.Query().Get("id")
 	if postIDStr == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -258,7 +261,7 @@ func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 
 	// Query post with user information including profile picture
 	query := `
-        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id,
                u.nickname, u.profile_pic,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
@@ -376,7 +379,10 @@ func (ah *APIHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// Helper function to extract category names for logging
+// getCategoryNames extracts category names from a slice of Category objects
+// Used for logging and debugging purposes
+// @param categories - Slice of Category objects
+// @returns []string - Slice of category names
 func getCategoryNames(categories []utils.Category) []string {
 	var names []string
 	for _, cat := range categories {
@@ -385,13 +391,14 @@ func getCategoryNames(categories []utils.Category) []string {
 	return names
 }
 
+// handleUsers returns a list of all users in the system
+// Used for user directory and admin purposes
 func (ah *APIHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get all users from the database
 	query := `
 		SELECT id, nickname, email, first_name, last_name, age, gender, profile_pic, created_at, is_online, last_seen
 		FROM users
@@ -446,6 +453,11 @@ func (ah *APIHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(users)
 }
 
+// handleFilteredPosts returns posts filtered by various criteria
+// Supports filtering by:
+// - Posts created by a specific user
+// - Posts liked by a specific user
+// - Posts in a specific category
 func (ah *APIHandler) handleFilteredPosts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -485,6 +497,8 @@ func (ah *APIHandler) handleFilteredPosts(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(posts)
 }
 
+// handleCreatePost processes requests to create a new post
+// Requires authentication and handles file uploads for post images
 func (ah *APIHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -603,7 +617,7 @@ func (ah *APIHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 
 		// Try to insert, ignore duplicate errors
 		_, err = tx.Exec(`
-            INSERT OR IGNORE INTO post_categories (post_id, category_id) 
+            INSERT OR IGNORE INTO post_categories (post_id, category_id)
             VALUES (?, ?)
         `, postID, categoryID)
 		if err != nil {
@@ -635,6 +649,10 @@ func (ah *APIHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getCategoryIdByName retrieves the ID of a category by its name
+// @param categoryName - The name of the category to look up
+// @returns int64 - The ID of the category
+// @returns error - Error if category not found
 func getCategoryIdByName(categoryName string) (int64, error) {
 	var id int64
 	err := utils.GlobalDB.QueryRow("SELECT id FROM categories WHERE name = ?", categoryName).Scan(&id)
@@ -644,6 +662,8 @@ func getCategoryIdByName(categoryName string) (int64, error) {
 	return id, nil
 }
 
+// handleReaction processes like/dislike reactions on posts
+// Handles adding, updating, and removing reactions
 func (ah *APIHandler) handleReaction(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	userID := r.Context().Value("userID").(string)
@@ -670,29 +690,29 @@ func (ah *APIHandler) handleReaction(w http.ResponseWriter, r *http.Request) {
 	// Check existing reaction
 	var existingReaction sql.NullInt64
 	err = tx.QueryRow(`
-        SELECT like FROM reaction 
+        SELECT like FROM reaction
         WHERE user_id = ? AND post_id = ?
     `, userID, req.PostID).Scan(&existingReaction)
 
 	if err == sql.ErrNoRows {
 		// New reaction - insert
 		_, err = tx.Exec(`
-            INSERT INTO reaction (user_id, post_id, like) 
+            INSERT INTO reaction (user_id, post_id, like)
             VALUES (?, ?, ?)
         `, userID, req.PostID, req.Like)
 	} else if err == nil {
 		if existingReaction.Int64 == int64(req.Like) {
 			// Remove existing reaction if same type
 			_, err = tx.Exec(`
-                DELETE FROM reaction 
+                DELETE FROM reaction
                 WHERE user_id = ? AND post_id = ?
             `, userID, req.PostID)
 			req.Like = -1 // Indicate reaction removed
 		} else {
 			// Update existing reaction
 			_, err = tx.Exec(`
-                UPDATE reaction 
-                SET like = ? 
+                UPDATE reaction
+                SET like = ?
                 WHERE user_id = ? AND post_id = ?
             `, req.Like, userID, req.PostID)
 		}
@@ -713,8 +733,8 @@ func (ah *APIHandler) handleReaction(w http.ResponseWriter, r *http.Request) {
 	// Get final counts
 	var likes, dislikes int
 	err = utils.GlobalDB.QueryRow(`
-        SELECT likes, dislikes 
-        FROM posts 
+        SELECT likes, dislikes
+        FROM posts
         WHERE id = ?
     `, req.PostID).Scan(&likes, &dislikes)
 	if err != nil {
@@ -732,6 +752,8 @@ func (ah *APIHandler) handleReaction(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleComment processes requests to add comments to posts
+// Validates the comment content and updates the post's comment count
 func (ah *APIHandler) handleComment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	userID := r.Context().Value("userID").(string)
@@ -755,7 +777,7 @@ func (ah *APIHandler) handleComment(w http.ResponseWriter, r *http.Request) {
 
 	// Insert comment
 	_, err := utils.GlobalDB.Exec(`
-        INSERT INTO comments (post_id, user_id, content) 
+        INSERT INTO comments (post_id, user_id, content)
         VALUES (?, ?, ?)`,
 		req.PostID, userID, req.Content,
 	)
@@ -767,7 +789,7 @@ func (ah *APIHandler) handleComment(w http.ResponseWriter, r *http.Request) {
 
 	// Update post comment count
 	_, err = utils.GlobalDB.Exec(`
-        UPDATE posts SET comments = comments + 1 
+        UPDATE posts SET comments = comments + 1
         WHERE id = ?`, req.PostID)
 	if err != nil {
 		log.Printf("Error updating comment count: %v", err)
@@ -780,6 +802,8 @@ func (ah *APIHandler) handleComment(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleEditPost processes requests to edit existing posts
+// Verifies the user owns the post before allowing edits
 func (ah *APIHandler) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	userID := r.Context().Value("userID").(string)
@@ -847,6 +871,8 @@ func (ah *APIHandler) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleDeletePost processes requests to delete posts
+// Verifies the user owns the post and deletes all related data
 func (ah *APIHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	userID := r.Context().Value("userID").(string)
@@ -939,6 +965,8 @@ func (ah *APIHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleEditComment processes requests to edit comments
+// Verifies the user owns the comment before allowing edits
 func (ah *APIHandler) handleEditComment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	userID := r.Context().Value("userID").(string)
@@ -978,7 +1006,8 @@ func (ah *APIHandler) handleEditComment(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// handleCategoryPosts handles requests for posts filtered by category
+// handleCategoryPosts returns posts filtered by a specific category
+// Accepts a category name as a query parameter and returns matching posts
 func (ah *APIHandler) handleCategoryPosts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		log.Printf("Invalid method for category posts endpoint: %s", r.Method)
@@ -1013,7 +1042,7 @@ func (ah *APIHandler) handleCategoryPosts(w http.ResponseWriter, r *http.Request
 
 	// Get posts for this category
 	query := `
-		SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+		SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id,
 			   u.nickname, u.profile_pic,
 			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
 			   (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
@@ -1090,6 +1119,8 @@ func (ah *APIHandler) handleCategoryPosts(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(posts)
 }
 
+// handleDeleteComment processes requests to delete comments
+// Verifies the user owns the comment and updates the post's comment count
 func (ah *APIHandler) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	userID := r.Context().Value("userID").(string)
@@ -1151,10 +1182,10 @@ func (ah *APIHandler) handleDeleteComment(w http.ResponseWriter, r *http.Request
 
 	// Update post comment count
 	_, err = tx.Exec(`
-        UPDATE posts 
+        UPDATE posts
         SET comments = (
-            SELECT COUNT(*) 
-            FROM comments 
+            SELECT COUNT(*)
+            FROM comments
             WHERE post_id = ?
         )
         WHERE id = ?`, postID, postID)
@@ -1177,6 +1208,8 @@ func (ah *APIHandler) handleDeleteComment(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// handleGetProfile returns a user's profile information
+// If no user ID is provided, returns the current user's profile
 func (ah *APIHandler) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -1252,6 +1285,8 @@ func (ah *APIHandler) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleUpdateProfilePic processes requests to update a user's profile picture
+// Handles file upload, image processing, and database update
 func (ah *APIHandler) handleUpdateProfilePic(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -1347,6 +1382,8 @@ func (ah *APIHandler) handleUpdateProfilePic(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+// handleUserStatus returns the current user's authentication status
+// Used by the frontend to determine if a user is logged in and display user information
 func (ah *APIHandler) handleUserStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -1405,6 +1442,7 @@ func (ah *APIHandler) handleUserStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleLogin processes user login requests
+// Authenticates the user and creates a session if credentials are valid
 func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Content-Type", "application/json")
@@ -1533,6 +1571,7 @@ func (ah *APIHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRegister processes user registration requests
+// Creates a new user account with the provided information
 func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Content-Type", "application/json")
@@ -1901,7 +1940,7 @@ func (ah *APIHandler) handleCreatedPosts(w http.ResponseWriter, r *http.Request)
 
 	// Query posts created by this user
 	query := `
-        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id,
                u.nickname, u.profile_pic,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
@@ -2013,7 +2052,7 @@ func (ah *APIHandler) handleLikedPosts(w http.ResponseWriter, r *http.Request) {
 
 	// Query posts liked by this user
 	query := `
-        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id,
                u.nickname, u.profile_pic,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
@@ -2144,7 +2183,7 @@ func (ah *APIHandler) handleUserStats(w http.ResponseWriter, r *http.Request) {
 	// Get likes received (likes on user's posts)
 	var likesReceived int
 	err = utils.GlobalDB.QueryRow(`
-		SELECT COUNT(*) 
+		SELECT COUNT(*)
 		FROM reaction r
 		JOIN posts p ON r.post_id = p.id
 		WHERE p.user_id = ? AND r.like = 1
@@ -2213,7 +2252,7 @@ func (ah *APIHandler) handleCommentedPosts(w http.ResponseWriter, r *http.Reques
 
 	// Query posts commented on by this user
 	query := `
-        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id, 
+        SELECT p.id, p.title, p.content, p.imagepath, p.post_at, p.user_id,
                u.nickname, u.profile_pic,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
@@ -2287,8 +2326,8 @@ func (ah *APIHandler) handleOnlineUsers(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 
 	rows, err := utils.GlobalDB.Query(`
-        SELECT id, nickname, first_name || ' ' || last_name as user_name, profile_pic 
-        FROM users 
+        SELECT id, nickname, first_name || ' ' || last_name as user_name, profile_pic
+        FROM users
         WHERE is_online = 1
     `)
 	if err != nil {
