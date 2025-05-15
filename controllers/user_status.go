@@ -7,9 +7,11 @@ import (
     "forum/utils"
 )
 
+// GetUserStatus returns the current user's authentication status and notification count
+// Used by the frontend to determine if a user is logged in and display notification badges
 func GetUserStatus(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
-    
+
     // Default status - not logged in
     userStatus := struct {
         IsLoggedIn    bool   `json:"isLoggedIn"`
@@ -38,8 +40,8 @@ func GetUserStatus(w http.ResponseWriter, r *http.Request) {
     // Get unread notifications count
     var unreadCount int
     err = utils.GlobalDB.QueryRow(`
-        SELECT COUNT(*) 
-        FROM notifications 
+        SELECT COUNT(*)
+        FROM notifications
         WHERE user_id = ? AND is_read = false
     `, userID).Scan(&unreadCount)
     if err != nil {
