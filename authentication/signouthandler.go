@@ -9,6 +9,8 @@ import (
 	"forum/utils"
 )
 
+// SignOutHandler logs out a user by invalidating their session
+// Updates the user's online status to offline and clears the session cookie
 func SignOutHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session_token")
@@ -27,9 +29,9 @@ func SignOutHandler(db *sql.DB) http.HandlerFunc {
 		// Update user's online status and last seen timestamp
 		if userID != "" {
 			_, err = db.Exec(`
-                UPDATE users 
-                SET is_online = 0, 
-                    last_seen = CURRENT_TIMESTAMP 
+                UPDATE users
+                SET is_online = 0,
+                    last_seen = CURRENT_TIMESTAMP
                 WHERE id = ?
             `, userID)
 			if err != nil {
