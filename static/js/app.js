@@ -1,4 +1,4 @@
-// Import authentication service 
+
 import AuthService from './services/auth-service.js';
 import AuthComponent from './components/authentication/auth.js';
 import navigationHelper from './services/navigation-helper.js';
@@ -10,11 +10,9 @@ import SinglePostComponent from './components/posts/single_post.js';
 import CreatePostComponent from './components/posts/create_post.js';
 import EditPostComponent from './components/posts/edit_post.js';
 import ProfileComponent from './components/profile/profile.js';
-//import NotificationsComponent from './components/notifications/notifications.js';
 import FilterNavComponent from './components/filters/filters_nav.js';
 import UsersNavComponent from './components/users/users_nav.js';
 
-// Export functions for external use
 export {
     loadPosts,
     loadSinglePost,
@@ -27,14 +25,13 @@ export {
     handlePostClick
 };
 
-// Function to reset layout before navigation
 function resetLayout() {
     console.log('Resetting layout');
 
-    // Clean up navigation helper
+
     navigationHelper.cleanUp();
 
-    // Reset the main content area
+
     const mainContent = document.getElementById('main-content');
     if (mainContent) {
         mainContent.innerHTML = `
@@ -45,11 +42,11 @@ function resetLayout() {
         `;
     }
 
-    // Make sure sidebars are in their proper place
+
     const filterNav = document.getElementById('filter-nav');
     const usersNav = document.getElementById('users-nav');
 
-    // Reset filter nav position and display
+
     if (filterNav) {
         filterNav.style.position = '';
         filterNav.style.left = '';
@@ -58,7 +55,7 @@ function resetLayout() {
         filterNav.style.zIndex = '';
     }
 
-    // Reset users nav position and display
+
     if (usersNav) {
         usersNav.style.position = '';
         usersNav.style.right = '';
@@ -67,22 +64,20 @@ function resetLayout() {
         usersNav.style.zIndex = '';
     }
 
-    // Reset any other layout issues
+
     document.body.style.overflow = '';
 }
-// Navigation helper
 window.navigation = {
     navigateTo: (path, data = null) => {
         console.log(`Navigation: navigating to ${path}`);
 
         if (path === window.location.pathname + window.location.search) {
-            // Don't push new state if URL hasn't changed 
-            resetLayout(); // Still reset layout
+        
+            resetLayout();
             handleRoute();
             return;
         }
-
-        // Reset layout before navigation
+        
         resetLayout();
 
         window.history.pushState(data, '', path);
@@ -90,35 +85,30 @@ window.navigation = {
     },
     reloadPage: () => {
         console.log('Navigation: reloading page');
-
-        // Reset layout before reloading
         resetLayout();
-
-        handleRoute(); // Re-handle current route instead of navigating 
+        handleRoute();
     }
 };
 
-// Check if current path is an auth page
 function isAuthPage(path) {
     return path === '/signin' || path === '/signup';
 }
 
-// Router configuration 
 const router = {
     '/': () => {
-        // Check authentication before showing home page 
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
                 return;
             }
 
-            // Load posts 
+        
             loadPosts();
         });
     },
     '/profile': (id) => {
-        // Check authentication before showing profile 
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
@@ -143,7 +133,7 @@ const router = {
         });
     },
     '/category': (categoryName) => {
-        // Check authentication before showing category posts
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
@@ -155,95 +145,95 @@ const router = {
                 return;
             }
 
-            // Load posts for the selected category
+        
             loadCategoryPosts(categoryName);
         });
     },
     '/created': () => {
-        // Check authentication before showing created posts
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
                 return;
             }
 
-            // Get user ID from query parameter if present
+        
             const urlParams = new URLSearchParams(window.location.search);
             const userId = urlParams.get('user_id');
 
-            // Load posts created by the specified user or current user
+        
             loadCreatedPosts(userId);
         });
     },
 
     '/chat': () => {
-        // Check authentication
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
                 return;
             }
 
-            // Get user IDs from query parameters
+        
             const urlParams = new URLSearchParams(window.location.search);
             const user1Id = urlParams.get('user1');
             const user2Id = urlParams.get('user2');
             const currentUser = AuthService.getCurrentUser();
 
-            // Validate IDs
+        
             if (!user1Id || !user2Id) {
                 window.navigation.navigateTo('/');
                 return;
             }
 
-            // Ensure current user is one of the participants
+        
             if (currentUser.id !== user1Id && currentUser.id !== user2Id) {
                 window.navigation.navigateTo('/');
                 return;
             }
 
-            // Create and mount chat component
+        
             const chat = new ChatComponent(currentUser.id, currentUser.id === user1Id ? user2Id : user1Id);
             chat.mount();
         });
     },
 
     '/liked': () => {
-        // Check authentication before showing liked posts
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
                 return;
             }
 
-            // Get user ID from query parameter if present
+        
             const urlParams = new URLSearchParams(window.location.search);
             const userId = urlParams.get('user_id');
 
-            // Load posts liked by the specified user or current user
+        
             loadLikedPosts(userId);
         });
     },
 
     '/commented': () => {
-        // Check authentication before showing commented posts
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
                 return;
             }
 
-            // Get user ID from query parameter if present
+        
             const urlParams = new URLSearchParams(window.location.search);
             const userId = urlParams.get('user_id');
 
-            // Load posts commented on by the specified user or current user
+        
             loadCommentedPosts(userId);
         });
     },
 
     '/create': () => {
-        // Check authentication before showing create post page 
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
@@ -254,7 +244,7 @@ const router = {
                 const createPost = new CreatePostComponent();
                 createPost.mount();
 
-                // Register with navigation helper
+            
                 navigationHelper.setCurrentComponent(createPost);
             } else {
                 console.error('CreatePostComponent is not defined');
@@ -263,7 +253,7 @@ const router = {
         });
     },
     '/edit-post': (id) => {
-        // Check authentication before showing edit post page 
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
@@ -285,7 +275,7 @@ const router = {
         });
     },
     'post': (id) => {
-        // Check authentication before showing single post 
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
@@ -296,45 +286,45 @@ const router = {
         });
     },
     '/signin': () => {
-        // If already authenticated, redirect to home 
+    
         AuthService.checkAuthState().then(isAuth => {
             if (isAuth) {
                 window.navigation.navigateTo('/');
                 return;
             }
 
-            // Load auth component 
+        
             const authComponent = new AuthComponent('signin');
             authComponent.mount();
         });
     },
     '/signup': () => {
-        // If already authenticated, redirect to home 
+    
         AuthService.checkAuthState().then(isAuth => {
             if (isAuth) {
                 window.navigation.navigateTo('/');
                 return;
             }
 
-            // Load auth component 
+        
             const authComponent = new AuthComponent('signup');
             authComponent.mount();
         });
     },
     '/notifications': () => {
-        // Check authentication before showing notifications
+    
         AuthService.checkAuthState().then(isAuth => {
             if (!isAuth) {
                 window.navigation.navigateTo('/signin');
                 return;
             }
 
-            // Load notifications component if it exists
+        
             if (typeof NotificationsComponent === 'function') {
                 const notifications = new NotificationsComponent();
                 notifications.mount();
             } else {
-                // Fallback if component doesn't exist
+            
                 document.getElementById('main-content').innerHTML = '<h1>Notifications</h1><p>Your notifications will appear here.</p>';
             }
         });
@@ -351,19 +341,19 @@ function handleRoute() {
 
     console.log(`Handling route: ${path}${search}`);
 
-    // Check if we're on an auth page
+
     const authPage = isAuthPage(path);
 
-    // Show/hide navigation elements based on page type
+
     toggleNavigationElements(!authPage);
 
-    // Handle profile path with query parameter
+
     if (path === '/profile') {
         router['/profile'](userId);
         return;
     }
 
-    // Handle edit-post path 
+
     if (path === '/edit-post') {
         if (!postId) {
             window.navigation.navigateTo('/');
@@ -373,13 +363,13 @@ function handleRoute() {
         return;
     }
 
-    // Handle notifications path
+
     if (path === '/notifications') {
         router['/notifications']();
         return;
     }
 
-    // Handle category path
+
     if (path === '/category') {
         if (!categoryName) {
             window.navigation.navigateTo('/');
@@ -389,31 +379,31 @@ function handleRoute() {
         return;
     }
 
-    // Handle created posts path
+
     if (path === '/created') {
         router['/created']();
         return;
     }
 
-    // Handle liked posts path
+
     if (path === '/liked') {
         router['/liked']();
         return;
     }
 
-    // Handle commented posts path
+
     if (path === '/commented') {
         router['/commented']();
         return;
     }
 
-    // Check for single post view 
+
     if (path === '/' && postId) {
         router.post(postId);
         return;
     }
 
-    // Handle signin and signup routes 
+
     if (path === '/signin' || path === '/signup') {
         const route = router[path];
         if (route) {
@@ -422,32 +412,31 @@ function handleRoute() {
         }
     }
 
-    // Handle other routes with authentication check 
+
     const route = router[path];
     if (route) {
         route();
         return;
     }
 
-    // Default route 
+
     router['/']();
 }
 
-// Toggle navigation elements based on page type
 function toggleNavigationElements(show) {
-    // Get navigation elements
+
     const navbarElement = document.getElementById('navbar');
     const filterNavElement = document.getElementById('filter-nav');
     const usersNavElement = document.getElementById('users-nav');
     
-    // Add or remove auth-page class to body
+
     if (!show) {
         document.body.classList.add('auth-page');
     } else {
         document.body.classList.remove('auth-page');
     }
 
-    // Show/hide elements if they exist
+
     if (navbarElement) {
         navbarElement.style.display = show ? 'block' : 'none';
     }
@@ -461,57 +450,55 @@ function toggleNavigationElements(show) {
     }
 }
 
-// Handle browser back/forward navigation
 window.addEventListener('popstate', (event) => {
     console.log('Navigation: popstate event triggered');
 
-    // Try to handle with navigation helper first
+
     const handled = navigationHelper.handleBack();
 
     if (!handled) {
-        // If not handled by navigation helper, reset layout and handle route
+    
         resetLayout();
         handleRoute();
     }
 });
 
-// Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // First check if we're on an auth page
+
     const currentPath = window.location.pathname;
     const isOnAuthPage = isAuthPage(currentPath);
 
-    // Check if user is authenticated
+
     AuthService.checkAuthState().then(isAuth => {
         if (isOnAuthPage) {
-            // If on auth page and already authenticated, redirect to home
+        
             if (isAuth) {
                 window.navigation.navigateTo('/');
                 return;
             }
 
-            // Otherwise, handle the auth route
+        
             const route = router[currentPath];
             if (route) {
                 route();
             } else {
-                // If route not found, redirect to signin
+            
                 window.navigation.navigateTo('/signin');
             }
         } else {
-            // For non-auth pages
+        
             if (!isAuth) {
-                // If not authenticated, redirect to signin
+            
                 window.navigation.navigateTo('/signin');
                 return;
             }
 
-            // Initialize UI with user data
+        
             initializeUI();
         }
     });
 
-    // Get current user ID from localStorage or your auth service
+
     const currentUserId = localStorage.getItem('userId');
 
     if (currentUserId) {
@@ -521,7 +508,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Make initializeUI function global so it can be called from auth component
 function initializeUI() {
     const currentUser = AuthService.getCurrentUser();
 
@@ -533,15 +519,15 @@ function initializeUI() {
 
     console.log('Initializing UI with user data:', currentUser);
 
-    // Initialize navbar if element exists
+
     const navbarElement = document.getElementById('navbar');
     if (navbarElement) {
         try {
             const navbar = new NavbarComponent(
-                true, // isLoggedIn
+                true,
                 currentUser.id,
-                0, // unreadCount - default to 0
-                currentUser.nickname // Pass nickname to navbar
+                0,
+                currentUser.nickname
             );
             navbar.mount(navbarElement);
         } catch (error) {
@@ -549,23 +535,22 @@ function initializeUI() {
         }
     }
 
-    // Try to initialize other components
+
     initializeOptionalComponents();
 
-    // Handle the current route
+
     handleRoute();
 };
 
-// Initialize optional components if they exist
 function initializeOptionalComponents() {
-    // Only try to load users if we're logged in
+
     if (!AuthService.getCurrentUser()) {
         return;
     }
 
     console.log('Initializing optional components');
 
-    // Initialize filter nav if component exists
+
     const filterNavElement = document.getElementById('filter-nav');
     if (filterNavElement && typeof FilterNavComponent === 'function') {
         try {
@@ -576,18 +561,18 @@ function initializeOptionalComponents() {
         }
     }
 
-    // Initialize users nav with mock data if API fails
+
     const usersNavElement = document.getElementById('users-nav');
     if (usersNavElement && typeof UsersNavComponent === 'function') {
-        // Get current user ID
+    
         const currentUserId = AuthService.getCurrentUser()?.id;
 
-        // First try to load real users
+    
         loadUsers()
             .then(usersData => {
                 try {
                     console.log('Users data loaded:', usersData);
-                    // Filter out current user
+                
                     const filteredUsers = usersData.filter(user => {
                         const userId = user.ID || user.id;
                         return userId !== currentUserId;
@@ -601,7 +586,7 @@ function initializeOptionalComponents() {
             })
             .catch(error => {
                 console.error('Error loading users:', error);
-                // Use mock data if API fails
+            
                 const mockUsers = [
                     { ID: '1', UserName: 'User1', ProfilePic: '' },
                     { ID: '2', UserName: 'User2', ProfilePic: '' }
@@ -616,16 +601,15 @@ function initializeOptionalComponents() {
     }
 }
 
-// Improved loadUsers function with better error handling
 function loadUsers() {
     console.log('Loading users...');
     return new Promise((resolve, reject) => {
         fetch('/api/users', {
-            credentials: 'include' // Include cookies for auth
+            credentials: 'include'
         })
             .then(response => {
                 if (!response.ok) {
-                    // If we get a 500 error, reject the promise
+                
                     console.warn(`Error loading users: ${response.status}`);
                     reject(new Error(`Failed to load users: ${response.status}`));
                     return null;
@@ -648,7 +632,7 @@ function loadUsers() {
 function loadPosts() {
     console.log('Loading posts...');
 
-    // Show loading state
+
     const mainContent = document.getElementById('main-content');
     if (mainContent) {
         mainContent.innerHTML = `
@@ -660,11 +644,11 @@ function loadPosts() {
     }
 
     fetch('/api/posts', {
-        credentials: 'include' // Include cookies for auth
+        credentials: 'include'
     })
         .then(response => {
             if (!response.ok) {
-                // Don't show placeholders, show error instead
+            
                 throw new Error(`Failed to load posts: ${response.status}`);
             }
             return response.json();
@@ -672,19 +656,19 @@ function loadPosts() {
         .then(postsData => {
             console.log('Posts received:', postsData);
 
-            // Handle empty posts array or null data
-            // Always ensure we have an array, even if empty
+        
+        
             const posts = Array.isArray(postsData) ? postsData :
                 (postsData && postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
 
             if (typeof PostsComponent === 'function') {
                 const postsComponent = new PostsComponent();
                 postsComponent.posts = posts;
-                postsComponent.isLoggedIn = true; // We already checked auth
+                postsComponent.isLoggedIn = true;
                 postsComponent.currentUserID = AuthService.getCurrentUser()?.id;
                 postsComponent.mount();
             } else {
-                // Show proper empty state or posts list
+            
                 showProperPostsState(posts);
             }
         })
@@ -704,11 +688,10 @@ function loadPosts() {
         });
 }
 
-// Function to load posts created by the current user
 function loadCreatedPosts() {
     console.log('Loading created posts...');
 
-    // Show loading state
+
     const mainContent = document.getElementById('main-content');
     if (mainContent) {
         mainContent.innerHTML = `
@@ -720,12 +703,12 @@ function loadCreatedPosts() {
     }
 
     fetch('/api/posts/created', {
-        credentials: 'include' // Include cookies for auth
+        credentials: 'include'
     })
         .then(response => {
             if (!response.ok) {
                 if (response.status === 401) {
-                    // Unauthorized, redirect to login
+                
                     window.navigation.navigateTo('/signin');
                     throw new Error('Please sign in to view your posts');
                 }
@@ -736,34 +719,34 @@ function loadCreatedPosts() {
         .then(postsData => {
             console.log('Created posts received:', postsData);
 
-            // Handle empty posts array or null data
+        
             const posts = Array.isArray(postsData) ? postsData :
                 (postsData && postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
 
             if (typeof PostsComponent === 'function') {
                 const postsComponent = new PostsComponent();
                 postsComponent.posts = posts;
-                postsComponent.isLoggedIn = true; // We already checked auth
+                postsComponent.isLoggedIn = true;
                 postsComponent.currentUserID = AuthService.getCurrentUser()?.id;
 
-                // Add a title to the main content before mounting posts
+            
                 if (mainContent) {
                     mainContent.innerHTML = `
                         <h2 class="filter-title">Posts You Created</h2>
                         <div id="posts-container"></div>
                     `;
 
-                    // Mount posts to the posts container
+                
                     postsComponent.mount(document.getElementById('posts-container'));
                 } else {
-                    // Fallback to mounting directly to main content
+                
                     postsComponent.mount();
                 }
 
-                // Highlight the active filter in the sidebar
+            
                 highlightActiveFilter('created');
             } else {
-                // Show proper empty state or posts list
+            
                 showProperPostsState(posts, 'Posts You Created');
             }
         })
@@ -788,11 +771,10 @@ function loadCreatedPosts() {
         });
 }
 
-// Function to load posts liked by the current user
 function loadLikedPosts() {
     console.log('Loading liked posts...');
 
-    // Show loading state
+
     const mainContent = document.getElementById('main-content');
     if (mainContent) {
         mainContent.innerHTML = `
@@ -804,12 +786,12 @@ function loadLikedPosts() {
     }
 
     fetch('/api/posts/liked', {
-        credentials: 'include' // Include cookies for auth
+        credentials: 'include'
     })
         .then(response => {
             if (!response.ok) {
                 if (response.status === 401) {
-                    // Unauthorized, redirect to login
+                
                     window.navigation.navigateTo('/signin');
                     throw new Error('Please sign in to view your liked posts');
                 }
@@ -820,34 +802,34 @@ function loadLikedPosts() {
         .then(postsData => {
             console.log('Liked posts received:', postsData);
 
-            // Handle empty posts array or null data
+        
             const posts = Array.isArray(postsData) ? postsData :
                 (postsData && postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
 
             if (typeof PostsComponent === 'function') {
                 const postsComponent = new PostsComponent();
                 postsComponent.posts = posts;
-                postsComponent.isLoggedIn = true; // We already checked auth
+                postsComponent.isLoggedIn = true;
                 postsComponent.currentUserID = AuthService.getCurrentUser()?.id;
 
-                // Add a title to the main content before mounting posts
+            
                 if (mainContent) {
                     mainContent.innerHTML = `
                         <h2 class="filter-title">Posts You Reacted To</h2>
                         <div id="posts-container"></div>
                     `;
 
-                    // Mount posts to the posts container
+                
                     postsComponent.mount(document.getElementById('posts-container'));
                 } else {
-                    // Fallback to mounting directly to main content
+                
                     postsComponent.mount();
                 }
 
-                // Highlight the active filter in the sidebar
+            
                 highlightActiveFilter('liked');
             } else {
-                // Show proper empty state or posts list
+            
                 showProperPostsState(posts, 'Posts You Reacted To');
             }
         })
@@ -872,11 +854,10 @@ function loadLikedPosts() {
         });
 }
 
-// Function to load posts commented on by the current user
 function loadCommentedPosts() {
     console.log('Loading commented posts...');
 
-    // Show loading state
+
     const mainContent = document.getElementById('main-content');
     if (mainContent) {
         mainContent.innerHTML = `
@@ -888,12 +869,12 @@ function loadCommentedPosts() {
     }
 
     fetch('/api/posts/commented', {
-        credentials: 'include' // Include cookies for auth
+        credentials: 'include'
     })
         .then(response => {
             if (!response.ok) {
                 if (response.status === 401) {
-                    // Unauthorized, redirect to login
+                
                     window.navigation.navigateTo('/signin');
                     throw new Error('Please sign in to view your commented posts');
                 }
@@ -904,34 +885,34 @@ function loadCommentedPosts() {
         .then(postsData => {
             console.log('Commented posts received:', postsData);
 
-            // Handle empty posts array or null data
+        
             const posts = Array.isArray(postsData) ? postsData :
                 (postsData && postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
 
             if (typeof PostsComponent === 'function') {
                 const postsComponent = new PostsComponent();
                 postsComponent.posts = posts;
-                postsComponent.isLoggedIn = true; // We already checked auth
+                postsComponent.isLoggedIn = true;
                 postsComponent.currentUserID = AuthService.getCurrentUser()?.id;
 
-                // Add a title to the main content before mounting posts
+            
                 if (mainContent) {
                     mainContent.innerHTML = `
                         <h2 class="filter-title">Posts You Commented On</h2>
                         <div id="posts-container"></div>
                     `;
 
-                    // Mount posts to the posts container
+                
                     postsComponent.mount(document.getElementById('posts-container'));
                 } else {
-                    // Fallback to mounting directly to main content
+                
                     postsComponent.mount();
                 }
 
-                // Highlight the active filter in the sidebar
+            
                 highlightActiveFilter('commented');
             } else {
-                // Show proper empty state or posts list
+            
                 showProperPostsState(posts, 'Posts You Commented On');
             }
         })
@@ -956,18 +937,17 @@ function loadCommentedPosts() {
         });
 }
 
-// Helper function to highlight active filter in the sidebar
 function highlightActiveFilter(filterType) {
     const filterNav = document.getElementById('filter-nav');
     if (!filterNav || !filterNav.querySelector) return;
 
-    // Remove active class from all links
+
     const allLinks = filterNav.querySelectorAll('.filter-link');
     allLinks.forEach(link => {
         link.classList.remove('active');
     });
 
-    // Add active class to the selected filter link
+
     if (filterType) {
         const selector = filterType === 'created' || filterType === 'liked' || filterType === 'commented'
             ? `.filter-link[data-filter="${filterType}"]`
@@ -980,8 +960,6 @@ function highlightActiveFilter(filterType) {
     }
 }
 
-// Show proper empty state or posts list (replacing showPostsPlaceholder)
-// Show proper empty state or posts list (replacing showPostsPlaceholder)
 function showProperPostsState(posts, title = 'Posts') {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
@@ -1016,15 +994,15 @@ function showProperPostsState(posts, title = 'Posts') {
                 <div class="posts-list">
         `;
 
-        // Create post cards
+    
         posts.forEach(post => {
-            // Handle different field name formats that might come from the API
+        
             const postId = post.ID || post.id;
             const title = post.Title || post.title || 'Untitled Post';
             const content = post.Content || post.content || 'No content';
             const author = post.Username || post.username || post.Author || post.author || 'Anonymous';
 
-            // Ensure content is a string before using substring
+        
             const contentStr = String(content);
             const contentPreview = contentStr.substring(0, 100) + (contentStr.length > 100 ? '...' : '');
 
@@ -1056,11 +1034,10 @@ function showProperPostsState(posts, title = 'Posts') {
     }
 }
 
-// Function to load a single post
 function loadSinglePost(postId) {
     console.log(`Loading single post with ID: ${postId}`);
 
-    // Show loading state
+
     const mainContent = document.getElementById('main-content');
     if (mainContent) {
         mainContent.innerHTML = `
@@ -1072,12 +1049,12 @@ function loadSinglePost(postId) {
     }
 
     fetch(`/api/posts/single?id=${postId}`, {
-        credentials: 'include' // Include cookies for auth
+        credentials: 'include'
     })
         .then(response => {
             if (!response.ok) {
                 if (response.status === 401) {
-                    // Unauthorized, redirect to login
+                
                     window.navigation.navigateTo('/signin');
                     throw new Error('Please sign in to view this post');
                 }
@@ -1092,16 +1069,16 @@ function loadSinglePost(postId) {
                 throw new Error('Post not found');
             }
 
-            // Create and mount single post component
+        
             if (typeof SinglePostComponent === 'function') {
                 const singlePostComponent = new SinglePostComponent(postId);
                 singlePostComponent.post = data.post;
                 singlePostComponent.comments = data.comments || [];
-                singlePostComponent.isLoggedIn = true; // We already checked auth
+                singlePostComponent.isLoggedIn = true;
                 singlePostComponent.currentUserID = AuthService.getCurrentUser()?.id;
                 singlePostComponent.mount();
             } else {
-                // Fallback if component doesn't exist
+            
                 showSinglePostFallback(data.post, data.comments || []);
             }
         })
@@ -1126,11 +1103,10 @@ function loadSinglePost(postId) {
         });
 }
 
-// Function to load posts for a specific category
 function loadCategoryPosts(categoryName) {
     console.log(`Loading posts for category: ${categoryName}`);
 
-    // Show loading state
+
     const mainContent = document.getElementById('main-content');
     if (mainContent) {
         mainContent.innerHTML = `
@@ -1142,12 +1118,12 @@ function loadCategoryPosts(categoryName) {
     }
 
     fetch(`/api/posts/category?name=${encodeURIComponent(categoryName)}`, {
-        credentials: 'include' // Include cookies for auth
+        credentials: 'include'
     })
         .then(response => {
             if (!response.ok) {
                 if (response.status === 401) {
-                    // Unauthorized, redirect to login
+                
                     window.navigation.navigateTo('/signin');
                     throw new Error('Please sign in to view category posts');
                 }
@@ -1158,34 +1134,34 @@ function loadCategoryPosts(categoryName) {
         .then(postsData => {
             console.log('Category posts received:', postsData);
 
-            // Handle empty posts array or null data
+        
             const posts = Array.isArray(postsData) ? postsData :
                 (postsData && postsData.posts && Array.isArray(postsData.posts)) ? postsData.posts : [];
 
             if (typeof PostsComponent === 'function') {
                 const postsComponent = new PostsComponent();
                 postsComponent.posts = posts;
-                postsComponent.isLoggedIn = true; // We already checked auth
+                postsComponent.isLoggedIn = true;
                 postsComponent.currentUserID = AuthService.getCurrentUser()?.id;
 
-                // Add a title to the main content before mounting posts
+            
                 if (mainContent) {
                     mainContent.innerHTML = `
                         <h2 class="filter-title">Category: ${categoryName}</h2>
                         <div id="posts-container"></div>
                     `;
 
-                    // Mount posts to the posts container
+                
                     postsComponent.mount(document.getElementById('posts-container'));
                 } else {
-                    // Fallback to mounting directly to main content
+                
                     postsComponent.mount();
                 }
 
-                // Highlight the active filter in the sidebar
+            
                 highlightActiveFilter(categoryName);
             } else {
-                // Show proper empty state or posts list
+            
                 showProperPostsState(posts, `Category: ${categoryName}`);
             }
         })
@@ -1210,12 +1186,11 @@ function loadCategoryPosts(categoryName) {
         });
 }
 
-// Fallback function to show a single post if component doesn't exist
 function showSinglePostFallback(post, comments) {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
 
-    // Extract post data with fallbacks
+
     const postId = post.ID || post.id;
     const title = post.Title || post.title || 'Untitled Post';
     const content = post.Content || post.content || 'No content';
@@ -1281,18 +1256,17 @@ function showSinglePostFallback(post, comments) {
     mainContent.innerHTML = html;
 }
 
-// Function to handle post click
 function handlePostClick(event) {
     let postId;
 
     if (typeof event === 'string') {
-        // If called with just the ID
+    
         postId = event;
     } else {
-        // If called from a click event
+    
         event.preventDefault();
 
-        // Find the post card element
+    
         const postCard = event.target.closest('.post-card');
         if (!postCard) return;
 
@@ -1304,11 +1278,10 @@ function handlePostClick(event) {
         return;
     }
 
-    // Navigate to the post
+
     window.navigation.navigateTo(`/?id=${postId}`);
 }
 
-// Function to get post ID from URL
 function getPostIdFromUrl() {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('id');
