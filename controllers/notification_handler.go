@@ -1,8 +1,9 @@
 package controllers
 
 import (
+	"database/sql"
 	"encoding/json"
-	"html/template"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -20,80 +21,28 @@ func NewNotificationHandler() *NotificationHandler {
 // ServeHTTP handles HTTP requests for notifications
 // Routes:
 // - GET /notifications - Display user notifications
+// - GET /api/notifications - Get notifications as JSON
 // - POST /notifications/mark-read - Mark a notification as read
 func (nh *NotificationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/notifications":
 		nh.handleGetNotifications(w, r)
-	case http.MethodPost:
-		if r.URL.Path == "/notifications/mark-read" {
-			nh.handleMarkAsRead(w, r)
-		} else {
-			utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
-		}
+	case r.Method == http.MethodGet && r.URL.Path == "/api/notifications":
+		nh.handleGetNotificationsJSON(w, r)
+	case r.Method == http.MethodPost && r.URL.Path == "/notifications/mark-read":
+		nh.handleMarkAsRead(w, r)
 	default:
 		utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
 	}
 }
 
 // handleGetNotifications displays the user's notifications page
-// Fetches all notifications for the authenticated user and marks them as read
+// Since we're using a SPA, this just serves the index.html file
 func (nh *NotificationHandler) handleGetNotifications(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("session_token")
-	if err != nil {
-		http.Redirect(w, r, "/signin", http.StatusSeeOther)
-		return
-	}
-
-	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
-	if err != nil {
-		http.Redirect(w, r, "/signin", http.StatusSeeOther)
-		return
-	}
-
-	notifications, unreadCount, err := nh.getUserNotifications(userID)
-	if err != nil {
-		log.Printf("Error fetching notifications: %v", err)
-		utils.RenderErrorPage(w, http.StatusInternalServerError, utils.ErrInternalServer)
-		return
-	}
-
-	// Mark all notifications as read when viewing the page
-	if unreadCount > 0 {
-		_, err = utils.GlobalDB.Exec(`
-            UPDATE notifications
-            SET is_read = true
-            WHERE user_id = ? AND is_read = false
-        `, userID)
-		if err != nil {
-			log.Printf("Error marking notifications as read: %v", err)
-		}
-	}
-
-	data := struct {
-		Notifications []utils.Notification
-		UnreadCount   int
-		IsLoggedIn    bool
-		CurrentUserID string
-	}{
-		Notifications: notifications,
-		UnreadCount:   0, // Set to 0 since we've marked all as read
-		IsLoggedIn:    true,
-		CurrentUserID: userID,
-	}
-
-	tmpl, err := template.ParseFiles("templates/notifications.html")
-	if err != nil {
-		log.Printf("Error parsing template: %v", err)
-		utils.RenderErrorPage(w, http.StatusInternalServerError, utils.ErrTemplateLoad)
-		return
-	}
-
-	if err := tmpl.Execute(w, data); err != nil {
-		log.Printf("Error executing template: %v", err)
-		utils.RenderErrorPage(w, http.StatusInternalServerError, utils.ErrTemplateExec)
-	}
+	// Just serve the SPA index page
+	http.ServeFile(w, r, "templates/index.html")
 }
+
 // getUserNotifications retrieves all notifications for a user
 // Returns the notifications, unread count, and any error
 // @param userID - The ID of the user to get notifications for
@@ -102,7 +51,7 @@ func (nh *NotificationHandler) handleGetNotifications(w http.ResponseWriter, r *
 // @returns error - Any error that occurred
 func (nh *NotificationHandler) getUserNotifications(userID string) ([]utils.Notification, int, error) {
 	rows, err := utils.GlobalDB.Query(`
-		SELECT n.id, n.type, n.created_at, n.post_id, u.username, u.profile_pic, n.is_read
+		SELECT n.id, n.type, n.created_at, n.post_id, u.nickname, u.profile_pic, n.is_read
 		FROM notifications n
 		JOIN users u ON n.actor_id = u.id
 		WHERE n.user_id = ?
@@ -118,11 +67,22 @@ func (nh *NotificationHandler) getUserNotifications(userID string) ([]utils.Noti
 
 	for rows.Next() {
 		var n utils.Notification
-		err := rows.Scan(&n.ID, &n.Type, &n.CreatedAt, &n.PostID, &n.ActorName, &n.ActorProfilePic, &n.IsRead)
+		var profilePic sql.NullString // Use sql.NullString to handle NULL values
+
+		// Scan into the notification struct and the nullable profile_pic
+		err := rows.Scan(&n.ID, &n.Type, &n.CreatedAt, &n.PostID, &n.ActorName, &profilePic, &n.IsRead)
 		if err != nil {
 			log.Printf("Error scanning notification: %v", err)
 			continue
 		}
+
+		// Handle the nullable profile_pic
+		if profilePic.Valid {
+			n.ActorProfilePic = profilePic.String
+		} else {
+			n.ActorProfilePic = "" // Default empty string for NULL profile pics
+		}
+
 		if !n.IsRead {
 			unreadCount++
 		}
@@ -168,6 +128,48 @@ func (nh *NotificationHandler) handleMarkAsRead(w http.ResponseWriter, r *http.R
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// handleGetNotificationsJSON returns notifications as JSON
+// Used by the frontend to fetch notifications via AJAX
+func (nh *NotificationHandler) handleGetNotificationsJSON(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Unauthorized - No session found",
+		})
+		return
+	}
+
+	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Unauthorized - Invalid session",
+		})
+		return
+	}
+
+	notifications, unreadCount, err := nh.getUserNotifications(userID)
+	if err != nil {
+		log.Printf("Error fetching notifications: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Error fetching notifications: %v", err),
+		})
+		return
+	}
+
+	// Return notifications without marking them as read
+	// (unlike the HTML endpoint which marks them as read)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"Notifications": notifications,
+		"UnreadCount":   unreadCount,
+		"CurrentUserID": userID,
+	})
 }
 
 // GetUnreadCount returns the number of unread notifications for a user
