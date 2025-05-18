@@ -51,7 +51,7 @@ func (nh *NotificationHandler) handleGetNotifications(w http.ResponseWriter, r *
 // @returns error - Any error that occurred
 func (nh *NotificationHandler) getUserNotifications(userID string) ([]utils.Notification, int, error) {
 	rows, err := utils.GlobalDB.Query(`
-		SELECT n.id, n.type, n.created_at, n.post_id, u.nickname, u.profile_pic, n.is_read
+		SELECT n.id, n.type, n.created_at, n.post_id, u.nickname, u.profile_pic, n.is_read, n.actor_id
 		FROM notifications n
 		JOIN users u ON n.actor_id = u.id
 		WHERE n.user_id = ?
@@ -68,9 +68,10 @@ func (nh *NotificationHandler) getUserNotifications(userID string) ([]utils.Noti
 	for rows.Next() {
 		var n utils.Notification
 		var profilePic sql.NullString // Use sql.NullString to handle NULL values
+		var actorID string            // Store the actor ID for message notifications
 
 		// Scan into the notification struct and the nullable profile_pic
-		err := rows.Scan(&n.ID, &n.Type, &n.CreatedAt, &n.PostID, &n.ActorName, &profilePic, &n.IsRead)
+		err := rows.Scan(&n.ID, &n.Type, &n.CreatedAt, &n.PostID, &n.ActorName, &profilePic, &n.IsRead, &actorID)
 		if err != nil {
 			log.Printf("Error scanning notification: %v", err)
 			continue
@@ -82,6 +83,9 @@ func (nh *NotificationHandler) getUserNotifications(userID string) ([]utils.Noti
 		} else {
 			n.ActorProfilePic = "" // Default empty string for NULL profile pics
 		}
+
+		// Store the actor ID for message notifications
+		n.ActorID = actorID
 
 		if !n.IsRead {
 			unreadCount++
