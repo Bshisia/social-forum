@@ -6,7 +6,7 @@ class NavbarComponent {
         this.currentUserID = currentUserID;
         this.unreadCount = unreadCount;
         this.nickname = nickname;
-        
+
         // If nickname is not provided, try to get it from AuthService
         if (!this.nickname && this.isLoggedIn) {
             const currentUser = AuthService.getCurrentUser();
@@ -27,7 +27,7 @@ class NavbarComponent {
                 this.nickname = 'User';
             }
         }
-        
+
         const template = `
             <nav class="navbar">
                 <div class="nav-container">
@@ -48,7 +48,7 @@ class NavbarComponent {
                     </div>
                 </div>
             </nav>`;
-    
+
         return template;
     }
 
@@ -94,7 +94,7 @@ class NavbarComponent {
                     </ul>
                 </div>
             </div>
-            
+
             ${this.isLoggedIn ? `
             <div class="mobile-menu-section">
                 <button class="menu-toggle-btn">
@@ -117,9 +117,28 @@ class NavbarComponent {
             console.warn('Cannot mount NavbarComponent: element is null');
             return;
         }
-        
+
+        // Make the component accessible globally for event handlers
+        window.navbarComponent = this;
+
         element.innerHTML = this.render();
         this.attachEventListeners();
+    }
+
+    /**
+     * Update the notification count in the navbar
+     * @param {number} count - The new notification count
+     */
+    updateNotificationCount(count) {
+        console.log('NavbarComponent: Updating notification count to', count);
+        this.unreadCount = count;
+
+        // Update the notification dot in the DOM
+        const navbarElement = document.getElementById('navbar');
+        if (navbarElement) {
+            navbarElement.innerHTML = this.render();
+            this.attachEventListeners();
+        }
     }
 
     attachEventListeners() {
@@ -153,7 +172,7 @@ class NavbarComponent {
                 });
             });
         }
-        
+
         // Toggle icon for menu buttons
         menuToggles.forEach(toggle => {
             if (toggle && toggle.nextElementSibling) {
