@@ -5,6 +5,7 @@
 
 import AuthService from '../../services/auth-service.js';
 import { markAsRead as markNotificationAsRead } from '/static/notification.js';
+import eventBus from '../../utils/event-bus.js';
 
 class NotificationsComponent {
     constructor() {
@@ -100,22 +101,35 @@ class NotificationsComponent {
      * Update the notification count in the navbar
      */
     updateNotificationCount() {
-        const dot = document.querySelector('.notification-dot');
-        if (this.unreadCount > 0) {
-            if (dot) {
-                dot.textContent = this.unreadCount;
-            } else {
-                const notificationBtn = document.querySelector('.notification-btn');
-                if (notificationBtn) {
-                    const newDot = document.createElement('span');
-                    newDot.className = 'notification-dot';
-                    newDot.textContent = this.unreadCount;
-                    notificationBtn.appendChild(newDot);
+        console.log('NotificationsComponent: Updating notification count to', this.unreadCount);
+
+        // Use the global navbar component if available
+        if (window.navbarComponent && typeof window.navbarComponent.updateNotificationCount === 'function') {
+            console.log('Using navbar component to update notification count');
+            window.navbarComponent.updateNotificationCount(this.unreadCount);
+        } else {
+            console.log('Navbar component not available, updating DOM directly');
+
+            const dot = document.querySelector('.notification-dot');
+            if (this.unreadCount > 0) {
+                if (dot) {
+                    dot.textContent = this.unreadCount;
+                } else {
+                    const notificationBtn = document.querySelector('.notification-btn');
+                    if (notificationBtn) {
+                        const newDot = document.createElement('span');
+                        newDot.className = 'notification-dot';
+                        newDot.textContent = this.unreadCount;
+                        notificationBtn.appendChild(newDot);
+                    }
                 }
+            } else if (dot) {
+                dot.remove();
             }
-        } else if (dot) {
-            dot.remove();
         }
+
+        // Also emit an event for other components that might need to know about the count change
+        eventBus.emit('update_notification_count', this.unreadCount);
     }
 
     /**
@@ -259,6 +273,55 @@ class NotificationsComponent {
         // Show loading state
         this.mainContainer.innerHTML = this.render();
 
+        // Subscribe to real-time notification events
+        this.notificationEventUnsubscribe = eventBus.on('new_notification', (data) => {
+            console.log('Received real-time notification:', data);
+
+            // Update the unread count
+            this.unreadCount = data.unreadCount;
+
+            // Check if the notification is already in the list
+            const existingIndex = this.notifications.findIndex(n => n.id === data.notification.id);
+
+            if (existingIndex >= 0) {
+                // Update existing notification
+                this.notifications[existingIndex] = {
+                    ...this.notifications[existingIndex],
+                    ...data.notification,
+                    isRead: false
+                };
+            } else {
+                // Add new notification to the beginning of the list
+                this.notifications.unshift({
+                    id: data.notification.id,
+                    type: data.notification.type,
+                    postID: data.notification.postID || 0,
+                    actorName: data.notification.actorName,
+                    actorID: data.notification.actorID,
+                    actorProfilePic: data.notification.actorProfilePic,
+                    createdAtFormatted: 'Just now',
+                    isRead: false
+                });
+            }
+
+            // Re-render the component
+            this.mainContainer.innerHTML = this.render();
+
+            // Show a toast notification
+            this.showToastNotification(data.notification);
+        });
+
+        // Subscribe to notification count updates
+        this.countUpdateUnsubscribe = eventBus.on('update_notification_count', (count) => {
+            console.log('Received notification count update:', count);
+            this.unreadCount = count;
+
+            // Update the UI if we're on the notifications page
+            if (window.location.pathname === '/notifications') {
+                this.mainContainer.innerHTML = this.render();
+            }
+        });
+
         // Fetch notifications and update the view
         this.fetchNotifications()
             .then(() => {
@@ -278,12 +341,86 @@ class NotificationsComponent {
     }
 
     /**
+     * Show a toast notification for a new notification
+     * @param {Object} notification - The notification object
+     */
+    showToastNotification(notification) {
+        // Check if toast container exists, create if not
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container';
+            document.body.appendChild(toastContainer);
+        }
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = 'toast notification-toast';
+
+        // Create toast content
+        const message = this.formatNotificationMessage(notification);
+        const link = this.getNotificationLink(notification);
+
+        toast.innerHTML = `
+            <div class="toast-header">
+                <strong>New Notification</strong>
+                <button class="toast-close">&times;</button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+            <div class="toast-footer">
+                <button class="toast-action">View</button>
+            </div>
+        `;
+
+        // Add to container
+        toastContainer.appendChild(toast);
+
+        // Add event listeners
+        toast.querySelector('.toast-close').addEventListener('click', () => {
+            toast.classList.add('toast-hiding');
+            setTimeout(() => toast.remove(), 300);
+        });
+
+        toast.querySelector('.toast-action').addEventListener('click', () => {
+            window.navigation.navigateTo(link);
+            toast.remove();
+        });
+
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.classList.add('toast-hiding');
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 5000);
+
+        // Add animation class after a small delay to trigger animation
+        setTimeout(() => {
+            toast.classList.add('toast-show');
+        }, 10);
+    }
+
+    /**
      * Clean up when component is unmounted
      */
     unmount() {
         // Remove global reference
         if (window.notificationsComponent === this) {
             delete window.notificationsComponent;
+        }
+
+        // Unsubscribe from event bus
+        if (this.notificationEventUnsubscribe) {
+            this.notificationEventUnsubscribe();
+            this.notificationEventUnsubscribe = null;
+        }
+
+        // Unsubscribe from count update events
+        if (this.countUpdateUnsubscribe) {
+            this.countUpdateUnsubscribe();
+            this.countUpdateUnsubscribe = null;
         }
     }
 }
