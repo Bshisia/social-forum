@@ -1,14 +1,28 @@
 package handlers
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
 	"sync"
-	"database/sql"
-    "time"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+// ClientConnection represents a WebSocket connection with a mutex for thread safety
+type ClientConnection struct {
+	Conn  *websocket.Conn
+	Mutex sync.Mutex // Protects writes to this connection
+}
+
+// WriteJSON safely writes a JSON message to the WebSocket connection
+// It uses a mutex to ensure only one goroutine can write at a time
+func (c *ClientConnection) WriteJSON(v interface{}) error {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	return c.Conn.WriteJSON(v)
+}
 
 // WebSocket configuration and client management
 var (
@@ -21,7 +35,7 @@ var (
 		},
 	}
 	// clients maps user IDs to their WebSocket connections
-	clients    = make(map[string]*websocket.Conn)
+	clients = make(map[string]*ClientConnection)
 	// clientsMux protects concurrent access to the clients map
 	clientsMux sync.RWMutex
 )
@@ -37,9 +51,9 @@ type StatusMessage struct {
 type NewUserMessage struct {
 	Type string `json:"type"`
 	User struct {
-		ID        string `json:"id"`
-		Nickname  string `json:"nickname"`
-		IsOnline  bool   `json:"is_online"`
+		ID       string `json:"id"`
+		Nickname string `json:"nickname"`
+		IsOnline bool   `json:"is_online"`
 	} `json:"user"`
 }
 
@@ -48,6 +62,14 @@ type NewMessageNotification struct {
 	Type       string `json:"type"`
 	SenderID   string `json:"sender_id"`
 	ReceiverID string `json:"receiver_id"`
+}
+
+// NotificationMessage represents a notification event
+type NotificationMessage struct {
+	Type         string      `json:"type"`
+	Notification interface{} `json:"notification"`
+	UnreadCount  int         `json:"unread_count"`
+	ReceiverID   string      `json:"receiver_id"`
 }
 
 // UsersListMessage represents a list of all users and their statuses
@@ -79,9 +101,14 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	defer conn.Close()
 
+	// Create a new client connection with mutex
+	clientConn := &ClientConnection{
+		Conn: conn,
+	}
+
 	// Register client
 	clientsMux.Lock()
-	clients[userID] = conn
+	clients[userID] = clientConn
 	clientsMux.Unlock()
 
 	// Broadcast user online status
@@ -119,20 +146,30 @@ func broadcastUserStatus(userID string, isOnline bool) {
 		IsOnline: isOnline,
 	}
 
-	clientsMux.RLock()
-	defer clientsMux.RUnlock()
-
-	for _, conn := range clients {
-		err := conn.WriteJSON(status)
-		if err != nil {
-			log.Printf("Error broadcasting status: %v", err)
-			continue
+	// Use a separate goroutine for broadcasting to avoid blocking
+	go func() {
+		clientsMux.RLock()
+		clientsCopy := make(map[string]*ClientConnection)
+		for id, conn := range clients {
+			clientsCopy[id] = conn
 		}
-	}
-	log.Printf("Broadcasted status update for user %s: online=%v", userID, isOnline)
+		clientsMux.RUnlock()
 
-	// After sending the status update, also broadcast the updated users list
-	go BroadcastUsersList()
+		// Now we can safely iterate through our copy without holding the lock
+		for _, conn := range clientsCopy {
+			err := conn.WriteJSON(status)
+			if err != nil {
+				log.Printf("Error broadcasting status: %v", err)
+				continue
+			}
+		}
+		log.Printf("Broadcasted status update for user %s: online=%v", userID, isOnline)
+
+		// After sending the status update, also broadcast the updated users list
+		// Use a small delay to avoid concurrent writes
+		time.Sleep(100 * time.Millisecond)
+		BroadcastUsersList()
+	}()
 }
 
 // BroadcastNewUser notifies all connected clients about a new user registration
@@ -146,20 +183,30 @@ func BroadcastNewUser(userID string, nickname string) {
 	newUserMsg.User.Nickname = nickname
 	newUserMsg.User.IsOnline = true
 
-	clientsMux.RLock()
-	defer clientsMux.RUnlock()
-
-	for _, conn := range clients {
-		err := conn.WriteJSON(newUserMsg)
-		if err != nil {
-			log.Printf("Error broadcasting new user notification: %v", err)
-			continue
+	// Use a separate goroutine for broadcasting to avoid blocking
+	go func() {
+		clientsMux.RLock()
+		clientsCopy := make(map[string]*ClientConnection)
+		for id, conn := range clients {
+			clientsCopy[id] = conn
 		}
-	}
-	log.Printf("Broadcasted new user notification for user %s", userID)
+		clientsMux.RUnlock()
 
-	// After sending the notification, also broadcast the updated users list
-	go BroadcastUsersList()
+		// Now we can safely iterate through our copy without holding the lock
+		for _, conn := range clientsCopy {
+			err := conn.WriteJSON(newUserMsg)
+			if err != nil {
+				log.Printf("Error broadcasting new user notification: %v", err)
+				continue
+			}
+		}
+		log.Printf("Broadcasted new user notification for user %s", userID)
+
+		// After sending the notification, also broadcast the updated users list
+		// Use a small delay to avoid concurrent writes
+		time.Sleep(100 * time.Millisecond)
+		BroadcastUsersList()
+	}()
 }
 
 // BroadcastNewMessage notifies clients that a new message has been sent
@@ -172,20 +219,118 @@ func BroadcastNewMessage(senderID string, receiverID string) {
 		ReceiverID: receiverID,
 	}
 
-	clientsMux.RLock()
-	defer clientsMux.RUnlock()
-
-	for _, conn := range clients {
-		err := conn.WriteJSON(notification)
-		if err != nil {
-			log.Printf("Error broadcasting message notification: %v", err)
-			continue
+	// Use a separate goroutine for broadcasting to avoid blocking
+	go func() {
+		clientsMux.RLock()
+		clientsCopy := make(map[string]*ClientConnection)
+		for id, conn := range clients {
+			clientsCopy[id] = conn
 		}
-	}
-	log.Printf("Broadcasted message notification from %s to %s", senderID, receiverID)
+		clientsMux.RUnlock()
 
-	// After sending the notification, also broadcast the updated users list
-	go BroadcastUsersList()
+		// Now we can safely iterate through our copy without holding the lock
+		for _, conn := range clientsCopy {
+			err := conn.WriteJSON(notification)
+			if err != nil {
+				log.Printf("Error broadcasting message notification: %v", err)
+				continue
+			}
+		}
+		log.Printf("Broadcasted message notification from %s to %s", senderID, receiverID)
+
+		// After sending the notification, also broadcast the updated users list
+		// Use a small delay to avoid concurrent writes
+		time.Sleep(100 * time.Millisecond)
+		BroadcastUsersList()
+
+		// Also broadcast a real-time notification to the receiver
+		// Use another small delay to avoid concurrent writes
+		time.Sleep(100 * time.Millisecond)
+		// Call directly since BroadcastNotification already uses a goroutine internally
+		BroadcastNotification(receiverID, senderID, "message")
+	}()
+}
+
+// BroadcastNotification sends a real-time notification to a specific user
+// receiverID: the user who should receive the notification
+// actorID: the user who triggered the notification (sender, commenter, etc.)
+// notificationType: the type of notification (message, like, comment, etc.)
+func BroadcastNotification(receiverID string, actorID string, notificationType string) {
+	// Use a separate goroutine to avoid blocking and potential deadlocks
+	go func() {
+		log.Printf("Broadcasting %s notification from %s to %s", notificationType, actorID, receiverID)
+
+		// Get the notification details from the database
+		var notificationID int
+		var unreadCount int
+		var actorName string
+		var profilePic sql.NullString
+
+		// First, get the latest notification of this type
+		err := GlobalDB.QueryRow(`
+			SELECT n.id, u.nickname, u.profile_pic
+			FROM notifications n
+			JOIN users u ON n.actor_id = u.id
+			WHERE n.user_id = ? AND n.actor_id = ? AND n.type = ?
+			ORDER BY n.created_at DESC
+			LIMIT 1
+		`, receiverID, actorID, notificationType).Scan(&notificationID, &actorName, &profilePic)
+
+		if err != nil {
+			log.Printf("Error fetching notification details: %v", err)
+			return
+		}
+
+		// Get the unread count
+		err = GlobalDB.QueryRow(`
+			SELECT COUNT(*)
+			FROM notifications
+			WHERE user_id = ? AND is_read = false
+		`, receiverID).Scan(&unreadCount)
+
+		if err != nil {
+			log.Printf("Error fetching unread count: %v", err)
+			return
+		}
+
+		// Create notification data
+		var profilePicStr string
+		if profilePic.Valid {
+			profilePicStr = profilePic.String
+		}
+
+		notificationData := map[string]interface{}{
+			"id":              notificationID,
+			"type":            notificationType,
+			"actorName":       actorName,
+			"actorID":         actorID,
+			"actorProfilePic": profilePicStr,
+		}
+
+		// Create the notification message
+		message := NotificationMessage{
+			Type:         "new_notification",
+			Notification: notificationData,
+			UnreadCount:  unreadCount,
+			ReceiverID:   receiverID,
+		}
+
+		// Send only to the specific receiver
+		clientsMux.RLock()
+		conn, exists := clients[receiverID]
+		clientsMux.RUnlock()
+
+		if exists {
+			err := conn.WriteJSON(message)
+			if err != nil {
+				log.Printf("Error sending notification to user %s: %v", receiverID, err)
+				return
+			}
+			log.Printf("Successfully sent %s notification to user %s", notificationType, receiverID)
+		} else {
+			log.Printf("User %s is not connected, notification will be delivered when they connect", receiverID)
+		}
+	}()
 }
 
 // TriggerUsersListBroadcast is a handler that can be called from HTTP endpoints
@@ -225,17 +370,17 @@ func BroadcastUsersList() {
 	var users []map[string]interface{}
 	for rows.Next() {
 		var (
-			id        string
-			nickname  string
-			email     string
-			firstName sql.NullString
-			lastName  sql.NullString
-			age       sql.NullInt64
-			gender    sql.NullString
+			id         string
+			nickname   string
+			email      string
+			firstName  sql.NullString
+			lastName   sql.NullString
+			age        sql.NullInt64
+			gender     sql.NullString
 			profilePic sql.NullString
-			createdAt time.Time
-			isOnline  bool
-			lastSeen  sql.NullTime
+			createdAt  time.Time
+			isOnline   bool
+			lastSeen   sql.NullTime
 		)
 
 		err := rows.Scan(
@@ -248,10 +393,10 @@ func BroadcastUsersList() {
 		}
 
 		user := map[string]interface{}{
-			"ID":        id,
-			"UserName":  nickname,
-			"Email":     email,
-			"isOnline":  isOnline,
+			"ID":       id,
+			"UserName": nickname,
+			"Email":    email,
+			"isOnline": isOnline,
 		}
 
 		if profilePic.Valid {
@@ -275,9 +420,14 @@ func BroadcastUsersList() {
 
 	// Broadcast to all clients
 	clientsMux.RLock()
-	defer clientsMux.RUnlock()
+	clientsCopy := make(map[string]*ClientConnection)
+	for id, conn := range clients {
+		clientsCopy[id] = conn
+	}
+	clientsMux.RUnlock()
 
-	for _, conn := range clients {
+	// Now we can safely iterate through our copy without holding the lock
+	for _, conn := range clientsCopy {
 		err := conn.WriteJSON(message)
 		if err != nil {
 			log.Printf("Error broadcasting users list: %v", err)
