@@ -29,37 +29,32 @@ class NotificationsComponent {
                 this.unreadCount = parseInt(notificationDot.textContent) || 0;
             }
 
-            // Create some sample notifications for demonstration
-            // In a real implementation, we would fetch these from the server
-            this.notifications = [
-                {
-                    id: 1,
-                    type: 'like',
-                    postID: 1,
-                    actorName: 'John Doe',
-                    actorProfilePic: '',
-                    createdAtFormatted: '2 hours ago',
-                    isRead: false
+            // Fetch real notifications from the server using the API endpoint
+            const response = await fetch('/api/notifications', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
-                {
-                    id: 2,
-                    type: 'comment',
-                    postID: 2,
-                    actorName: 'Jane Smith',
-                    actorProfilePic: '',
-                    createdAtFormatted: '1 day ago',
-                    isRead: true
-                },
-                {
-                    id: 3,
-                    type: 'mention',
-                    postID: 3,
-                    actorName: 'Alex Johnson',
-                    actorProfilePic: '',
-                    createdAtFormatted: '3 days ago',
-                    isRead: false
-                }
-            ];
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch notifications: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data && data.Notifications) {
+                this.notifications = data.Notifications;
+                this.unreadCount = data.UnreadCount || 0;
+            } else if (data && data.error) {
+                throw new Error(data.error);
+            } else {
+                // If the response doesn't have the expected structure
+                console.warn('Unexpected response structure:', data);
+                this.notifications = [];
+            }
 
             this.isLoading = false;
             return this.notifications;
