@@ -26,6 +26,7 @@ func GetChatUsersHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Fetching chat users for user ID: %s", currentUserID)
 
 	// Query all users with their last message timestamp
+	// Sort by last message time (like Discord), with alphabetical fallback for users without messages
 	rows, err := GlobalDB.Query(`
 		SELECT u.id, u.nickname, u.profile_pic, u.is_online,
 			   (SELECT MAX(sent_at)
@@ -35,11 +36,14 @@ func GetChatUsersHandler(w http.ResponseWriter, r *http.Request) {
 		FROM users u
 		WHERE u.id != ?
 		ORDER BY
+			-- First, put users with messages at the top
 			CASE WHEN (SELECT MAX(sent_at)
 					  FROM messages
 					  WHERE (sender_id = u.id AND receiver_id = ?)
 						 OR (sender_id = ? AND receiver_id = u.id)) IS NULL THEN 1 ELSE 0 END,
+			-- Then sort by most recent message (like Discord)
 			last_message_time DESC,
+			-- Finally, sort alphabetically for users without messages
 			nickname ASC
 	`, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID)
 	if err != nil {
