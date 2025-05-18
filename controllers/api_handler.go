@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	handlers "forum/authentication"
 	"forum/utils"
 )
 
@@ -732,15 +733,22 @@ func (ah *APIHandler) handleReaction(w http.ResponseWriter, r *http.Request) {
 
 	// Get final counts
 	var likes, dislikes int
+	var postOwnerID string
 	err = utils.GlobalDB.QueryRow(`
-        SELECT likes, dislikes
+        SELECT likes, dislikes, user_id
         FROM posts
         WHERE id = ?
-    `, req.PostID).Scan(&likes, &dislikes)
+    `, req.PostID).Scan(&likes, &dislikes, &postOwnerID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get counts"})
 		return
+	}
+
+	// Broadcast notification for likes (not for dislikes or removals)
+	if req.Like == 1 && postOwnerID != userID {
+		// Import the BroadcastNotification function
+		handlers.BroadcastNotification(postOwnerID, userID, "like")
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -793,6 +801,17 @@ func (ah *APIHandler) handleComment(w http.ResponseWriter, r *http.Request) {
         WHERE id = ?`, req.PostID)
 	if err != nil {
 		log.Printf("Error updating comment count: %v", err)
+	}
+
+	// Get post owner ID to send notification
+	var postOwnerID string
+	err = utils.GlobalDB.QueryRow(`
+		SELECT user_id FROM posts WHERE id = ?
+	`, req.PostID).Scan(&postOwnerID)
+
+	// Send notification if post owner is not the commenter
+	if err == nil && postOwnerID != userID {
+		handlers.BroadcastNotification(postOwnerID, userID, "comment")
 	}
 
 	w.WriteHeader(http.StatusOK)
