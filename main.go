@@ -61,6 +61,12 @@ func main() {
 	http.HandleFunc("/api/chat/send", handlers.SendMessageHandler)
 	http.HandleFunc("/api/chat/users", handlers.GetChatUsersHandler)
 
+	// Notification routes
+	notificationHandler := controllers.NewNotificationHandler()
+	http.Handle("/notifications", notificationHandler)
+	http.Handle("/api/notifications", notificationHandler)
+	http.Handle("/notifications/mark-read", notificationHandler)
+
 	// SPA catch-all route - serve index.html for all other routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") ||
