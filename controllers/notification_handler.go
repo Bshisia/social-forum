@@ -22,6 +22,7 @@ func NewNotificationHandler() *NotificationHandler {
 // Routes:
 // - GET /notifications - Display user notifications
 // - GET /api/notifications - Get notifications as JSON
+// - GET /api/notifications/count - Get unread notification count as JSON
 // - POST /notifications/mark-read - Mark a notification as read
 func (nh *NotificationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
@@ -29,6 +30,8 @@ func (nh *NotificationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		nh.handleGetNotifications(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/notifications":
 		nh.handleGetNotificationsJSON(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/notifications/count":
+		nh.handleGetNotificationCount(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/notifications/mark-read":
 		nh.handleMarkAsRead(w, r)
 	default:
@@ -189,4 +192,42 @@ func (nh *NotificationHandler) GetUnreadCount(userID string) (int, error) {
 	`, userID).Scan(&count)
 
 	return count, err
+}
+
+// handleGetNotificationCount returns the unread notification count as JSON
+// Used by the frontend to fetch the notification count via AJAX
+func (nh *NotificationHandler) handleGetNotificationCount(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Unauthorized - No session found",
+		})
+		return
+	}
+
+	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Unauthorized - Invalid session",
+		})
+		return
+	}
+
+	count, err := nh.GetUnreadCount(userID)
+	if err != nil {
+		log.Printf("Error fetching notification count: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Error fetching notification count: %v", err),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"count": count,
+	})
 }
