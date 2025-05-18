@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -344,6 +346,127 @@ func HandleChatMessage(conn *websocket.Conn, message map[string]interface{}) {
 
 	// Broadcast to all clients that a new message was sent to update their user lists
 	go BroadcastMessageNotification(sender, recipient)
+}
+
+// MarkMessagesAsReadHandler handles marking messages as read
+func MarkMessagesAsReadHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("MarkMessagesAsReadHandler called with method: %s", r.Method)
+
+	// Only allow POST method
+	if r.Method != http.MethodPost {
+		log.Printf("Method not allowed: %s", r.Method)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse request body
+	var requestBody struct {
+		ReceiverID string `json:"receiver_id"` // The user who is reading the messages
+		SenderID   string `json:"sender_id"`   // The user who sent the messages
+	}
+
+	// Read the request body for logging
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Error reading request body: %v", err)
+		http.Error(w, "Error reading request body", http.StatusBadRequest)
+		return
+	}
+
+	// Log the raw request body
+	log.Printf("Raw request body: %s", string(bodyBytes))
+
+	// Create a new reader with the same bytes for json.Decoder
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		log.Printf("Error decoding request body: %v", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Decoded request body: %+v", requestBody)
+
+	// Validate request data
+	if requestBody.ReceiverID == "" || requestBody.SenderID == "" {
+		log.Printf("Missing required fields: receiver_id=%s, sender_id=%s", requestBody.ReceiverID, requestBody.SenderID)
+		http.Error(w, "receiver_id and sender_id are required", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Marking messages as read: From %s to %s", requestBody.SenderID, requestBody.ReceiverID)
+
+	// Check if there are any unread messages
+	var unreadCount int
+	err = GlobalDB.QueryRow(`
+		SELECT COUNT(*)
+		FROM messages
+		WHERE sender_id = ? AND receiver_id = ? AND read = 0
+	`, requestBody.SenderID, requestBody.ReceiverID).Scan(&unreadCount)
+
+	if err != nil {
+		log.Printf("Error checking unread messages: %v", err)
+	} else {
+		log.Printf("Found %d unread messages from %s to %s", unreadCount, requestBody.SenderID, requestBody.ReceiverID)
+	}
+
+	// Update messages in the database
+	result, err := GlobalDB.Exec(`
+		UPDATE messages
+		SET read = 1
+		WHERE sender_id = ? AND receiver_id = ? AND read = 0
+	`, requestBody.SenderID, requestBody.ReceiverID)
+	if err != nil {
+		log.Printf("Database error marking messages as read: %v", err)
+		http.Error(w, "Failed to mark messages as read", http.StatusInternalServerError)
+		return
+	}
+
+	// Get the number of rows affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("Error getting rows affected: %v", err)
+	} else {
+		log.Printf("Marked %d messages as read", rowsAffected)
+	}
+
+	// Broadcast a message_read event to the sender
+	if rowsAffected > 0 {
+		log.Printf("Broadcasting message_read event from %s to %s", requestBody.ReceiverID, requestBody.SenderID)
+
+		// Create a message_read notification
+		readNotification := map[string]interface{}{
+			"type":       "message_read",
+			"senderID":   requestBody.SenderID,   // The original sender of the messages
+			"receiverID": requestBody.ReceiverID, // The person who read the messages
+		}
+
+		// Find the sender's connection and send the notification
+		clientsMux.RLock()
+		senderConn, exists := clients[requestBody.SenderID]
+		clientsMux.RUnlock()
+
+		if exists {
+			err = senderConn.WriteJSON(readNotification)
+			if err != nil {
+				log.Printf("Error sending message_read notification to sender: %v", err)
+			} else {
+				log.Printf("Successfully sent message_read notification to user %s", requestBody.SenderID)
+			}
+		} else {
+			log.Printf("Sender %s not connected, could not send message_read notification", requestBody.SenderID)
+		}
+	}
+
+	// Return success response
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"success":      true,
+		"rowsAffected": rowsAffected,
+		"message":      "Messages marked as read",
+	}
+	log.Printf("Sending response: %+v", response)
+	json.NewEncoder(w).Encode(response)
 }
 
 // BroadcastMessageNotification notifies all clients that a new message has been sent
