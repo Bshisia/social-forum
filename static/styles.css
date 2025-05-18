@@ -2753,7 +2753,7 @@ input[type="file"] {
 }
 
 .notification-item.unread {
-  background-color: #f0f7ff;
+  background-color: #444;
 }
 
 .notification-item:hover {
