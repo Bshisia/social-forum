@@ -60,6 +60,7 @@ func main() {
 	http.HandleFunc("/api/chat/history", handlers.GetChatHistoryHandler)
 	http.HandleFunc("/api/chat/send", handlers.SendMessageHandler)
 	http.HandleFunc("/api/chat/users", handlers.GetChatUsersHandler)
+	http.HandleFunc("/api/chat/mark-read", handlers.MarkMessagesAsReadHandler)
 
 	// Notification routes
 	notificationHandler := controllers.NewNotificationHandler()
