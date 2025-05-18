@@ -524,13 +524,40 @@ function initializeUI() {
     const navbarElement = document.getElementById('navbar');
     if (navbarElement) {
         try {
-            const navbar = new NavbarComponent(
-                true,
-                currentUser.id,
-                0,
-                currentUser.nickname
-            );
-            navbar.mount(navbarElement);
+            // Fetch the notification count first
+            fetch('/api/notifications/count', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                const unreadCount = data.count || 0;
+                console.log('Initial notification count:', unreadCount);
+
+                // Initialize navbar with the correct notification count
+                const navbar = new NavbarComponent(
+                    true,
+                    currentUser.id,
+                    unreadCount,
+                    currentUser.nickname
+                );
+                navbar.mount(navbarElement);
+            })
+            .catch(error => {
+                console.error('Error fetching notification count:', error);
+                // Fall back to initializing with zero count
+                const navbar = new NavbarComponent(
+                    true,
+                    currentUser.id,
+                    0,
+                    currentUser.nickname
+                );
+                navbar.mount(navbarElement);
+            });
         } catch (error) {
             console.error('Error mounting navbar:', error);
         }
