@@ -336,10 +336,10 @@ func HandleChatMessage(conn *websocket.Conn, message map[string]interface{}) {
 		if err != nil {
 			log.Printf("Error sending message to recipient: %v", err)
 		} else {
-			log.Printf("Message delivered to recipient %s", recipient)
+			log.Printf("Successfully forwarded message to user %s", recipient)
 		}
 	} else {
-		log.Printf("Recipient %s is not connected, message will be delivered when they connect", recipient)
+		log.Printf("Recipient %s not connected to chat with %s (key: %s:%s not found)", recipient, sender, recipient, sender)
 	}
 
 	// Broadcast to all clients that a new message was sent to update their user lists
@@ -357,18 +357,28 @@ func BroadcastMessageNotification(senderID string, receiverID string) {
 		ReceiverID: receiverID,
 	}
 
-	clientsMux.RLock()
-	defer clientsMux.RUnlock()
-
-	for _, conn := range clients {
-		err := conn.WriteJSON(notification)
-		if err != nil {
-			log.Printf("Error broadcasting message notification: %v", err)
-			continue
+	// Use a separate goroutine for broadcasting to avoid blocking
+	go func() {
+		clientsMux.RLock()
+		clientsCopy := make(map[string]*ClientConnection)
+		for id, conn := range clients {
+			clientsCopy[id] = conn
 		}
-	}
-	log.Printf("Broadcasted message notification from %s to %s", senderID, receiverID)
+		clientsMux.RUnlock()
 
-	// After sending the notification, also broadcast the updated users list
-	go BroadcastUsersList()
+		// Now we can safely iterate through our copy without holding the lock
+		for _, conn := range clientsCopy {
+			err := conn.WriteJSON(notification)
+			if err != nil {
+				log.Printf("Error broadcasting message notification: %v", err)
+				continue
+			}
+		}
+		log.Printf("Broadcasted message notification from %s to %s", senderID, receiverID)
+
+		// After sending the notification, also broadcast the updated users list
+		// Use a small delay to avoid concurrent writes
+		time.Sleep(100 * time.Millisecond)
+		BroadcastUsersList()
+	}()
 }
