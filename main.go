@@ -65,6 +65,7 @@ func main() {
 	notificationHandler := controllers.NewNotificationHandler()
 	http.Handle("/notifications", notificationHandler)
 	http.Handle("/api/notifications", notificationHandler)
+	http.Handle("/api/notifications/count", notificationHandler)
 	http.Handle("/notifications/mark-read", notificationHandler)
 
 	// SPA catch-all route - serve index.html for all other routes
