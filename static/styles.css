@@ -892,12 +892,12 @@ a:hover {
 }
 
 .like-btn i {
-  color: #f87171;
+  color: greenyellow;
   opacity: 0.8;
 }
 
 .like-btn:hover i {
-  color: #ef4444;
+  color: green;
   opacity: 1;
 }
 
@@ -1289,12 +1289,12 @@ a:hover {
 }
 
 .comment-reaction-buttons .dislike-btn i {
-  color: #9ca3af;
+  color: red;
   opacity: 0.8;
 }
 
 .comment-reaction-buttons .dislike-btn:hover i {
-  color: #6b7280;
+  color: red;
   opacity: 1;
 }
 
