@@ -79,6 +79,7 @@ type Notification struct {
 	Type               string    `json:"type"`               // Notification type (like, comment, etc.)
 	PostID             int       `json:"postID"`             // Related post ID
 	ActorName          string    `json:"actorName"`          // Username of the actor
+	ActorID            string    `json:"actorID"`            // ID of the actor (needed for message notifications)
 	ActorProfilePic    string    `json:"actorProfilePic"`    // Actor's profile picture
 	CreatedAt          time.Time `json:"createdAt"`          // Creation timestamp
 	CreatedAtFormatted string    `json:"createdAtFormatted"` // Formatted timestamp for display
