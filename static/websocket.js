@@ -82,6 +82,21 @@ class UsersNavigation {
                     // Emit an event to refresh the users list
                     eventBus.emit('refresh_users_list');
                 }
+                else if (data.type === 'new_notification') {
+                    console.log('Received new notification:', data);
+
+                    // Only process if this notification is for the current user
+                    if (data.receiverID === this.currentUserId) {
+                        // Update the notification count in the UI
+                        this.updateNotificationCount(data.unreadCount);
+
+                        // Emit an event for the notification component to handle
+                        eventBus.emit('new_notification', {
+                            notification: data.notification,
+                            unreadCount: data.unreadCount
+                        });
+                    }
+                }
                 else if (data.type === 'users_list') {
                     console.log('Received users list update:', data);
 
@@ -124,6 +139,55 @@ class UsersNavigation {
      */
     getUserStatus(userId) {
         return this.userStatuses.get(userId) || false;
+    }
+
+    /**
+     * Update the notification count in the UI
+     * @param {number} count - The number of unread notifications
+     */
+    updateNotificationCount(count) {
+        console.log('Updating notification count to:', count);
+
+        // Use the global navbar component if available
+        if (window.navbarComponent && typeof window.navbarComponent.updateNotificationCount === 'function') {
+            console.log('Using navbar component to update notification count');
+            window.navbarComponent.updateNotificationCount(count);
+        } else {
+            console.log('Navbar component not available, updating DOM directly');
+
+            // Find the notification dot in the navbar
+            let notificationDot = document.querySelector('.notification-dot');
+
+            if (count > 0) {
+                // If there are notifications, show the dot
+                if (!notificationDot) {
+                    // Create the dot if it doesn't exist
+                    const notificationBtn = document.querySelector('.notification-btn');
+                    if (notificationBtn) {
+                        console.log('Found notification button, adding dot');
+                        notificationDot = document.createElement('span');
+                        notificationDot.className = 'notification-dot';
+                        notificationBtn.appendChild(notificationDot);
+                    } else {
+                        console.warn('Notification button not found in the DOM');
+                    }
+                }
+
+                // Update the count
+                if (notificationDot) {
+                    notificationDot.textContent = count;
+                    notificationDot.style.display = 'inline-flex';
+                    console.log('Updated notification dot with count:', count);
+                }
+            } else if (notificationDot) {
+                // If there are no notifications, hide the dot
+                notificationDot.remove();
+                console.log('Removed notification dot (count is zero)');
+            }
+        }
+
+        // Also update the notification count in the notifications component if it's active
+        eventBus.emit('update_notification_count', count);
     }
 
     cleanup() {
