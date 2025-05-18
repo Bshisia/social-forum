@@ -1,5 +1,6 @@
-function markAsRead(notificationId) {
-    fetch('/notifications/mark-read', {
+// Function to mark a notification as read
+export function markAsRead(notificationId) {
+    return fetch('/notifications/mark-read', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -11,9 +12,11 @@ function markAsRead(notificationId) {
     .then(response => {
         if (response.ok) {
             // Remove unread styling
-            document.querySelector(`[data-notification-id="${notificationId}"]`)
-                .classList.remove('unread');
-            
+            const notificationElement = document.querySelector(`[data-notification-id="${notificationId}"]`);
+            if (notificationElement) {
+                notificationElement.classList.remove('unread');
+            }
+
             // Update the notification count
             const dot = document.querySelector('.notification-dot');
             if (dot) {
@@ -24,7 +27,12 @@ function markAsRead(notificationId) {
                     dot.remove();
                 }
             }
+            return true;
         }
+        return false;
     })
-    .catch(error => console.error('Error:', error));
+    .catch(error => {
+        console.error('Error:', error);
+        return false;
+    });
 }
