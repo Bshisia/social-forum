@@ -25,14 +25,17 @@ func GetChatUsersHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Fetching chat users for user ID: %s", currentUserID)
 
-	// Query all users with their last message timestamp
+	// Query all users with their last message timestamp and unread message count
 	// Sort by last message time (like Discord), with alphabetical fallback for users without messages
 	rows, err := GlobalDB.Query(`
 		SELECT u.id, u.nickname, u.profile_pic, u.is_online,
 			   (SELECT MAX(sent_at)
 				FROM messages
 				WHERE (sender_id = u.id AND receiver_id = ?)
-				   OR (sender_id = ? AND receiver_id = u.id)) as last_message_time
+				   OR (sender_id = ? AND receiver_id = u.id)) as last_message_time,
+			   (SELECT COUNT(*)
+				FROM messages
+				WHERE sender_id = u.id AND receiver_id = ? AND read = 0) as unread_count
 		FROM users u
 		WHERE u.id != ?
 		ORDER BY
@@ -45,7 +48,7 @@ func GetChatUsersHandler(w http.ResponseWriter, r *http.Request) {
 			last_message_time DESC,
 			-- Finally, sort alphabetically for users without messages
 			nickname ASC
-	`, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID)
+	`, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID)
 	if err != nil {
 		log.Printf("Error querying users with messages: %v", err)
 		http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
@@ -59,16 +62,18 @@ func GetChatUsersHandler(w http.ResponseWriter, r *http.Request) {
 		var profilePic sql.NullString
 		var isOnline bool
 		var lastMessageTime sql.NullString
+		var unreadCount int
 
-		if err := rows.Scan(&id, &nickname, &profilePic, &isOnline, &lastMessageTime); err != nil {
+		if err := rows.Scan(&id, &nickname, &profilePic, &isOnline, &lastMessageTime, &unreadCount); err != nil {
 			log.Printf("Error scanning user row: %v", err)
 			continue
 		}
 
 		user := map[string]interface{}{
-			"id":       id,
-			"userName": nickname,
-			"isOnline": isOnline,
+			"id":          id,
+			"userName":    nickname,
+			"isOnline":    isOnline,
+			"unreadCount": unreadCount,
 		}
 
 		if profilePic.Valid {

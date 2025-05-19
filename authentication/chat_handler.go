@@ -212,7 +212,7 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 	sentAtStr := sentAt.Format("2006-01-02 15:04:05")
 	log.Printf("Formatted timestamp: %s", sentAtStr)
 
-	// Insert message into database
+	// Insert message into database - explicitly set read to 0 (false) to ensure it's unread
 	result, err := GlobalDB.Exec(`
 		INSERT INTO messages (sender_id, receiver_id, content, sent_at, read)
 		VALUES (?, ?, ?, ?, 0)
