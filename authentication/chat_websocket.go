@@ -13,7 +13,7 @@ import (
 // Chat WebSocket connection management
 var (
 	// chatClients maps user chat connections using a composite key format "userID:chatPartnerID"
-	chatClients    = make(map[string]*websocket.Conn)
+	chatClients = make(map[string]*websocket.Conn)
 	// chatClientsMux protects concurrent access to the chatClients map
 	chatClientsMux sync.RWMutex
 )
@@ -210,13 +210,19 @@ func forwardMessageToUser(recipientID string, message []byte) {
 		} else {
 			log.Printf("Successfully forwarded message to user %s (key: %s)", recipientID, chatKey)
 
-			// Trigger a refresh of the users list
-			go BroadcastNewMessage(senderID, recipientID)
+			// Only trigger a refresh and notification for actual messages, not typing indicators
+			if msgType, ok := msg["type"].(string); ok && msgType == "message" {
+				// Trigger a refresh of the users list
+				go BroadcastNewMessage(senderID, recipientID)
+			}
 		}
 	} else {
 		log.Printf("Recipient %s not connected to chat with %s (key: %s not found)", recipientID, senderID, chatKey)
 
-		// Broadcast notification even if recipient is not connected
-		go BroadcastNewMessage(senderID, recipientID)
+		// Only broadcast notification for actual messages, not typing indicators
+		if msgType, ok := msg["type"].(string); ok && msgType == "message" {
+			// Broadcast notification even if recipient is not connected
+			go BroadcastNewMessage(senderID, recipientID)
+		}
 	}
 }
