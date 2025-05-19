@@ -20,7 +20,7 @@ class ChatComponent {
 
     async fetchMessageHistory(loadMore = false) {
         if (this.isLoadingMore) return false;
-        
+
         try {
             this.isLoadingMore = true;
 
@@ -138,6 +138,9 @@ class ChatComponent {
                 chatHeader.textContent = `Chat with ${this.otherUserName}`;
             }
 
+            // Update the typing indicator text
+            this.updateTypingIndicatorText();
+
             return true;
         } catch (error) {
             console.error('Error fetching user details:', error);
@@ -165,6 +168,9 @@ class ChatComponent {
                             chatHeader.textContent = `Chat with ${this.otherUserName}`;
                         }
 
+                        // Update the typing indicator text
+                        this.updateTypingIndicatorText();
+
                         return true;
                     }
                 }
@@ -180,6 +186,9 @@ class ChatComponent {
             if (chatHeader) {
                 chatHeader.textContent = `Chat with ${this.otherUserName}`;
             }
+
+            // Update the typing indicator text
+            this.updateTypingIndicatorText();
 
             // Show error message in the chat
             const messagesContainer = document.getElementById('messages-container');
@@ -452,6 +461,9 @@ class ChatComponent {
         const typingIndicator = document.getElementById('typing-indicator');
         if (!typingIndicator) return;
 
+        // Update the typing indicator text with the current user name
+        this.updateTypingIndicatorText();
+
         if (show) {
             // Add fade-in animation
             typingIndicator.style.opacity = '0';
@@ -473,6 +485,14 @@ class ChatComponent {
                     typingIndicator.style.display = 'none';
                 }
             }, 300);
+        }
+    }
+
+    updateTypingIndicatorText() {
+        // Update the typing indicator text with the current user name
+        const typingIndicatorText = document.querySelector('#typing-indicator span');
+        if (typingIndicatorText && this.otherUserName) {
+            typingIndicatorText.textContent = `${this.otherUserName} is typing`;
         }
     }
 
@@ -602,12 +622,12 @@ class ChatComponent {
             if (message.sender === this.otherUserId) {
                 this.playNotificationSound();
             }
-            
+
             // Refresh the users list to update the sorting based on last message
             this.refreshUsersNav();
         } else {
             console.log('Ignoring message not related to this chat conversation');
-            
+
             // Even if the message is not for this chat, we should refresh the users list
             // to update the sorting for the sender in the users navigation
             this.refreshUsersNav();
@@ -899,7 +919,7 @@ class ChatComponent {
             window.usersNavComponent.refreshUsersList();
         } else {
             console.warn('UsersNavComponent not available for refresh');
-            
+
             // Emit an event for any component that might be listening
             eventBus.emit('refresh_users_list');
         }
@@ -945,7 +965,7 @@ class ChatComponent {
         try {
             const messageDate = new Date(message.timestamp);
             formattedTime = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
+
             // Add date if message is from a different day
             const today = new Date();
             if (messageDate.toDateString() !== today.toDateString()) {
