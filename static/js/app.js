@@ -3,6 +3,7 @@ import AuthService from './services/auth-service.js';
 import AuthComponent from './components/authentication/auth.js';
 import navigationHelper from './services/navigation-helper.js';
 import ChatComponent from './components/chat/chat.js';
+import websocketService from './services/websocket-service.js';
 
 import NavbarComponent from './components/navbar/navbar.js';
 import PostsComponent from './components/posts/posts.js';
@@ -13,6 +14,7 @@ import ProfileComponent from './components/profile/profile.js';
 import FilterNavComponent from './components/filters/filters_nav.js';
 import UsersNavComponent from './components/users/users_nav.js';
 import NotificationsComponent from './components/notifications/notifications.js';
+import eventBus from './utils/event-bus.js';
 
 export {
     loadPosts,
@@ -520,6 +522,21 @@ function initializeUI() {
 
     console.log('Initializing UI with user data:', currentUser);
 
+    // Initialize WebSocket service first
+    websocketService.initialize()
+        .then(() => {
+            console.log('WebSocket service initialized successfully');
+
+            // Set up notification popup handler
+            eventBus.on('show_notification_popup', (notification) => {
+                if (window.notificationsComponent) {
+                    window.notificationsComponent.showToastNotification(notification);
+                }
+            });
+        })
+        .catch(error => {
+            console.warn('WebSocket initialization failed, will retry later:', error);
+        });
 
     const navbarElement = document.getElementById('navbar');
     if (navbarElement) {
@@ -546,6 +563,13 @@ function initializeUI() {
                     currentUser.nickname
                 );
                 navbar.mount(navbarElement);
+
+                // Listen for real-time notification count updates
+                eventBus.on('new_notification', (data) => {
+                    if (navbar && typeof navbar.updateNotificationCount === 'function') {
+                        navbar.updateNotificationCount(data.unreadCount);
+                    }
+                });
             })
             .catch(error => {
                 console.error('Error fetching notification count:', error);
@@ -563,10 +587,7 @@ function initializeUI() {
         }
     }
 
-
     initializeOptionalComponents();
-
-
     handleRoute();
 };
 
