@@ -71,13 +71,21 @@ func (nh *NotificationHandler) getUserNotifications(userID string) ([]utils.Noti
 	for rows.Next() {
 		var n utils.Notification
 		var profilePic sql.NullString // Use sql.NullString to handle NULL values
+		var postID sql.NullInt64      // Use sql.NullInt64 to handle NULL post_id values
 		var actorID string            // Store the actor ID for message notifications
 
-		// Scan into the notification struct and the nullable profile_pic
-		err := rows.Scan(&n.ID, &n.Type, &n.CreatedAt, &n.PostID, &n.ActorName, &profilePic, &n.IsRead, &actorID)
+		// Scan into the notification struct and the nullable fields
+		err := rows.Scan(&n.ID, &n.Type, &n.CreatedAt, &postID, &n.ActorName, &profilePic, &n.IsRead, &actorID)
 		if err != nil {
 			log.Printf("Error scanning notification: %v", err)
 			continue
+		}
+
+		// Handle nullable post_id
+		if postID.Valid {
+			n.PostID = int(postID.Int64)
+		} else {
+			n.PostID = 0 // Default value for message notifications
 		}
 
 		// Handle the nullable profile_pic
