@@ -260,25 +260,59 @@ func BroadcastNotification(receiverID string, actorID string, notificationType s
 	go func() {
 		log.Printf("Broadcasting %s notification from %s to %s", notificationType, actorID, receiverID)
 
-		// Get the notification details from the database
 		var notificationID int
 		var unreadCount int
 		var actorName string
 		var profilePic sql.NullString
 
-		// First, get the latest notification of this type
+		// For message notifications, we need to create a notification record first
+		if notificationType == "message" {
+			// Get a dummy post ID (0 is fine for messages as they don't relate to posts)
+			dummyPostID := 0
+
+			// Insert notification for the message
+			result, err := GlobalDB.Exec(`
+				INSERT INTO notifications (user_id, actor_id, post_id, type, created_at, is_read)
+				VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, false)
+			`, receiverID, actorID, dummyPostID, notificationType)
+
+			if err != nil {
+				log.Printf("Error creating message notification: %v", err)
+				// Continue anyway to try to send the notification
+			} else {
+				// Get the ID of the inserted notification
+				if id, err := result.LastInsertId(); err == nil {
+					notificationID = int(id)
+					log.Printf("Created message notification with ID: %d", notificationID)
+				}
+			}
+		}
+
+		// Get the actor's details (sender's name and profile pic)
 		err := GlobalDB.QueryRow(`
-			SELECT n.id, u.nickname, u.profile_pic
-			FROM notifications n
-			JOIN users u ON n.actor_id = u.id
-			WHERE n.user_id = ? AND n.actor_id = ? AND n.type = ?
-			ORDER BY n.created_at DESC
-			LIMIT 1
-		`, receiverID, actorID, notificationType).Scan(&notificationID, &actorName, &profilePic)
+			SELECT nickname, profile_pic FROM users WHERE id = ?
+		`, actorID).Scan(&actorName, &profilePic)
 
 		if err != nil {
-			log.Printf("Error fetching notification details: %v", err)
+			log.Printf("Error fetching actor details: %v", err)
 			return
+		}
+
+		// If we didn't create a new notification (for non-message types), get the existing one
+		if notificationID == 0 && notificationType != "message" {
+			// Get the latest notification of this type
+			err := GlobalDB.QueryRow(`
+				SELECT n.id
+				FROM notifications n
+				WHERE n.user_id = ? AND n.actor_id = ? AND n.type = ?
+				ORDER BY n.created_at DESC
+				LIMIT 1
+			`, receiverID, actorID, notificationType).Scan(&notificationID)
+
+			if err != nil {
+				log.Printf("Error fetching notification details: %v", err)
+				return
+			}
 		}
 
 		// Get the unread count
