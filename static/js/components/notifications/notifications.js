@@ -168,7 +168,14 @@ class NotificationsComponent {
             case 'follow':
                 return `/profile?id=${notification.actorID}`;
             case 'message':
-                return `/chat?user1=${this.currentUserId}&user2=${notification.actorID}`;
+                // For message notifications, we use the actorID (sender's ID)
+                // Make sure we have a valid currentUserId before constructing the URL
+                if (this.currentUserId) {
+                    return `/chat?user1=${this.currentUserId}&user2=${notification.actorID}`;
+                } else {
+                    console.warn('Current user ID not available for chat link');
+                    return '/chat';
+                }
             default:
                 return '/';
         }
