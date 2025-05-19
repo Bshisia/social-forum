@@ -34,6 +34,7 @@ class UsersNavComponent {
             const userId = user.ID || user.id;
             const userName = user.UserName || user.userName || user.Nickname || user.nickname || user.username || 'Unknown User';
             const isOnline = user.isOnline || user.is_online || false;
+            const unreadCount = user.unreadCount || 0;
 
             // Get last message time if available
             let lastMessageTime = null;
@@ -92,7 +93,12 @@ class UsersNavComponent {
                         <div class="user-info">
                             <div class="user-info-row">
                                 <span class="username">${userName}</span>
-                                ${formattedTime ? `<span class="last-message-time">${formattedTime}</span>` : ''}
+                                <div class="user-info-right">
+                                    ${unreadCount > 0 ?
+                                        `<span class="unread-count">${unreadCount}</span>` :
+                                        ''}
+                                    ${formattedTime ? `<span class="last-message-time">${formattedTime}</span>` : ''}
+                                </div>
                             </div>
                             <span class="status" id="status-${userId}">
                                 ${this.typingUsers.has(userId) ?
@@ -164,6 +170,22 @@ class UsersNavComponent {
             // Filter out current user
             this.users = users.filter(user => user.id !== this.currentUserId);
 
+            // Preserve unread counts from previous state if they exist
+            // This prevents the unread count from disappearing when refreshing
+            if (this.users && this.users.length > 0) {
+                this.users.forEach(user => {
+                    // If unreadCount is 0 or undefined, check if we have a previous count
+                    if (!user.unreadCount || user.unreadCount === 0) {
+                        const userId = user.id || user.ID;
+                        const previousUser = this.findUserById(userId);
+                        if (previousUser && previousUser.unreadCount && previousUser.unreadCount > 0) {
+                            console.log(`Preserving unread count for user ${userId}: ${previousUser.unreadCount}`);
+                            user.unreadCount = previousUser.unreadCount;
+                        }
+                    }
+                });
+            }
+
             // Render the users list
             this.renderUsers();
         } catch (error) {
@@ -171,6 +193,16 @@ class UsersNavComponent {
             // Fallback to regular users endpoint if needed
             this.fetchUsersWithoutMessages();
         }
+    }
+
+    // Helper method to find a user by ID in the current users array
+    findUserById(userId) {
+        if (!this.users) return null;
+
+        return this.users.find(user => {
+            const id = user.id || user.ID;
+            return id === userId;
+        });
     }
 
     renderUsers() {
@@ -226,6 +258,9 @@ class UsersNavComponent {
                     }
                 }
 
+                // Get unread count if available
+                const unreadCount = user.unreadCount || 0;
+
                 userItem.innerHTML = `
                     <div class="user-avatar">
                         ${user.profilePic ? `<img src="${user.profilePic}" alt="${user.userName}">` :
@@ -233,14 +268,27 @@ class UsersNavComponent {
                         <span class="status-indicator ${user.isOnline ? 'online' : 'offline'}"></span>
                     </div>
                     <div class="user-info">
-                        <div class="user-name">${user.userName}</div>
-                        ${lastMessageTime ? `<div class="last-message-time">${lastMessageTime}</div>` : ''}
+                        <div class="user-info-row">
+                            <span class="username">${user.userName}</span>
+                            <div class="user-info-right">
+                                ${unreadCount > 0 ?
+                                    `<span class="unread-count">${unreadCount}</span>` :
+                                    ''}
+                                ${lastMessageTime ? `<span class="last-message-time">${lastMessageTime}</span>` : ''}
+                            </div>
+                        </div>
+                        <span class="status" id="status-${user.id}">
+                            ${user.isOnline ?
+                                '<span class="status-text online"><i class="fas fa-circle"></i> Online</span>' :
+                                '<span class="status-text offline"><i class="fas fa-circle"></i> Offline</span>'
+                            }
+                        </span>
                     </div>
                 `;
 
                 // Add click event to open chat
                 userItem.addEventListener('click', () => {
-                    window.location.href = `/chat?user=${user.id}`;
+                    window.location.href = `/chat?user1=${this.currentUserId}&user2=${user.id}`;
                 });
 
                 usersList.appendChild(userItem);
@@ -341,11 +389,34 @@ class UsersNavComponent {
 
         this.usersListUpdateUnsubscribe = eventBus.on('users_list_update', (users) => {
             console.log('Received users_list_update event:', users);
+
+            // Store current users to preserve unread counts
+            const currentUsers = this.users ? [...this.users] : [];
+
             // Filter out current user
             const filteredUsers = users.filter(user => {
                 const userId = user.ID || user.id;
                 return userId !== this.currentUserId;
             });
+
+            // Preserve unread counts from current state
+            if (currentUsers.length > 0 && filteredUsers.length > 0) {
+                filteredUsers.forEach(user => {
+                    const userId = user.ID || user.id;
+                    // Find the user in the current list
+                    const currentUser = currentUsers.find(u => {
+                        const id = u.ID || u.id;
+                        return id === userId;
+                    });
+
+                    // If the user exists and has an unread count, preserve it
+                    if (currentUser && currentUser.unreadCount && currentUser.unreadCount > 0) {
+                        console.log(`Preserving unread count for user ${userId} in users_list_update: ${currentUser.unreadCount}`);
+                        user.unreadCount = currentUser.unreadCount;
+                    }
+                });
+            }
+
             this.users = filteredUsers;
             this.container.innerHTML = this.render();
         });
@@ -551,6 +622,9 @@ class UsersNavComponent {
     async refreshUsersList(showNotification = false) {
         console.log('Refreshing users list...');
 
+        // Store a copy of the current users with their unread counts
+        const previousUsers = this.users ? [...this.users] : [];
+
         // Add rotating animation to the refresh button
         const refreshButton = document.getElementById('refresh-users-btn');
         if (refreshButton) {
@@ -558,7 +632,9 @@ class UsersNavComponent {
         }
 
         try {
+            // The fetchUsers method now handles preserving unread counts
             await this.fetchUsers();
+
             // Note: fetchUsers already includes sorting logic
             this.container.innerHTML = this.render();
             console.log('Users list refreshed successfully');
@@ -579,6 +655,12 @@ class UsersNavComponent {
             return true;
         } catch (error) {
             console.error('Error refreshing users list:', error);
+
+            // Restore previous users if fetch failed
+            if (previousUsers.length > 0) {
+                this.users = previousUsers;
+                this.container.innerHTML = this.render();
+            }
 
             // Remove the rotating class on error
             setTimeout(() => {

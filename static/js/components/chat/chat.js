@@ -82,6 +82,9 @@ class ChatComponent {
                 this.renderAdditionalMessages(newMessages);
             } else {
                 this.renderMessages();
+
+                // Mark messages as read when chat is first loaded
+                this.markMessagesAsRead();
             }
 
             return true;
@@ -532,6 +535,12 @@ class ChatComponent {
             };
             this.addMessageToUI(uiMessage, true);
 
+            // Trigger a refresh of the users list to update unread counts
+            // This ensures the unread count appears for the recipient
+            setTimeout(() => {
+                eventBus.emit('refresh_users_list');
+            }, 500);
+
             // Simulate status updates (in a real app, these would come from the server)
             this.simulateMessageStatusUpdates(tempId);
 
@@ -620,6 +629,12 @@ class ChatComponent {
 
             // No notification sound for messages as per user request
 
+            // If the message is from the other user and we're viewing the chat, mark it as read
+            if (message.sender === this.otherUserId) {
+                // Only mark as read if this is a message we received, not one we sent
+                this.markMessagesAsRead();
+            }
+
             // Refresh the users list to update the sorting based on last message
             this.refreshUsersNav();
         } else {
@@ -632,6 +647,40 @@ class ChatComponent {
     }
 
     // Notification sound removed as per user request
+
+    async markMessagesAsRead() {
+        try {
+            // Only mark messages as read if we're the receiver, not the sender
+            // This ensures unread counts persist until the recipient actually reads the message
+
+            // Mark messages from the other user as read
+            const response = await fetch('/api/chat/mark-read', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    receiver_id: this.currentUserId,
+                    sender_id: this.otherUserId
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to mark messages as read: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('Messages marked as read:', result);
+
+            // Only refresh the users list if messages were actually marked as read
+            if (result.rowsAffected > 0) {
+                // Refresh the users list to update unread counts
+                eventBus.emit('refresh_users_list');
+            }
+        } catch (error) {
+            console.error('Error marking messages as read:', error);
+        }
+    }
 
     addMessageToUI(message, isSent) {
         const messagesContainer = document.getElementById('messages-container');
