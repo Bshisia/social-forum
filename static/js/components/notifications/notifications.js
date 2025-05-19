@@ -367,14 +367,44 @@ class NotificationsComponent {
         // Create toast content
         const message = this.formatNotificationMessage(notification);
         const link = this.getNotificationLink(notification);
+        const profilePic = notification.actorProfilePic || '';
+
+        // Get notification icon based on type
+        let notificationIcon = 'fa-bell';
+        switch (notification.type) {
+            case 'like':
+                notificationIcon = 'fa-heart';
+                break;
+            case 'comment':
+                notificationIcon = 'fa-comment';
+                break;
+            case 'mention':
+                notificationIcon = 'fa-at';
+                break;
+            case 'follow':
+                notificationIcon = 'fa-user-plus';
+                break;
+            case 'message':
+                notificationIcon = 'fa-envelope';
+                break;
+        }
 
         toast.innerHTML = `
             <div class="toast-header">
+                <i class="fas ${notificationIcon} notification-icon"></i>
                 <strong>New Notification</strong>
                 <button class="toast-close">&times;</button>
             </div>
             <div class="toast-body">
-                ${message}
+                <div class="notification-avatar">
+                    ${profilePic ?
+                        `<img class="notification-avatar-img" src="${profilePic}" alt="${notification.actorName}">` :
+                        `<div class="notification-avatar-placeholder">${notification.actorName ? notification.actorName.charAt(0).toUpperCase() : 'U'}</div>`
+                    }
+                </div>
+                <div class="notification-content">
+                    ${message}
+                </div>
             </div>
             <div class="toast-footer">
                 <button class="toast-action">View</button>
@@ -395,6 +425,8 @@ class NotificationsComponent {
             toast.remove();
         });
 
+        // Notification sound removed as per user request
+
         // Auto-remove after 5 seconds
         setTimeout(() => {
             if (toast.parentNode) {
@@ -407,6 +439,25 @@ class NotificationsComponent {
         setTimeout(() => {
             toast.classList.add('toast-show');
         }, 10);
+
+        // Animate the notification icon in the navbar
+        this.animateNotificationIcon();
+    }
+
+    /**
+     * Animate the notification icon in the navbar
+     */
+    animateNotificationIcon() {
+        const notificationIcon = document.querySelector('.notification-btn i');
+        if (notificationIcon) {
+            // Add the animation class
+            notificationIcon.classList.add('notification-pulse');
+
+            // Remove the animation class after it completes
+            setTimeout(() => {
+                notificationIcon.classList.remove('notification-pulse');
+            }, 1000);
+        }
     }
 
     /**

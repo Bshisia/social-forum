@@ -618,10 +618,7 @@ class ChatComponent {
             const isSent = message.sender === this.currentUserId;
             this.addMessageToUI(message, isSent);
 
-            // Play notification sound if the message is from the other user
-            if (message.sender === this.otherUserId) {
-                this.playNotificationSound();
-            }
+            // No notification sound for messages as per user request
 
             // Refresh the users list to update the sorting based on last message
             this.refreshUsersNav();
@@ -634,11 +631,7 @@ class ChatComponent {
         }
     }
 
-    playNotificationSound() {
-        // Create and play a notification sound
-        const audio = new Audio('/static/notification.mp3');
-        audio.play().catch(err => console.log('Error playing notification sound:', err));
-    }
+    // Notification sound removed as per user request
 
     addMessageToUI(message, isSent) {
         const messagesContainer = document.getElementById('messages-container');

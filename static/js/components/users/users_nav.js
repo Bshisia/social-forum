@@ -1,5 +1,5 @@
-import UsersNavigation from '../../../websocket.js';
 import eventBus from '../../utils/event-bus.js';
+import websocketService from '../../services/websocket-service.js';
 
 class UsersNavComponent {
     constructor(users = [], currentUserId = null) {
@@ -131,7 +131,7 @@ class UsersNavComponent {
                 this.handleTypingStatus(data.userId, data.isTyping);
             }
         });
-        
+
         // Subscribe to refresh users list events
         this.refreshEventUnsubscribe = eventBus.on('refresh_users_list', () => {
             console.log('Received refresh_users_list event');
@@ -142,51 +142,11 @@ class UsersNavComponent {
         if (!this.users || this.users.length === 0) {
             this.fetchUsers().then(() => {
                 this.container.innerHTML = this.render();
-
-                // Use existing WebSocket if available, otherwise initialize a new one
-                if (window.globalUsersNav) {
-                    console.log('Using existing WebSocket connection');
-                    this.usersNav = window.globalUsersNav;
-                    // Update the callback to point to this component
-                    this.usersNav.updateCallback = (updateType, data) => {
-                        if (updateType === 'refresh') {
-                            console.log('Refreshing users list due to WebSocket notification');
-                            this.refreshUsersList(false); // Don't show notification for automatic refreshes
-                        } else if (updateType === 'new_user' && data) {
-                            console.log('Adding new user to list:', data);
-                            this.addNewUser(data);
-                        } else {
-                            console.log('Updating user status:', updateType, data);
-                            this.updateUserStatus(updateType, data);
-                        }
-                    };
-                } else {
-                    this.initializeWebSocket();
-                }
+                this.initializeWebSocket();
             });
         } else {
             this.container.innerHTML = this.render();
-
-            // Use existing WebSocket if available, otherwise initialize a new one
-            if (window.globalUsersNav) {
-                console.log('Using existing WebSocket connection');
-                this.usersNav = window.globalUsersNav;
-                // Update the callback to point to this component
-                this.usersNav.updateCallback = (updateType, data) => {
-                    if (updateType === 'refresh') {
-                        console.log('Refreshing users list due to WebSocket notification');
-                        this.refreshUsersList(false); // Don't show notification for automatic refreshes
-                    } else if (updateType === 'new_user' && data) {
-                        console.log('Adding new user to list:', data);
-                        this.addNewUser(data);
-                    } else {
-                        console.log('Updating user status:', updateType, data);
-                        this.updateUserStatus(updateType, data);
-                    }
-                };
-            } else {
-                this.initializeWebSocket();
-            }
+            this.initializeWebSocket();
         }
     }
 
@@ -197,13 +157,13 @@ class UsersNavComponent {
             if (!response.ok) {
                 throw new Error('Failed to fetch users');
             }
-            
+
             const users = await response.json();
             console.log('Users with last messages fetched successfully:', users);
-            
+
             // Filter out current user
             this.users = users.filter(user => user.id !== this.currentUserId);
-            
+
             // Render the users list
             this.renderUsers();
         } catch (error) {
@@ -215,14 +175,14 @@ class UsersNavComponent {
 
     renderUsers() {
         if (!this.container) return;
-        
+
         // Clear the container
         this.container.innerHTML = '';
-        
+
         // Create the users list
         const usersList = document.createElement('div');
         usersList.className = 'users-list';
-        
+
         if (this.users.length === 0) {
             usersList.innerHTML = '<div class="no-users">No users found</div>';
         } else {
@@ -231,7 +191,7 @@ class UsersNavComponent {
                 // First sort by online status
                 if (a.isOnline && !b.isOnline) return -1;
                 if (!a.isOnline && b.isOnline) return 1;
-                
+
                 // Then by last message time
                 if (a.lastMessage && b.lastMessage) {
                     return new Date(b.lastMessage) - new Date(a.lastMessage);
@@ -240,23 +200,23 @@ class UsersNavComponent {
                 } else if (b.lastMessage) {
                     return 1;
                 }
-                
+
                 // Finally alphabetically
                 return a.userName.localeCompare(b.userName);
             });
-            
+
             // Create user items
             sortedUsers.forEach(user => {
                 const userItem = document.createElement('div');
                 userItem.className = `user-item ${user.isOnline ? 'online' : 'offline'}`;
                 userItem.dataset.userId = user.id;
-                
+
                 // Format last message time if exists
                 let lastMessageTime = '';
                 if (user.lastMessage) {
                     const messageDate = new Date(user.lastMessage);
                     const today = new Date();
-                    
+
                     if (messageDate.toDateString() === today.toDateString()) {
                         // Today - show time
                         lastMessageTime = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -265,10 +225,10 @@ class UsersNavComponent {
                         lastMessageTime = messageDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
                     }
                 }
-                
+
                 userItem.innerHTML = `
                     <div class="user-avatar">
-                        ${user.profilePic ? `<img src="${user.profilePic}" alt="${user.userName}">` : 
+                        ${user.profilePic ? `<img src="${user.profilePic}" alt="${user.userName}">` :
                         `<div class="default-avatar">${user.userName.charAt(0).toUpperCase()}</div>`}
                         <span class="status-indicator ${user.isOnline ? 'online' : 'offline'}"></span>
                     </div>
@@ -277,16 +237,16 @@ class UsersNavComponent {
                         ${lastMessageTime ? `<div class="last-message-time">${lastMessageTime}</div>` : ''}
                     </div>
                 `;
-                
+
                 // Add click event to open chat
                 userItem.addEventListener('click', () => {
                     window.location.href = `/chat?user=${user.id}`;
                 });
-                
+
                 usersList.appendChild(userItem);
             });
         }
-        
+
         this.container.appendChild(usersList);
     }
 
@@ -360,48 +320,45 @@ class UsersNavComponent {
     }
 
     initializeWebSocket() {
-        // Initialize WebSocket connection with status update callback
-        if (this.currentUserId) {
-            console.log('Initializing UsersNavigation with currentUserId:', this.currentUserId);
-            // Pass the callback function that handles different types of updates
-            this.usersNav = new UsersNavigation((updateType, data) => {
-                if (updateType === 'refresh') {
-                    // Refresh the entire users list
-                    console.log('Refreshing users list due to WebSocket notification');
-                    this.refreshUsersList();
-                } else if (updateType === 'new_user' && data) {
-                    // Add the new user to the list without a full refresh
-                    console.log('Adding new user to list:', data);
-                    this.addNewUser(data);
-                } else {
-                    // Regular status update
-                    console.log('Updating user status:', updateType, data);
-                    this.updateUserStatus(updateType, data);
-                }
-            });
-        } else {
+        // Use the global WebSocket service instead of creating a new one
+        if (!this.currentUserId) {
             console.error('No currentUserId available for WebSocket initialization');
-            // Try to get from AuthService as fallback
-            const currentUser = window.AuthService?.getCurrentUser();
-            if (currentUser?.id) {
-                this.currentUserId = currentUser.id;
-                console.log('Retrieved currentUserId from AuthService:', this.currentUserId);
-                this.usersNav = new UsersNavigation((updateType, data) => {
-                    if (updateType === 'refresh') {
-                        // Refresh the entire users list
-                        console.log('Refreshing users list due to WebSocket notification');
-                        this.refreshUsersList();
-                    } else if (updateType === 'new_user' && data) {
-                        // Add the new user to the list without a full refresh
-                        console.log('Adding new user to list:', data);
-                        this.addNewUser(data);
-                    } else {
-                        // Regular status update
-                        console.log('Updating user status:', updateType, data);
-                        this.updateUserStatus(updateType, data);
-                    }
+            return;
+        }
+
+        console.log('Setting up WebSocket event handlers for UsersNavComponent');
+
+        // Set up event listeners for WebSocket events
+        this.userStatusUnsubscribe = eventBus.on('user_status_change', (data) => {
+            console.log('Received user_status_change event:', data);
+            this.updateUserStatus(data.userId, data.isOnline);
+        });
+
+        this.userSignupUnsubscribe = eventBus.on('user_signup', (data) => {
+            console.log('Received user_signup event:', data);
+            this.addNewUser(data);
+        });
+
+        this.usersListUpdateUnsubscribe = eventBus.on('users_list_update', (users) => {
+            console.log('Received users_list_update event:', users);
+            // Filter out current user
+            const filteredUsers = users.filter(user => {
+                const userId = user.ID || user.id;
+                return userId !== this.currentUserId;
+            });
+            this.users = filteredUsers;
+            this.container.innerHTML = this.render();
+        });
+
+        // Initialize the WebSocket service if not already initialized
+        if (!websocketService.connected) {
+            websocketService.initialize()
+                .then(() => {
+                    console.log('WebSocket service initialized successfully for UsersNavComponent');
+                })
+                .catch(error => {
+                    console.warn('WebSocket initialization failed in UsersNavComponent:', error);
                 });
-            }
         }
 
         // Add event listeners for filter buttons
@@ -442,20 +399,32 @@ class UsersNavComponent {
             this.typingEventUnsubscribe();
             this.typingEventUnsubscribe = null;
         }
-        
+
         if (this.refreshEventUnsubscribe) {
             this.refreshEventUnsubscribe();
             this.refreshEventUnsubscribe = null;
         }
 
-        if (this.usersNav) {
-            this.usersNav.cleanup();
+        // Unsubscribe from WebSocket events
+        if (this.userStatusUnsubscribe) {
+            this.userStatusUnsubscribe();
+            this.userStatusUnsubscribe = null;
         }
-        
+
+        if (this.userSignupUnsubscribe) {
+            this.userSignupUnsubscribe();
+            this.userSignupUnsubscribe = null;
+        }
+
+        if (this.usersListUpdateUnsubscribe) {
+            this.usersListUpdateUnsubscribe();
+            this.usersListUpdateUnsubscribe = null;
+        }
+
         if (this.container) {
             this.container.innerHTML = '';
         }
-        
+
         // Remove global reference
         delete window.usersNavComponent;
     }
@@ -530,7 +499,19 @@ class UsersNavComponent {
     }
 
     updateUserStatus(userId, isOnline) {
-        // Find the user element
+        console.log(`Updating user ${userId} status to ${isOnline ? 'online' : 'offline'}`);
+
+        // Update our internal users array
+        const userIndex = this.users.findIndex(user => {
+            const id = user.ID || user.id;
+            return id === userId;
+        });
+
+        if (userIndex !== -1) {
+            this.users[userIndex].isOnline = isOnline;
+        }
+
+        // Find the user element in the DOM
         const userElement = this.container.querySelector(`[data-user-id="${userId}"]`);
         if (userElement) {
             // Update the data-online attribute
@@ -555,6 +536,14 @@ class UsersNavComponent {
             if (activeFilter && activeFilter.dataset.filter === 'online') {
                 userElement.style.display = isOnline ? 'block' : 'none';
             }
+
+            // Add a brief highlight effect to show the status change
+            userElement.classList.add('status-change');
+            setTimeout(() => {
+                userElement.classList.remove('status-change');
+            }, 2000);
+        } else {
+            console.warn(`User element for ${userId} not found in DOM`);
         }
     }
 
