@@ -193,7 +193,7 @@ END;
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT NOT NULL,
         actor_id TEXT NOT NULL,
-        post_id INTEGER NOT NULL,
+        post_id INTEGER,
         type TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         is_read BOOLEAN DEFAULT FALSE,
