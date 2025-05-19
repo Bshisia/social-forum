@@ -2842,7 +2842,7 @@ input[type="file"] {
   min-width: 18px;
   text-align: center;
   display: inline-block;
-  margin-right: 5px;
+  margin-right: 0px;
   font-weight: 500;
   animation: bounceIn 0.5s;
 }
