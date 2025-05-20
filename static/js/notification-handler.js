@@ -45,7 +45,7 @@ class NotificationHandler {
         let notificationIcon = 'fa-bell';
         switch (notification.type) {
             case 'like':
-                notificationIcon = 'fa-heart';
+                notificationIcon = 'fa-thumbs-up';
                 break;
             case 'comment':
                 notificationIcon = 'fa-comment';
@@ -131,7 +131,7 @@ class NotificationHandler {
                         }, 800); // Match this with the animation duration
                     }, 150);
                 }, 150);
-            }, 2500); // Show the toast for 2.5 seconds before it flies
+            }, 5000); 
         }, 10);
     }
 
