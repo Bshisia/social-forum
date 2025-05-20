@@ -267,8 +267,8 @@ func (ph *PostHandler) handleGetPosts(w http.ResponseWriter, r *http.Request) {
 
 func (ph *PostHandler) getAllUsers() ([]utils.User, error) {
 	rows, err := utils.GlobalDB.Query(`
-        SELECT id, username, profile_pic 
-        FROM users 
+        SELECT id, username, profile_pic
+        FROM users
         ORDER BY username ASC
     `)
 	if err != nil {
@@ -290,8 +290,8 @@ func (ph *PostHandler) getAllUsers() ([]utils.User, error) {
 
 func (ph *PostHandler) getAllPosts() ([]utils.Post, error) {
 	query := `
-        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at, 
-               u.username, 
+        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at,
+               u.username,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
                (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments,
@@ -434,7 +434,7 @@ func (ph *PostHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 		utils.GlobalDB.Exec(`
-            INSERT INTO post_categories (post_id, category_id) 
+            INSERT INTO post_categories (post_id, category_id)
             VALUES (?, ?)
         `, postID, categoryID)
 	}
@@ -543,7 +543,7 @@ func (ph *PostHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) 
 
 func (ph *PostHandler) getCommentsForPost(postID int64) ([]utils.Comment, error) {
 	rows, err := utils.GlobalDB.Query(`
-		SELECT c.id, c.post_id, c.user_id, c.content, c.comment_at, 
+		SELECT c.id, c.post_id, c.user_id, c.content, c.comment_at,
 			   u.username, u.profile_pic
 		FROM comments c
 		JOIN users u ON c.user_id = u.id
@@ -583,8 +583,8 @@ func (ph *PostHandler) getPostByID(postID int64) (*utils.Post, []utils.Comment, 
 	var postTime time.Time
 	post := &utils.Post{}
 	err := utils.GlobalDB.QueryRow(`
-        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at, 
-               u.username, 
+        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at,
+               u.username,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
                (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
                (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments,
@@ -727,20 +727,28 @@ func (ph *PostHandler) handleComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	postID, err := strconv.Atoi(r.FormValue("post_id"))
+	// Validate post ID
+	postIDStr := r.FormValue("post_id")
+	postID, err := utils.ValidatePostID(postIDStr)
 	if err != nil {
+		log.Printf("Invalid post ID: %s, error: %v", postIDStr, err)
 		http.Error(w, "Invalid post ID", http.StatusBadRequest)
 		return
 	}
 
+	// Validate and sanitize content
 	content := r.FormValue("content")
-	if content == "" {
-		http.Error(w, "Comment cannot be empty", http.StatusBadRequest)
+	if err := utils.ValidateContent(content, 5000); err != nil {
+		log.Printf("Invalid comment content: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// Sanitize content to prevent XSS
+	content = utils.SanitizeString(content)
+
 	_, err = utils.GlobalDB.Exec(`
-        INSERT INTO comments (post_id, user_id, content) 
+        INSERT INTO comments (post_id, user_id, content)
         VALUES (?, ?, ?)`,
 		postID, userID, content,
 	)
@@ -751,7 +759,7 @@ func (ph *PostHandler) handleComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = utils.GlobalDB.Exec(`
-        UPDATE posts SET comments = comments + 1 
+        UPDATE posts SET comments = comments + 1
         WHERE id = ?`, postID)
 	if err != nil {
 		log.Printf("Error updating comment count: %v", err)
@@ -962,12 +970,12 @@ func (ph *PostHandler) handleDeleteComment(w http.ResponseWriter, r *http.Reques
 	// Update the post's comment count
 	if postID > 0 {
 		_, err = utils.GlobalDB.Exec(`
-			UPDATE posts 
+			UPDATE posts
 			SET comments = (
-				SELECT COUNT(*) 
-				FROM comments 
+				SELECT COUNT(*)
+				FROM comments
 				WHERE post_id = ?
-			) 
+			)
 			WHERE id = ?`, postID, postID)
 		if err != nil {
 			log.Printf("Error updating post comment count: %v", err)
@@ -1155,7 +1163,7 @@ func (ph *PostHandler) getPostsByCategoryName(categoryName string) ([]utils.Post
 // getPostCategories retrieves all categories for a given post
 func (ph *PostHandler) getPostCategories(postID int64) ([]utils.Category, error) {
 	query := `
-		SELECT c.id, c.name 
+		SELECT c.id, c.name
 		FROM categories c
 		JOIN post_categories pc ON c.id = pc.category_id
 		WHERE pc.post_id = ?
@@ -1259,7 +1267,7 @@ func (ph *PostHandler) getUserProfile(userID string) (*ProfileData, error) {
 	// Get user profile data
 	err = utils.GlobalDB.QueryRow(`
         SELECT username, email, COALESCE(profile_pic, '') as profile_pic
-        FROM users 
+        FROM users
         WHERE id = ?
     `, userID).Scan(&profile.Username, &profile.Email, &profile.ProfilePic)
 	if err != nil {
@@ -1268,8 +1276,8 @@ func (ph *PostHandler) getUserProfile(userID string) (*ProfileData, error) {
 
 	// Get post count
 	err = utils.GlobalDB.QueryRow(`
-        SELECT COUNT(*) 
-        FROM posts 
+        SELECT COUNT(*)
+        FROM posts
         WHERE user_id = ?
     `, userID).Scan(&profile.PostCount)
 	if err != nil {
@@ -1278,8 +1286,8 @@ func (ph *PostHandler) getUserProfile(userID string) (*ProfileData, error) {
 
 	// Get comment count
 	err = utils.GlobalDB.QueryRow(`
-        SELECT COUNT(*) 
-        FROM comments 
+        SELECT COUNT(*)
+        FROM comments
         WHERE user_id = ?
     `, userID).Scan(&profile.CommentCount)
 	if err != nil {
@@ -1288,7 +1296,7 @@ func (ph *PostHandler) getUserProfile(userID string) (*ProfileData, error) {
 
 	// Get likes received
 	err = utils.GlobalDB.QueryRow(`
-        SELECT COUNT(*) 
+        SELECT COUNT(*)
         FROM reaction l
         JOIN posts p ON l.post_id = p.id
         WHERE p.user_id = ? AND l.like = 1

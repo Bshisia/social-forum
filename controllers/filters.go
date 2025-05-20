@@ -265,7 +265,7 @@ func fetchUserPostsForLikes(userID string) ([]utils.Post, error) {
         LEFT JOIN post_categories pc ON p.id = pc.post_id
         LEFT JOIN categories c ON pc.category_id = c.id
         JOIN reaction r ON p.id = r.post_id
-        WHERE r.user_id = ? AND r.like = 1 OR r.like = 0
+        WHERE r.user_id = ? AND (r.like = 1 OR r.like = 0)
         ORDER BY p.post_at DESC
     `, userID)
 	if err != nil {

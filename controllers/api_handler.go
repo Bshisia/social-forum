@@ -1258,6 +1258,16 @@ func (ah *APIHandler) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 		userID = sessionUserID
 	}
 
+	// Validate user ID format
+	if err := utils.ValidateUserID(userID); err != nil {
+		log.Printf("Invalid user ID format for profile: %s, error: %v", userID, err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Invalid user ID format",
+		})
+		return
+	}
+
 	log.Printf("Getting profile for user ID: %s", userID)
 
 	// Query user data
@@ -1346,6 +1356,14 @@ func (ah *APIHandler) handleUpdateProfilePic(w http.ResponseWriter, r *http.Requ
 	if userID == "" {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized - No valid user ID found"})
+		return
+	}
+
+	// Validate user ID format
+	if err := utils.ValidateUserID(userID); err != nil {
+		log.Printf("Invalid user ID format for profile picture: %s, error: %v", userID, err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid user ID format"})
 		return
 	}
 
@@ -1641,6 +1659,30 @@ func (ah *APIHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"message": "Nickname, email, and password are required",
+			"success": false,
+		})
+		return
+	}
+
+	// Validate email format
+	if err := utils.ValidateEmail(userData.Email); err != nil {
+		log.Printf("Invalid email format: %s, error: %v", userData.Email, err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid email format",
+			"success": false,
+		})
+		return
+	}
+
+	// Validate nickname format
+	if err := utils.ValidateNickname(userData.Nickname); err != nil {
+		log.Printf("Invalid nickname format: %s, error: %v", userData.Nickname, err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid nickname format (must be 3-30 characters, alphanumeric with _.-)",
 			"success": false,
 		})
 		return
@@ -2171,6 +2213,16 @@ func (ah *APIHandler) handleUserStats(w http.ResponseWriter, r *http.Request) {
 		}
 
 		userID = sessionUserID
+	}
+
+	// Validate user ID format
+	if err := utils.ValidateUserID(userID); err != nil {
+		log.Printf("Invalid user ID format for stats: %s, error: %v", userID, err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Invalid user ID format",
+		})
+		return
 	}
 
 	log.Printf("Getting stats for user ID: %s", userID)
