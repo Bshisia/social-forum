@@ -69,7 +69,9 @@ func TestValidateEmail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ValidateEmail(tt.email); got != tt.want {
+			err := ValidateEmail(tt.email)
+			got := err == nil
+			if got != tt.want {
 				t.Errorf("ValidateEmail() = %v, want %v", got, tt.want)
 			}
 		})

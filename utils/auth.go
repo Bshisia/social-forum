@@ -1,21 +1,10 @@
 package utils
 
 import (
-	"regexp"
 	"unicode"
 
 	"github.com/gofrs/uuid"
 )
-
-// ValidateEmail checks if the provided email address is valid
-// Uses a regular expression to validate the email format
-// @param email - The email address to validate
-// @returns bool - True if the email is valid, false otherwise
-func ValidateEmail(email string) bool {
-	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
-	match, _ := regexp.MatchString(pattern, email)
-	return match
-}
 
 // ValidateUsername checks if the provided username is valid
 // Username must be 3-30 characters long and contain at least one letter
