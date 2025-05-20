@@ -14,7 +14,6 @@ import ProfileComponent from './components/profile/profile.js';
 import FilterNavComponent from './components/filters/filters_nav.js';
 import UsersNavComponent from './components/users/users_nav.js';
 import NotificationsComponent from './components/notifications/notifications.js';
-import eventBus from './utils/event-bus.js';
 
 export {
     loadPosts,
@@ -527,11 +526,11 @@ function initializeUI() {
         .then(() => {
             console.log('WebSocket service initialized successfully');
 
-            // Set up notification popup handler
-            eventBus.on('show_notification_popup', (notification) => {
-                if (window.notificationsComponent) {
-                    window.notificationsComponent.showToastNotification(notification);
-                }
+            // Import the standalone notification handler
+            import('./notification-handler.js').then(() => {
+                console.log('Notification handler loaded successfully');
+            }).catch(error => {
+                console.error('Failed to load notification handler:', error);
             });
         })
         .catch(error => {
@@ -564,12 +563,8 @@ function initializeUI() {
                 );
                 navbar.mount(navbarElement);
 
-                // Listen for real-time notification count updates
-                eventBus.on('new_notification', (data) => {
-                    if (navbar && typeof navbar.updateNotificationCount === 'function') {
-                        navbar.updateNotificationCount(data.unreadCount);
-                    }
-                });
+                // The navbar component now listens for notification events directly
+                // No need to set up a redundant event listener here
             })
             .catch(error => {
                 console.error('Error fetching notification count:', error);
