@@ -1,4 +1,5 @@
 import eventBus from '../../utils/event-bus.js';
+import websocketService from '../../services/websocket-service.js';
 
 class ChatComponent {
     constructor(currentUserId, otherUserId) {
@@ -441,7 +442,12 @@ class ChatComponent {
         } else {
             // If not already typing, send typing indicator
             this.isTyping = true;
-            this.sendTypingStatus(true);
+
+            try {
+                this.sendTypingStatus(true);
+            } catch (error) {
+                console.warn('Error sending typing status:', error);
+            }
 
             // Add typing animation to the input field
             messageInput.classList.add('typing');
@@ -450,7 +456,12 @@ class ChatComponent {
         // Set a timer to stop typing indicator after some inactivity
         this.typingTimer = setTimeout(() => {
             this.isTyping = false;
-            this.sendTypingStatus(false);
+
+            try {
+                this.sendTypingStatus(false);
+            } catch (error) {
+                console.warn('Error stopping typing status:', error);
+            }
 
             // Remove typing animation from the input field
             if (messageInput) {
@@ -460,20 +471,34 @@ class ChatComponent {
     }
 
     sendTypingStatus(isTyping) {
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({
-                type: isTyping ? 'typing' : 'stop_typing',
-                sender: this.currentUserId,
-                recipient: this.otherUserId
-            }));
+        // Create the typing status message
+        const typingMessage = {
+            type: isTyping ? 'typing' : 'stop_typing',
+            sender: this.currentUserId,
+            recipient: this.otherUserId
+        };
+
+        // Try to use the global WebSocket service if the method exists
+        try {
+            if (websocketService && typeof websocketService.send === 'function') {
+                // Send via the global WebSocket service
+                websocketService.send(typingMessage);
+
+                // Also emit an event for local components
+                eventBus.emit('user_typing_status', {
+                    userId: this.currentUserId,
+                    recipientId: this.otherUserId,
+                    isTyping: isTyping
+                });
+            }
+        } catch (error) {
+            console.warn('Error using global WebSocket service:', error);
         }
 
-        // Also emit an event for the users_nav component
-        eventBus.emit('user_typing_status', {
-            userId: this.currentUserId,
-            recipientId: this.otherUserId,
-            isTyping: isTyping
-        });
+        // Also send through the chat-specific WebSocket if connected
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify(typingMessage));
+        }
     }
 
     showTypingIndicator(show, immediate = false) {
@@ -546,7 +571,12 @@ class ChatComponent {
 
             // Stop typing indicator
             this.isTyping = false;
-            this.sendTypingStatus(false);
+
+            try {
+                this.sendTypingStatus(false);
+            } catch (error) {
+                console.warn('Error stopping typing indicator:', error);
+            }
 
             // Explicitly hide the typing indicator immediately when sending a message
             this.showTypingIndicator(false, true);
