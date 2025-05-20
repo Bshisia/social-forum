@@ -294,6 +294,37 @@ class WebSocketService {
     }
 
     /**
+     * Send typing status to another user
+     * @param {string} recipientId - The ID of the user receiving the typing status
+     * @param {boolean} isTyping - Whether the current user is typing or not
+     * @returns {boolean} - True if the status was sent, false otherwise
+     */
+    sendTypingStatus(recipientId, isTyping) {
+        if (!this.currentUserId || !recipientId) {
+            console.warn('Cannot send typing status: Missing user IDs');
+            return false;
+        }
+
+        const message = {
+            type: isTyping ? 'typing' : 'stop_typing',
+            sender: this.currentUserId,
+            recipient: recipientId
+        };
+
+        // Send via WebSocket
+        const sent = this.send(message);
+
+        // Also emit an event for local components
+        eventBus.emit('user_typing_status', {
+            userId: this.currentUserId,
+            recipientId: recipientId,
+            isTyping: isTyping
+        });
+
+        return sent;
+    }
+
+    /**
      * Close the WebSocket connection
      */
     close() {
