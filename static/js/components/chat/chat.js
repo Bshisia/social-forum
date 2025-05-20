@@ -257,6 +257,9 @@ class ChatComponent {
         // Setup scroll listener for pagination
         this.setupScrollListener();
 
+        // Setup typing event listener
+        this.setupTypingListener();
+
         // Add event listener for page unload to clean up resources
         window.addEventListener('beforeunload', () => {
             this.cleanup();
@@ -297,7 +300,6 @@ class ChatComponent {
                         placeholder="Type your message here..."
                         class="message-input"
                         onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); window.chatComponent.handleSendMessage(); }"
-                        onkeyup="window.chatComponent.handleTyping()"
                     ></textarea>
                     <button id="send-message-btn" onclick="window.chatComponent.handleSendMessage()">
                         <i class="fas fa-paper-plane"></i>
@@ -414,8 +416,24 @@ class ChatComponent {
         }
     }
 
+    setupTypingListener() {
+        const messageInput = document.getElementById('message-input');
+        if (!messageInput) return;
+
+        // Add keyup event listener for typing detection
+        messageInput.addEventListener('keyup', (event) => {
+            // Don't trigger typing indicator for Enter key (unless Shift+Enter)
+            if (event.key === 'Enter' && !event.shiftKey) {
+                return;
+            }
+
+            this.handleTyping();
+        });
+    }
+
     handleTyping() {
         const messageInput = document.getElementById('message-input');
+        if (!messageInput) return;
 
         // If the user is already marked as typing, clear the previous timer
         if (this.isTyping) {
@@ -426,9 +444,7 @@ class ChatComponent {
             this.sendTypingStatus(true);
 
             // Add typing animation to the input field
-            if (messageInput) {
-                messageInput.classList.add('typing');
-            }
+            messageInput.classList.add('typing');
         }
 
         // Set a timer to stop typing indicator after some inactivity
@@ -460,7 +476,7 @@ class ChatComponent {
         });
     }
 
-    showTypingIndicator(show) {
+    showTypingIndicator(show, immediate = false) {
         const typingIndicator = document.getElementById('typing-indicator');
         if (!typingIndicator) return;
 
@@ -479,15 +495,23 @@ class ChatComponent {
             typingIndicator.style.transition = 'opacity 0.3s ease-in-out';
             typingIndicator.style.opacity = '1';
         } else {
-            // Fade out
-            typingIndicator.style.opacity = '0';
+            if (immediate) {
+                // Hide immediately without animation
+                typingIndicator.style.transition = 'none';
+                typingIndicator.style.opacity = '0';
+                typingIndicator.style.display = 'none';
+            } else {
+                // Fade out with animation
+                typingIndicator.style.transition = 'opacity 0.3s ease-in-out';
+                typingIndicator.style.opacity = '0';
 
-            // Hide after animation completes
-            setTimeout(() => {
-                if (typingIndicator.style.opacity === '0') {
-                    typingIndicator.style.display = 'none';
-                }
-            }, 300);
+                // Hide after animation completes
+                setTimeout(() => {
+                    if (typingIndicator.style.opacity === '0') {
+                        typingIndicator.style.display = 'none';
+                    }
+                }, 300);
+            }
         }
     }
 
@@ -523,6 +547,9 @@ class ChatComponent {
             // Stop typing indicator
             this.isTyping = false;
             this.sendTypingStatus(false);
+
+            // Explicitly hide the typing indicator immediately when sending a message
+            this.showTypingIndicator(false, true);
 
             // Add message to UI immediately for better UX
             const tempId = Date.now(); // Temporary ID
@@ -882,6 +909,16 @@ class ChatComponent {
         if (this.typingTimer) {
             clearTimeout(this.typingTimer);
             this.typingTimer = null;
+        }
+
+        // Remove typing event listener
+        const messageInput = document.getElementById('message-input');
+        if (messageInput) {
+            // Clone the element to remove all event listeners
+            const newMessageInput = messageInput.cloneNode(true);
+            if (messageInput.parentNode) {
+                messageInput.parentNode.replaceChild(newMessageInput, messageInput);
+            }
         }
 
         // Unsubscribe from event bus
