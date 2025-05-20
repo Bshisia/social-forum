@@ -350,6 +350,23 @@ function handleRoute() {
     toggleNavigationElements(!authPage);
 
 
+    // Check if this is a profile path with a user ID in the URL path
+    if (path.startsWith('/profile/')) {
+        const profileUserId = path.substring('/profile/'.length);
+        console.log('Profile user ID from path:', profileUserId);
+
+        // Check if the user ID is valid (not "stats" or other special paths)
+        if (profileUserId && profileUserId !== 'stats') {
+            router['/profile'](profileUserId);
+            return;
+        } else {
+            // Handle special profile paths or redirect to home
+            window.navigation.navigateTo('/');
+            return;
+        }
+    }
+
+    // Handle regular profile path with query parameter
     if (path === '/profile') {
         router['/profile'](userId);
         return;

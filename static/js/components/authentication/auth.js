@@ -71,6 +71,23 @@ class AuthComponent {
                             </button>
                         </div>
 
+                        <div class="auth-divider">
+                            <span>OR</span>
+                        </div>
+
+                        <div class="social-auth-container">
+                            <div class="social-auth-buttons">
+                                <a href="/auth/google" class="google-signin-btn">
+                                    <i class="fab fa-google"></i>
+                                    Sign in with Google
+                                </a>
+                                <a href="/auth/github" class="github-signin-btn">
+                                    <i class="fab fa-github"></i>
+                                    Sign in with GitHub
+                                </a>
+                            </div>
+                        </div>
+
                         <div class="form-footer">
                             Don't have an account? <a href="/signup" onclick="event.preventDefault(); window.location.href = '/signup'">Create Account</a>
                         </div>
@@ -153,6 +170,23 @@ class AuthComponent {
                                 <i class="fas fa-user-plus"></i>
                                 Create Account
                             </button>
+                        </div>
+
+                        <div class="auth-divider">
+                            <span>OR</span>
+                        </div>
+
+                        <div class="social-auth-container">
+                            <div class="social-auth-buttons">
+                                <a href="/auth/google" class="google-signin-btn">
+                                    <i class="fab fa-google"></i>
+                                    Sign up with Google
+                                </a>
+                                <a href="/auth/github" class="github-signin-btn">
+                                    <i class="fab fa-github"></i>
+                                    Sign up with GitHub
+                                </a>
+                            </div>
                         </div>
 
                         <div class="form-footer">
