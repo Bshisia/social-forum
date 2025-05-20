@@ -97,6 +97,22 @@ class WebSocketService {
             const data = JSON.parse(event.data);
             console.log('Received WebSocket message type:', data.type);
 
+            // Special handling for notification events
+            if (data.type === 'new_notification') {
+                console.log('Handling notification event with data:', data);
+
+                // Import the notification handler dynamically to ensure it's loaded
+                import('../notification-handler.js').then(module => {
+                    console.log('Notification handler loaded for WebSocket event');
+                    this.handleNewNotification(data);
+                }).catch(error => {
+                    console.error('Failed to load notification handler for WebSocket event:', error);
+                    // Try to handle the notification anyway
+                    this.handleNewNotification(data);
+                });
+                return;
+            }
+
             switch (data.type) {
                 case 'user_status':
                     this.handleUserStatus(data);
@@ -108,9 +124,6 @@ class WebSocketService {
                 case 'refresh_users':
                     this.handleRefreshUsers(data);
                     break;
-                case 'new_notification':
-                    this.handleNewNotification(data);
-                    break;
                 case 'users_list':
                     this.handleUsersList(data);
                     break;
@@ -119,10 +132,10 @@ class WebSocketService {
                     this.handleTypingStatus(data);
                     break;
                 default:
-                    console.log('Unknown message type:', data.type);
+                    console.log('Unknown message type:', data.type, 'with data:', data);
             }
         } catch (error) {
-            console.error('Error processing WebSocket message:', error);
+            console.error('Error processing WebSocket message:', error, 'Raw data:', event.data);
         }
     }
 
@@ -194,20 +207,51 @@ class WebSocketService {
         console.log('Received new notification:', data);
 
         // Only process if this notification is for the current user
-        if (data.receiverID === this.currentUserId) {
-            // Show notification popup
-            this.showNotificationPopup(data.notification);
+        if (data.receiverID === this.currentUserId || data.receiver_id === this.currentUserId) {
+            // Extract the notification data
+            const notification = data.notification;
+            const unreadCount = data.unreadCount || data.unread_count || 0;
 
-            // Emit an event for the notification component to handle
-            eventBus.emit('new_notification', {
-                notification: data.notification,
-                unreadCount: data.unreadCount
-            });
+            console.log('Processing notification for current user:', notification);
+            console.log('Unread count:', unreadCount);
 
-            // Update the notification count in the navbar
-            if (window.navbarComponent && typeof window.navbarComponent.updateNotificationCount === 'function') {
-                window.navbarComponent.updateNotificationCount(data.unreadCount);
+            // Make sure the notification has the correct format
+            if (notification) {
+                // Ensure the notification has a type
+                if (!notification.type) {
+                    // Try to determine the type from the data
+                    if (notification.post_id || notification.postID) {
+                        if (notification.comment_id || notification.commentID) {
+                            notification.type = 'comment';
+                        } else {
+                            notification.type = 'like';
+                        }
+                    } else if (notification.message_id || notification.messageID) {
+                        notification.type = 'message';
+                    } else {
+                        notification.type = 'message'; // Default to message
+                    }
+                    console.log('Determined notification type:', notification.type);
+                }
+
+                // Show notification popup
+                this.showNotificationPopup(notification);
+
+                // Emit an event for the notification component to handle
+                eventBus.emit('new_notification', {
+                    notification: notification,
+                    unreadCount: unreadCount
+                });
+
+                // Also emit a direct update_notification_count event
+                eventBus.emit('update_notification_count', unreadCount);
+
+                console.log('WebSocket: Emitted notification count update:', unreadCount);
+            } else {
+                console.error('Invalid notification data:', data);
             }
+        } else {
+            console.log('Notification not for current user. Current:', this.currentUserId, 'Receiver:', data.receiverID || data.receiver_id);
         }
     }
 
@@ -239,8 +283,35 @@ class WebSocketService {
      * @param {Object} notification - The notification data
      */
     showNotificationPopup(notification) {
+        console.log('WebSocketService: Showing notification popup for:', notification);
+
+        // Make sure we have a valid notification object
+        if (!notification) {
+            console.error('Cannot show notification popup: notification is null or undefined');
+            return;
+        }
+
+        // Log the raw notification to help with debugging
+        console.log('Raw notification data:', JSON.stringify(notification));
+
+        // Ensure the notification has the required fields
+        const validatedNotification = {
+            id: notification.id || notification.ID || Date.now(),
+            type: notification.type || 'message',
+            actorName: notification.actorName || notification.actor_name || 'Someone',
+            actorID: notification.actorID || notification.actor_id || '',
+            actorProfilePic: notification.actorProfilePic || notification.actor_profile_pic || '',
+            postID: notification.postID || notification.post_id || 0,
+            post_id: notification.postID || notification.post_id || 0, // Include both formats
+            createdAt: notification.createdAt || notification.created_at || new Date().toISOString()
+        };
+
+        // Log the validated notification to help with debugging
+        console.log('Validated notification:', JSON.stringify(validatedNotification));
+
         // This will be handled by the notifications component
-        eventBus.emit('show_notification_popup', notification);
+        eventBus.emit('show_notification_popup', validatedNotification);
+        console.log('WebSocketService: Emitted show_notification_popup event with:', validatedNotification);
     }
 
     /**
