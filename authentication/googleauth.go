@@ -33,10 +33,10 @@ func init() {
 	authURL = os.Getenv("GOOGLE_AUTH_URL")
 	tokenURL = os.Getenv("GOOGLE_TOKEN_URL")
 	userInfoURL = os.Getenv("GOOGLE_USER_INFO_URL")
-	oauthState = "OAUTH_STATE"
+	oauthState = os.Getenv("OAUTH_STATE")
 
-	if clientID == "" || clientSecret == "" || redirectURI == "" {
-		log.Fatal("Missing required environment variables")
+	if Google_clientID == "" || Google_clientSecret == "" || Google_redirectURI == "" {
+		log.Fatal("Missing required Google OAuth environment variables")
 	}
 }
 
