@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"forum/utils"
 	"io"
 	"log"
 	"net/http"
@@ -212,11 +213,34 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 	sentAtStr := sentAt.Format("2006-01-02 15:04:05")
 	log.Printf("Formatted timestamp: %s", sentAtStr)
 
+	// Validate sender and receiver IDs
+	if err := utils.ValidateUserID(requestBody.SenderID); err != nil {
+		log.Printf("Invalid sender ID: %s, error: %v", requestBody.SenderID, err)
+		http.Error(w, "Invalid sender ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := utils.ValidateUserID(requestBody.ReceiverID); err != nil {
+		log.Printf("Invalid receiver ID: %s, error: %v", requestBody.ReceiverID, err)
+		http.Error(w, "Invalid receiver ID", http.StatusBadRequest)
+		return
+	}
+
+	// Validate message content
+	if err := utils.ValidateContent(requestBody.Content, 5000); err != nil {
+		log.Printf("Invalid message content: %v", err)
+		http.Error(w, "Invalid message content", http.StatusBadRequest)
+		return
+	}
+
+	// Sanitize message content to prevent XSS
+	sanitizedContent := utils.SanitizeString(requestBody.Content)
+
 	// Insert message into database - explicitly set read to 0 (false) to ensure it's unread
 	result, err := GlobalDB.Exec(`
 		INSERT INTO messages (sender_id, receiver_id, content, sent_at, read)
 		VALUES (?, ?, ?, ?, 0)
-	`, requestBody.SenderID, requestBody.ReceiverID, requestBody.Content, sentAtStr)
+	`, requestBody.SenderID, requestBody.ReceiverID, sanitizedContent, sentAtStr)
 	if err != nil {
 		log.Printf("Database error saving message: %v", err)
 		http.Error(w, "Failed to save message", http.StatusInternalServerError)
