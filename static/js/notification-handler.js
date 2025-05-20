@@ -114,14 +114,24 @@ class NotificationHandler {
 
             // After showing the toast, animate it flying to the notification icon
             setTimeout(() => {
-                toast.classList.add('toast-fly-to-icon');
+                // Add a subtle bounce effect before flying
+                toast.style.transform = 'translateX(-10px)';
 
-                // Remove the toast after the animation completes
                 setTimeout(() => {
-                    toast.classList.add('toast-hiding');
-                    setTimeout(() => toast.remove(), 300);
-                }, 800); // Match this with the animation duration
-            }, 2000); // Show the toast for 2 seconds before it flies
+                    toast.style.transform = 'translateX(0)';
+
+                    // Start the flying animation after the bounce
+                    setTimeout(() => {
+                        toast.classList.add('toast-fly-to-icon');
+
+                        // Remove the toast after the animation completes
+                        setTimeout(() => {
+                            toast.classList.add('toast-hiding');
+                            setTimeout(() => toast.remove(), 300);
+                        }, 800); // Match this with the animation duration
+                    }, 150);
+                }, 150);
+            }, 2500); // Show the toast for 2.5 seconds before it flies
         }, 10);
     }
 
@@ -130,14 +140,32 @@ class NotificationHandler {
      */
     animateNotificationIcon() {
         const notificationIcon = document.querySelector('.notification-btn i');
+        const notificationBtn = document.querySelector('.notification-btn');
+
         if (notificationIcon) {
+            // First, ensure any previous animation is cleared
+            notificationIcon.classList.remove('notification-pulse');
+
+            // Force a reflow to restart the animation
+            void notificationIcon.offsetWidth;
+
             // Add the animation class
             notificationIcon.classList.add('notification-pulse');
 
-            // Remove the animation class after it completes (3 seconds)
+            // Add a subtle background pulse to the button itself
+            if (notificationBtn) {
+                notificationBtn.style.transition = 'background-color 0.3s ease';
+                notificationBtn.style.backgroundColor = 'rgba(79, 70, 229, 0.1)';
+
+                setTimeout(() => {
+                    notificationBtn.style.backgroundColor = 'transparent';
+                }, 300);
+            }
+
+            // Remove the animation class after it completes
             setTimeout(() => {
                 notificationIcon.classList.remove('notification-pulse');
-            }, 3000);
+            }, 2000);
         }
     }
 
@@ -147,15 +175,17 @@ class NotificationHandler {
      * @returns {string} Formatted message
      */
     formatNotificationMessage(notification) {
+        const actorName = notification.actorName || 'Someone';
+
         switch (notification.type) {
             case 'like':
-                return `<strong>${notification.actorName}</strong> liked your post`;
+                return `<strong>${actorName}</strong> liked your post <span class="notification-time">just now</span>`;
             case 'comment':
-                return `<strong>${notification.actorName}</strong> commented on your post`;
+                return `<strong>${actorName}</strong> commented on your post <span class="notification-time">just now</span>`;
             case 'message':
-                return `<strong>${notification.actorName}</strong> sent you a message`;
+                return `<strong>${actorName}</strong> sent you a message <span class="notification-time">just now</span>`;
             default:
-                return `<strong>${notification.actorName}</strong> interacted with your content`;
+                return `<strong>${actorName}</strong> interacted with your content <span class="notification-time">just now</span>`;
         }
     }
 
