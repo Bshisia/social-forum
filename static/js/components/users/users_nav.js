@@ -140,8 +140,7 @@ class UsersNavComponent {
 
         // Subscribe to refresh users list events
         this.refreshEventUnsubscribe = eventBus.on('refresh_users_list', () => {
-            console.log('Received refresh_users_list event');
-            this.refreshUsersList(false); // Don't show notification for automatic refreshes
+            this.refreshUsersList(false); 
         });
 
         // If we don't have users data yet, fetch it
