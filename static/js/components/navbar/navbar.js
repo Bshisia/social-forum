@@ -1,4 +1,6 @@
 import AuthService from '../../services/auth-service.js';
+import websocketService from '../../services/websocket-service.js';
+import eventBus from '../../utils/event-bus.js';
 
 class NavbarComponent {
     constructor(isLoggedIn, currentUserID, unreadCount, nickname = '') {
@@ -6,6 +8,9 @@ class NavbarComponent {
         this.currentUserID = currentUserID;
         this.unreadCount = unreadCount;
         this.nickname = nickname;
+        this.notificationEventUnsubscribe = null;
+        this.countUpdateUnsubscribe = null;
+        this.websocketUnsubscribe = null;
 
         // If nickname is not provided, try to get it from AuthService
         if (!this.nickname && this.isLoggedIn) {
@@ -14,6 +19,9 @@ class NavbarComponent {
                 this.nickname = currentUser.nickname;
             }
         }
+
+        // Log the initial notification count
+        console.log('NavbarComponent: Initial notification count:', this.unreadCount);
     }
 
     render() {
@@ -123,6 +131,50 @@ class NavbarComponent {
 
         element.innerHTML = this.render();
         this.attachEventListeners();
+
+        // Subscribe to notification events
+        this.notificationEventUnsubscribe = eventBus.on('new_notification', (data) => {
+            console.log('NavbarComponent: Received notification event with count', data.unreadCount);
+            this.updateNotificationCount(data.unreadCount);
+        });
+
+        // Also subscribe to update_notification_count events
+        this.countUpdateUnsubscribe = eventBus.on('update_notification_count', (count) => {
+            console.log('NavbarComponent: Received notification count update:', count);
+            this.updateNotificationCount(count);
+        });
+
+        // Subscribe to WebSocket events directly
+        if (websocketService && websocketService.socket) {
+            console.log('NavbarComponent: Subscribing to WebSocket events');
+
+            // Define the message handler
+            const handleWebSocketMessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('NavbarComponent: Received WebSocket message:', data);
+
+                    // Handle notification events
+                    if (data.type === 'notification' && data.receiverID === this.currentUserID) {
+                        console.log('NavbarComponent: Received notification WebSocket event with count', data.unreadCount);
+                        this.updateNotificationCount(data.unreadCount);
+                    }
+                } catch (error) {
+                    console.error('NavbarComponent: Error handling WebSocket message:', error);
+                }
+            };
+
+            // Add the event listener
+            websocketService.socket.addEventListener('message', handleWebSocketMessage);
+
+            // Store the handler for cleanup
+            this.websocketHandler = handleWebSocketMessage;
+        } else {
+            console.warn('NavbarComponent: WebSocket service not available');
+        }
+
+        // Log the current notification count
+        console.log('NavbarComponent: Mounted with notification count:', this.unreadCount);
     }
 
     /**
@@ -130,15 +182,54 @@ class NavbarComponent {
      * @param {number} count - The new notification count
      */
     updateNotificationCount(count) {
-        console.log('NavbarComponent: Updating notification count to', count);
-        this.unreadCount = count;
+        // Ensure count is a number
+        const numCount = parseInt(count, 10) || 0;
 
-        // Update the notification dot in the DOM
-        const navbarElement = document.getElementById('navbar');
-        if (navbarElement) {
-            navbarElement.innerHTML = this.render();
-            this.attachEventListeners();
+        // Only update if the count has changed
+        if (this.unreadCount === numCount) {
+            console.log('NavbarComponent: Notification count unchanged, skipping update');
+            return;
         }
+
+        console.log('NavbarComponent: Updating notification count from', this.unreadCount, 'to', numCount);
+        this.unreadCount = numCount;
+
+        // Find the notification button
+        const notificationBtn = document.querySelector('.notification-btn');
+        if (!notificationBtn) {
+            console.warn('Cannot update notification count: notification button not found');
+            return;
+        }
+
+        // Find existing notification dot
+        let notificationDot = notificationBtn.querySelector('.notification-dot');
+
+        if (numCount > 0) {
+            // If we have notifications, update or create the dot
+            if (notificationDot) {
+                // Update existing dot
+                notificationDot.textContent = numCount;
+                // Add a small animation to make the update noticeable
+                notificationDot.classList.remove('bounceIn');
+                void notificationDot.offsetWidth; // Force reflow to restart animation
+                notificationDot.classList.add('bounceIn');
+            } else {
+                // Create new dot
+                notificationDot = document.createElement('span');
+                notificationDot.className = 'notification-dot bounceIn';
+                notificationDot.textContent = numCount;
+                notificationBtn.appendChild(notificationDot);
+            }
+        } else if (notificationDot) {
+            // If no notifications, remove the dot
+            notificationDot.remove();
+        }
+
+        // Update the global notification count for other components to access
+        window.notificationCount = numCount;
+
+        // Also emit an event for other components that might need to know about the count change
+        eventBus.emit('update_notification_count', numCount);
     }
 
     attachEventListeners() {
@@ -190,6 +281,35 @@ class NavbarComponent {
                 });
             }
         });
+    }
+
+    /**
+     * Clean up when component is unmounted
+     */
+    unmount() {
+        // Remove global reference
+        if (window.navbarComponent === this) {
+            delete window.navbarComponent;
+        }
+
+        // Unsubscribe from event bus
+        if (this.notificationEventUnsubscribe) {
+            this.notificationEventUnsubscribe();
+            this.notificationEventUnsubscribe = null;
+        }
+
+        // Unsubscribe from count update events
+        if (this.countUpdateUnsubscribe) {
+            this.countUpdateUnsubscribe();
+            this.countUpdateUnsubscribe = null;
+        }
+
+        // Remove WebSocket event listener
+        if (websocketService && websocketService.socket && this.websocketHandler) {
+            console.log('NavbarComponent: Removing WebSocket event listener');
+            websocketService.socket.removeEventListener('message', this.websocketHandler);
+            this.websocketHandler = null;
+        }
     }
 }
 
