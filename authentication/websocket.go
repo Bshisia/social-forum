@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
@@ -123,12 +124,16 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		broadcastUserStatus(userID, false)
 	}()
 
-	// Keep connection alive and handle disconnection
+	// Keep connection alive and handle messages
 	for {
-		_, _, err := conn.ReadMessage()
+		_, message, err := conn.ReadMessage()
 		if err != nil {
+			log.Printf("Error reading message from user %s: %v", userID, err)
 			break
 		}
+
+		// Process the message
+		go handleWebSocketMessage(userID, message)
 	}
 }
 
@@ -383,6 +388,71 @@ func TriggerUsersListBroadcast(w http.ResponseWriter, r *http.Request) {
 	// Return success
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Users list broadcast triggered"))
+}
+
+// TypingMessage represents a typing status update
+type TypingMessage struct {
+	Type      string `json:"type"`
+	Sender    string `json:"sender"`
+	Recipient string `json:"recipient"`
+}
+
+// handleWebSocketMessage processes messages received from the main WebSocket connection
+func handleWebSocketMessage(senderID string, message []byte) {
+	// Parse the message
+	var msg map[string]interface{}
+	if err := json.Unmarshal(message, &msg); err != nil {
+		log.Printf("Error parsing WebSocket message: %v", err)
+		return
+	}
+
+	// Get message type
+	msgType, ok := msg["type"].(string)
+	if !ok {
+		log.Printf("Invalid message type in WebSocket message")
+		return
+	}
+
+	// Handle different message types
+	switch msgType {
+	case "typing", "stop_typing":
+		// Handle typing status messages
+		handleTypingMessage(senderID, msg)
+	default:
+		log.Printf("Unhandled message type in main WebSocket: %s", msgType)
+	}
+}
+
+// handleTypingMessage processes typing status messages and forwards them to the recipient
+func handleTypingMessage(senderID string, msg map[string]interface{}) {
+	// Extract recipient ID
+	recipientID, ok := msg["recipient"].(string)
+	if !ok {
+		log.Printf("Missing recipient in typing message")
+		return
+	}
+
+	// Create typing message
+	typingMsg := TypingMessage{
+		Type:      msg["type"].(string),
+		Sender:    senderID,
+		Recipient: recipientID,
+	}
+
+	// Forward to recipient if online
+	clientsMux.RLock()
+	recipientConn, exists := clients[recipientID]
+	clientsMux.RUnlock()
+
+	if exists {
+		if err := recipientConn.WriteJSON(typingMsg); err != nil {
+			log.Printf("Error forwarding typing status to user %s: %v", recipientID, err)
+		} else {
+			log.Printf("Successfully forwarded typing status from %s to %s", senderID, recipientID)
+		}
+	} else {
+		log.Printf("Recipient %s not connected, typing status not delivered", recipientID)
+	}
 }
 
 // BroadcastUsersList sends the current list of users to all connected clients
