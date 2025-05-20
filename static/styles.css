@@ -2219,11 +2219,13 @@ input[type="file"] {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   border: 2px solid rgba(255, 255, 255, 0.1);
   transition: all var(--transition-normal);
+  margin-right: 3px;
+  margin-bottom: 3px;
 }
 
 .user-link:hover .user-avatar {
@@ -2235,6 +2237,8 @@ input[type="file"] {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 50%;
+  overflow: hidden;
 }
 
 .user-avatar-placeholder {
@@ -2245,27 +2249,32 @@ input[type="file"] {
   align-items: center;
   justify-content: center;
   color: white;
+  border-radius: 50%;
+  overflow: hidden;
 }
 
 /* Status Indicator */
 .status-indicator {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 12px;
-  height: 12px;
+  bottom: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   border: 2px solid var(--card-background);
   transition: all var(--transition-normal);
+  z-index: 1;
 }
 
 .status-indicator.online {
   background-color: var(--success-color);
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3), 0 0 4px 1px rgba(16, 185, 129, 0.4);
+  animation: statusPulse 2s infinite alternate;
 }
 
 .status-indicator.offline {
   background-color: var(--light-gray);
+  box-shadow: 0 0 0 2px rgba(161, 161, 170, 0.2), 0 0 4px 1px rgba(161, 161, 170, 0.2);
 }
 
 /* Username and Status */
@@ -2367,6 +2376,11 @@ input[type="file"] {
 @keyframes bounce {
   0%, 60%, 100% { transform: translateY(0); }
   30% { transform: translateY(-3px); }
+}
+
+@keyframes statusPulse {
+  0% { box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3), 0 0 4px 1px rgba(16, 185, 129, 0.4); }
+  100% { box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.4), 0 0 8px 2px rgba(16, 185, 129, 0.6); }
 }
 
 /* Users navigation responsive styles */
@@ -3498,19 +3512,24 @@ input[type="file"] {
   color: var(--light-gray);
 }
 
-.status-indicator {
-  width: 8px;
-  height: 8px;
+.chat-status .status-indicator {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background-color: var(--light-gray);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
 }
 
-.status-indicator.online {
+.chat-status .status-indicator.online {
   background-color: var(--success-color);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3), 0 0 4px 1px rgba(16, 185, 129, 0.4);
+  animation: statusPulse 2s infinite alternate;
 }
 
-.status-indicator.offline {
+.chat-status .status-indicator.offline {
   background-color: var(--light-gray);
+  box-shadow: 0 0 0 2px rgba(161, 161, 170, 0.2), 0 0 4px 1px rgba(161, 161, 170, 0.2);
 }
 
 .messages-container {
@@ -3888,6 +3907,7 @@ input[type="file"] {
 
 .user-item.online .status {
   color: #2ecc71;
+  overflow: #2ecc71;
 }
 
 .user-item.offline .status {
