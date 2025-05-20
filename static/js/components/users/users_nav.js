@@ -140,7 +140,7 @@ class UsersNavComponent {
 
         // Subscribe to refresh users list events
         this.refreshEventUnsubscribe = eventBus.on('refresh_users_list', () => {
-            this.refreshUsersList(false); 
+            this.refreshUsersList(false);
         });
 
         // If we don't have users data yet, fetch it
@@ -460,9 +460,12 @@ class UsersNavComponent {
 
     // Add unmount method to clean up
     unmount() {
-        // Clear all typing timers
+        // Clear any existing typing timers (if any)
         this.typingTimers.forEach(timer => clearTimeout(timer));
         this.typingTimers.clear();
+
+        // Clear typing users map
+        this.typingUsers.clear();
 
         // Unsubscribe from events
         if (this.typingEventUnsubscribe) {
@@ -516,17 +519,9 @@ class UsersNavComponent {
             // Update the UI
             this.updateTypingStatus(userId, true);
 
-            // Set a timer to automatically clear typing status after 3 seconds
-            // (in case we don't receive a stop_typing event)
-            const timer = setTimeout(() => {
-                this.typingUsers.delete(userId);
-                this.updateTypingStatus(userId, false);
-                this.typingTimers.delete(userId);
-            }, 3000);
-
-            this.typingTimers.set(userId, timer);
+            // No timeout - typing indicator will stay visible until we receive a stop_typing event
         } else {
-            // Clear typing status
+            // Clear typing status when we receive a stop_typing event
             this.typingUsers.delete(userId);
 
             // Update the UI

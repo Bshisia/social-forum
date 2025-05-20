@@ -453,11 +453,15 @@ class ChatComponent {
             messageInput.classList.add('typing');
         }
 
-        // Set a timer to stop typing indicator after some inactivity
+        // Set a timer to detect when typing stops (after 2 seconds of inactivity)
+        // When typing stops, we send a stop_typing event to notify other components
+        // This is critical for the users_nav component which keeps showing the typing indicator
+        // until it explicitly receives a stop_typing event
         this.typingTimer = setTimeout(() => {
             this.isTyping = false;
 
             try {
+                // Send stop_typing event to notify other users that typing has stopped
                 this.sendTypingStatus(false);
             } catch (error) {
                 console.warn('Error stopping typing status:', error);
@@ -573,6 +577,7 @@ class ChatComponent {
             this.isTyping = false;
 
             try {
+                // Send stop_typing event to ensure typing indicators are removed in all components
                 this.sendTypingStatus(false);
             } catch (error) {
                 console.warn('Error stopping typing indicator:', error);
