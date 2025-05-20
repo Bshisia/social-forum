@@ -37,6 +37,7 @@ class NavbarComponent {
         }
 
         const template = `
+            <div class="mobile-menu-overlay"></div>
             <nav class="navbar">
                 <div class="nav-container">
                     <a href="/" class="logo-link">
@@ -235,12 +236,52 @@ class NavbarComponent {
     attachEventListeners() {
         const hamburgerBtn = document.querySelector('.hamburger-btn');
         const navRight = document.querySelector('.nav-right');
+        const overlay = document.querySelector('.mobile-menu-overlay');
         const menuToggles = document.querySelectorAll('.menu-toggle-btn');
         const signoutBtn = document.getElementById('signout-btn');
 
-        if (hamburgerBtn && navRight) {
-            hamburgerBtn.addEventListener('click', () => {
-                navRight.classList.toggle('active');
+        // Function to close the mobile menu
+        const closeMenu = () => {
+            navRight.classList.remove('active');
+            overlay.classList.remove('active');
+            document.body.style.overflow = '';
+        };
+
+        // Function to toggle the mobile menu
+        const toggleMenu = () => {
+            navRight.classList.toggle('active');
+            overlay.classList.toggle('active');
+            document.body.style.overflow = navRight.classList.contains('active') ? 'hidden' : '';
+        };
+
+        // Toggle menu when clicking hamburger button
+        if (hamburgerBtn && navRight && overlay) {
+            hamburgerBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent event from bubbling to document
+                toggleMenu();
+            });
+        }
+
+        // Close menu when clicking overlay
+        if (overlay) {
+            overlay.addEventListener('click', closeMenu);
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            // Only process if menu is open
+            if (navRight && navRight.classList.contains('active')) {
+                // Check if click is outside the menu
+                if (!navRight.contains(e.target) && e.target !== hamburgerBtn) {
+                    closeMenu();
+                }
+            }
+        });
+
+        // Prevent clicks inside the menu from closing it
+        if (navRight) {
+            navRight.addEventListener('click', (e) => {
+                e.stopPropagation(); // Stop clicks from reaching the document
             });
         }
 
@@ -310,6 +351,9 @@ class NavbarComponent {
             websocketService.socket.removeEventListener('message', this.websocketHandler);
             this.websocketHandler = null;
         }
+
+        // Reset body overflow in case menu was open when component unmounted
+        document.body.style.overflow = '';
     }
 }
 

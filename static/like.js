@@ -26,7 +26,7 @@ function handleReaction(event) {
             window.location.href = '/signin';
             throw new Error('Session expired. Please sign in again.');
         }
-        
+
         if (response.status === 401) {
             window.location.href = '/signin';
             throw new Error('Please sign in to react to posts');
@@ -39,7 +39,7 @@ function handleReaction(event) {
         }
         const likesElement = document.getElementById(`likes-${postID}`);
         const dislikesElement = document.getElementById(`dislikes-${postID}`);
-        
+
         if (likesElement && dislikesElement) {
             likesElement.textContent = data.likes;
             dislikesElement.textContent = data.dislikes;
@@ -92,7 +92,7 @@ function handleCommentReaction(event) {
         }
         const likesElement = document.getElementById(`comment-likes-${commentID}`);
         const dislikesElement = document.getElementById(`comment-dislikes-${commentID}`);
-        
+
         if (likesElement && dislikesElement) {
             likesElement.textContent = data.likes;
             dislikesElement.textContent = data.dislikes;
@@ -109,43 +109,43 @@ function handleCommentReaction(event) {
 function editComment(commentId) {
     const contentDiv = document.getElementById(`comment-content-${commentId}`);
     if (!contentDiv) return;
-    
+
     // Check if we're already editing
     if (contentDiv.querySelector('.edit-comment-form')) {
         return;
     }
-    
+
     const currentContent = contentDiv.textContent.trim();
-    
+
     // Create edit form
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/editcomment';
     form.className = 'edit-comment-form';
-    
+
     // Create textarea
     const textarea = document.createElement('textarea');
     textarea.name = 'content';
     textarea.value = currentContent;
     textarea.required = true;
     textarea.className = 'comment-input';
-    
+
     // Create hidden input for comment ID
     const hiddenInput = document.createElement('input');
     hiddenInput.type = 'hidden';
     hiddenInput.name = 'comment_id';
     hiddenInput.value = commentId;
-    
+
     // Create buttons container
     const buttonsDiv = document.createElement('div');
     buttonsDiv.className = 'edit-buttons';
-    
+
     // Create save button
     const saveButton = document.createElement('button');
     saveButton.type = 'submit';
     saveButton.className = 'save-btn';
     saveButton.textContent = 'Save';
-    
+
     // Create cancel button
     const cancelButton = document.createElement('button');
     cancelButton.type = 'button';
@@ -155,18 +155,18 @@ function editComment(commentId) {
         e.preventDefault();
         contentDiv.innerHTML = currentContent;
     };
-    
+
     // Assemble the form
     buttonsDiv.appendChild(saveButton);
     buttonsDiv.appendChild(cancelButton);
     form.appendChild(textarea);
     form.appendChild(hiddenInput);
     form.appendChild(buttonsDiv);
-    
+
     // Replace content with form
     contentDiv.innerHTML = '';
     contentDiv.appendChild(form);
-    
+
     // Focus the textarea
     textarea.focus();
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
@@ -175,7 +175,7 @@ function editComment(commentId) {
 // Comment deletion confirmation
 function confirmDeleteComment(event, commentId) {
     event.preventDefault();
-    
+
     if (confirm('Are you sure you want to delete this comment? This action cannot be undone.')) {
         const form = event.target.closest('form');
         if (form) {
@@ -194,32 +194,5 @@ document.querySelectorAll(".comment-like-btn, .comment-dislike-btn").forEach(but
     button.addEventListener("click", handleCommentReaction);
 });
 
-document.addEventListener('DOMContentLoaded', function() {
-    const hamburgerBtn = document.querySelector('.hamburger-btn');
-    const navRight = document.querySelector('.nav-right');
-    const overlay = document.querySelector('.mobile-menu-overlay');
-    const menuToggles = document.querySelectorAll('.menu-toggle-btn');
-
-    // Toggle mobile menu
-    hamburgerBtn.addEventListener('click', () => {
-        navRight.classList.toggle('active');
-        overlay.classList.toggle('active');
-        document.body.style.overflow = navRight.classList.contains('active') ? 'hidden' : '';
-    });
-
-    // Close menu when clicking overlay
-    overlay.addEventListener('click', () => {
-        navRight.classList.remove('active');
-        overlay.classList.remove('active');
-        document.body.style.overflow = '';
-    });
-
-    // Toggle categories and filters sections
-    menuToggles.forEach(toggle => {
-        toggle.addEventListener('click', () => {
-            const content = toggle.nextElementSibling;
-            toggle.classList.toggle('active');
-            content.classList.toggle('active');
-        });
-    });
-});
+// Note: The hamburger menu functionality has been moved to navbar.js
+// This prevents duplicate event listeners

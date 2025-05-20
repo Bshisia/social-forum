@@ -576,7 +576,7 @@ a:hover {
 }
 
 /* Desktop styles */
-@media (min-width: 769px) {
+@media (min-width: 1000px) {
   .hamburger-btn {
     display: none;
   }
@@ -1502,7 +1502,7 @@ a:hover {
   box-shadow: var(--hover-shadow);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1000px) {
   .main-content {
     margin: 10px;
     border: none;
@@ -1513,7 +1513,7 @@ a:hover {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1000px) {
   .main-wrapper {
     flex-direction: column;
   }
@@ -1744,7 +1744,7 @@ a:hover {
 }
 
 /* Mobile Filter Menu */
-@media (max-width: 768px) {
+@media (max-width: 1000px) {
   .mobile-filter-menu {
     position: fixed;
     bottom: 20px;
