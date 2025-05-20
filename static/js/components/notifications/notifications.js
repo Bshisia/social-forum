@@ -143,10 +143,6 @@ class NotificationsComponent {
                 return `<strong>${notification.actorName}</strong> liked your post`;
             case 'comment':
                 return `<strong>${notification.actorName}</strong> commented on your post`;
-            case 'mention':
-                return `<strong>${notification.actorName}</strong> mentioned you in a post`;
-            case 'follow':
-                return `<strong>${notification.actorName}</strong> started following you`;
             case 'message':
                 return `<strong>${notification.actorName}</strong> sent you a message`;
             default:
@@ -163,10 +159,7 @@ class NotificationsComponent {
         switch (notification.type) {
             case 'like':
             case 'comment':
-            case 'mention':
                 return `/?id=${notification.postID}`;
-            case 'follow':
-                return `/profile?id=${notification.actorID}`;
             case 'message':
                 // For message notifications, we use the actorID (sender's ID)
                 // Make sure we have a valid currentUserId before constructing the URL
@@ -352,18 +345,6 @@ class NotificationsComponent {
      * @param {Object} notification - The notification object
      */
     showToastNotification(notification) {
-        // Check if toast container exists, create if not
-        let toastContainer = document.querySelector('.toast-container');
-        if (!toastContainer) {
-            toastContainer = document.createElement('div');
-            toastContainer.className = 'toast-container';
-            document.body.appendChild(toastContainer);
-        }
-
-        // Create toast element
-        const toast = document.createElement('div');
-        toast.className = 'toast notification-toast';
-
         // Create toast content
         const message = this.formatNotificationMessage(notification);
         const link = this.getNotificationLink(notification);
@@ -378,18 +359,13 @@ class NotificationsComponent {
             case 'comment':
                 notificationIcon = 'fa-comment';
                 break;
-            case 'mention':
-                notificationIcon = 'fa-at';
-                break;
-            case 'follow':
-                notificationIcon = 'fa-user-plus';
-                break;
             case 'message':
                 notificationIcon = 'fa-envelope';
                 break;
         }
 
-        toast.innerHTML = `
+        // Create the notification content HTML
+        const notificationContent = `
             <div class="toast-header">
                 <i class="fas ${notificationIcon} notification-icon"></i>
                 <strong>New Notification</strong>
@@ -411,6 +387,63 @@ class NotificationsComponent {
             </div>
         `;
 
+        // Step 1: Create the popup that appears in the center of the screen
+        const popup = document.createElement('div');
+        popup.className = 'notification-popup';
+        popup.innerHTML = notificationContent;
+        document.body.appendChild(popup);
+
+        // Add event listeners
+        popup.querySelector('.toast-close').addEventListener('click', () => {
+            popup.remove();
+        });
+
+        popup.querySelector('.toast-action').addEventListener('click', () => {
+            window.navigation.navigateTo(link);
+            popup.remove();
+        });
+
+        // Step 2: Show the popup in the center of the screen
+        setTimeout(() => {
+            popup.classList.add('show');
+        }, 10);
+
+        // Step 3: After a delay, animate the popup flying to the notification icon
+        setTimeout(() => {
+            popup.classList.add('fly');
+
+            // Animate the notification icon in the navbar
+            this.animateNotificationIcon();
+
+            // Remove the popup after the animation completes
+            setTimeout(() => {
+                popup.remove();
+
+                // Step 4: After the popup flies to the icon, show the regular toast notification
+                this.showRegularToast(notificationContent, link);
+            }, 800); // Match this with the animation duration
+        }, 1500); // Show the popup for 1.5 seconds before it flies
+    }
+
+    /**
+     * Show a regular toast notification
+     * @param {string} content - The HTML content for the toast
+     * @param {string} link - The link to navigate to when clicking the toast
+     */
+    showRegularToast(content, link) {
+        // Check if toast container exists, create if not
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container';
+            document.body.appendChild(toastContainer);
+        }
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = 'toast notification-toast';
+        toast.innerHTML = content;
+
         // Add to container
         toastContainer.appendChild(toast);
 
@@ -425,8 +458,6 @@ class NotificationsComponent {
             toast.remove();
         });
 
-        // Notification sound removed as per user request
-
         // Auto-remove after 5 seconds
         setTimeout(() => {
             if (toast.parentNode) {
@@ -439,9 +470,6 @@ class NotificationsComponent {
         setTimeout(() => {
             toast.classList.add('toast-show');
         }, 10);
-
-        // Animate the notification icon in the navbar
-        this.animateNotificationIcon();
     }
 
     /**
@@ -453,10 +481,10 @@ class NotificationsComponent {
             // Add the animation class
             notificationIcon.classList.add('notification-pulse');
 
-            // Remove the animation class after it completes
+            // Remove the animation class after it completes (3 seconds)
             setTimeout(() => {
                 notificationIcon.classList.remove('notification-pulse');
-            }, 1000);
+            }, 3000);
         }
     }
 
