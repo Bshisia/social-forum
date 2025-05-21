@@ -45,6 +45,7 @@ class NavbarComponent {
                     </a>
                     <button class="hamburger-btn">
                         <i class="fas fa-bars"></i>
+                        <i class="fas fa-times"></i>
                     </button>
                     <div class="nav-right">
                         ${this.isLoggedIn ? `
@@ -88,6 +89,10 @@ class NavbarComponent {
     renderMobileMenu() {
         return `
             <div class="mobile-menu-section">
+                <button class="mobile-menu-close">
+                    <i class="fas fa-times"></i>
+                </button>
+                <h3>Menu</h3>
                 <button class="menu-toggle-btn">
                     Categories <i class="fas fa-chevron-down"></i>
                 </button>
@@ -239,18 +244,21 @@ class NavbarComponent {
         const overlay = document.querySelector('.mobile-menu-overlay');
         const menuToggles = document.querySelectorAll('.menu-toggle-btn');
         const signoutBtn = document.getElementById('signout-btn');
+        const mobileMenuClose = document.querySelector('.mobile-menu-close');
 
         // Function to close the mobile menu
         const closeMenu = () => {
             navRight.classList.remove('active');
             overlay.classList.remove('active');
             document.body.style.overflow = '';
+            hamburgerBtn.classList.remove('active');
         };
 
         // Function to toggle the mobile menu
         const toggleMenu = () => {
             navRight.classList.toggle('active');
             overlay.classList.toggle('active');
+            hamburgerBtn.classList.toggle('active');
             document.body.style.overflow = navRight.classList.contains('active') ? 'hidden' : '';
         };
 
@@ -260,6 +268,11 @@ class NavbarComponent {
                 e.stopPropagation(); // Prevent event from bubbling to document
                 toggleMenu();
             });
+        }
+
+        // Close menu when clicking X button
+        if (mobileMenuClose) {
+            mobileMenuClose.addEventListener('click', closeMenu);
         }
 
         // Close menu when clicking overlay
