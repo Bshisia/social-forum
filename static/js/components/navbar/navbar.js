@@ -122,6 +122,17 @@ class NavbarComponent {
                     </ul>
                 </div>
             </div>
+
+            <div class="mobile-menu-section">
+                <button class="menu-toggle-btn" id="mobile-users-toggle">
+                    Users <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="mobile-menu-content" id="mobile-users-content">
+                    <div class="mobile-users-loading">
+                        <i class="fas fa-spinner fa-spin"></i> Loading users...
+                    </div>
+                </div>
+            </div>
             ` : ''}`;
     }
 
@@ -245,6 +256,7 @@ class NavbarComponent {
         const menuToggles = document.querySelectorAll('.menu-toggle-btn');
         const signoutBtn = document.getElementById('signout-btn');
         const mobileMenuClose = document.querySelector('.mobile-menu-close');
+        const mobileUsersToggle = document.getElementById('mobile-users-toggle');
 
         // Function to close the mobile menu
         const closeMenu = () => {
@@ -335,6 +347,90 @@ class NavbarComponent {
                 });
             }
         });
+
+        // Special handling for mobile users toggle to load users when opened
+        if (mobileUsersToggle && this.isLoggedIn) {
+            mobileUsersToggle.addEventListener('click', () => {
+                const usersContent = document.getElementById('mobile-users-content');
+                if (usersContent && !usersContent.classList.contains('active')) {
+                    // Load users when opening the dropdown for the first time
+                    if (usersContent.querySelector('.mobile-users-loading')) {
+                        this.loadMobileUsers();
+                    }
+                }
+            });
+        }
+    }
+
+    async loadMobileUsers() {
+        const usersContent = document.getElementById('mobile-users-content');
+        if (!usersContent) return;
+
+        try {
+            const currentUserId = this.currentUserID;
+            const response = await fetch(`/api/chat/users?currentUserId=${currentUserId}`);
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch users');
+            }
+
+            const users = await response.json();
+
+            // Filter out current user and sort by online status
+            const filteredUsers = users.filter(user => {
+                const userId = user.ID || user.id;
+                return userId && userId.toString() !== currentUserId.toString();
+            }).sort((a, b) => {
+                // Sort by online status first, then alphabetically
+                if (a.isOnline && !b.isOnline) return -1;
+                if (!a.isOnline && b.isOnline) return 1;
+                const nameA = a.UserName || a.userName || a.Nickname || a.nickname || 'Unknown';
+                const nameB = b.UserName || b.userName || b.Nickname || b.nickname || 'Unknown';
+                return nameA.localeCompare(nameB);
+            });
+
+            // Render users list
+            if (filteredUsers.length === 0) {
+                usersContent.innerHTML = '<div class="no-users">No users found</div>';
+            } else {
+                const usersHTML = filteredUsers.map(user => {
+                    const userId = user.ID || user.id;
+                    const userName = user.UserName || user.userName || user.Nickname || user.nickname || 'Unknown User';
+                    const isOnline = user.isOnline || user.is_online || false;
+                    const profilePic = user.ProfilePic || user.profilePic || user.profile_pic;
+
+                    return `
+                        <li>
+                            <a href="/chat?user1=${currentUserId}&user2=${userId}"
+                               onclick="event.preventDefault(); window.location.href = '/chat?user1=${currentUserId}&user2=${userId}'">
+                                <div class="mobile-user-item">
+                                    <div class="mobile-user-avatar">
+                                        ${profilePic ?
+                                            `<img src="${profilePic}" alt="${userName}'s avatar" class="mobile-user-avatar-img">` :
+                                            `<div class="mobile-user-avatar-placeholder">
+                                                <i class="fas fa-user"></i>
+                                            </div>`
+                                        }
+                                        <span class="mobile-status-indicator ${isOnline ? 'online' : 'offline'}"></span>
+                                    </div>
+                                    <div class="mobile-user-info">
+                                        <span class="mobile-username">${userName}</span>
+                                        <span class="mobile-status ${isOnline ? 'online' : 'offline'}">
+                                            <i class="fas fa-circle"></i> ${isOnline ? 'Online' : 'Offline'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                    `;
+                }).join('');
+
+                usersContent.innerHTML = `<ul class="mobile-users-list">${usersHTML}</ul>`;
+            }
+        } catch (error) {
+            console.error('Error loading mobile users:', error);
+            usersContent.innerHTML = '<div class="users-error">Failed to load users</div>';
+        }
     }
 
     /**
