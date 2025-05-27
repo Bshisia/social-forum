@@ -4,7 +4,7 @@
  */
 
 import AuthService from '../../services/auth-service.js';
-import { markAsRead as markNotificationAsRead } from '/static/notification.js';
+import { markAsRead as markNotificationAsRead, markAllAsRead as markAllNotificationsAsRead } from '/static/notification.js';
 import eventBus from '../../utils/event-bus.js';
 
 class NotificationsComponent {
@@ -93,6 +93,58 @@ class NotificationsComponent {
             return true;
         } catch (error) {
             console.error('Error marking notification as read:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Mark all notifications as read
+     * @returns {Promise} Promise that resolves when all notifications are marked as read
+     */
+    async markAllAsRead() {
+        try {
+            // Show loading state on the button
+            const markAllBtn = document.querySelector('.mark-all-read-btn');
+            if (markAllBtn) {
+                markAllBtn.disabled = true;
+                markAllBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Marking as read...';
+            }
+
+            // Use the imported markAllNotificationsAsRead function
+            const result = await markAllNotificationsAsRead();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to mark all notifications as read');
+            }
+
+            // Update local state - mark all notifications as read
+            this.notifications.forEach(notification => {
+                notification.isRead = true;
+            });
+            this.unreadCount = 0;
+
+            // Update notification count in navbar
+            this.updateNotificationCount();
+
+            // Re-render the component to update the UI
+            this.mainContainer.innerHTML = this.render();
+
+            // Show success message
+            this.showSuccessMessage(`${result.markedAsRead} notifications marked as read`);
+
+            return true;
+        } catch (error) {
+            console.error('Error marking all notifications as read:', error);
+
+            // Reset button state
+            const markAllBtn = document.querySelector('.mark-all-read-btn');
+            if (markAllBtn) {
+                markAllBtn.disabled = false;
+                markAllBtn.innerHTML = '<i class="fas fa-check-double"></i> Mark All as Read';
+            }
+
+            // Show error message
+            this.showErrorMessage('Failed to mark all notifications as read');
             return false;
         }
     }
@@ -243,13 +295,26 @@ class NotificationsComponent {
             `;
         }).join('');
 
+        // Check if there are any unread notifications
+        const hasUnreadNotifications = this.notifications.some(n => !n.isRead);
+
         return `
             <div class="notifications-container">
                 <div class="notifications-header">
-                    <h1>Notifications</h1>
-                    <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
-                        <i class="fas fa-arrow-left"></i> Back
-                    </button>
+                    <div class="notifications-header-left">
+                        <h1>Notifications</h1>
+                        ${this.unreadCount > 0 ? `<span class="unread-count-badge">${this.unreadCount} unread</span>` : ''}
+                    </div>
+                    <div class="notifications-header-right">
+                        ${hasUnreadNotifications ? `
+                            <button onclick="notificationsComponent.markAllAsRead()" class="btn btn-primary mark-all-read-btn">
+                                <i class="fas fa-check-double"></i> Mark All as Read
+                            </button>
+                        ` : ''}
+                        <button onclick="window.navigation.navigateTo('/')" class="btn btn-outline">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </button>
+                    </div>
                 </div>
                 <div class="notifications-list">
                     ${notificationsHtml}
@@ -486,6 +551,64 @@ class NotificationsComponent {
                 notificationIcon.classList.remove('notification-pulse');
             }, 3000);
         }
+    }
+
+    /**
+     * Show a success message
+     * @param {string} message - The success message to display
+     */
+    showSuccessMessage(message) {
+        this.showMessage(message, 'success');
+    }
+
+    /**
+     * Show an error message
+     * @param {string} message - The error message to display
+     */
+    showErrorMessage(message) {
+        this.showMessage(message, 'error');
+    }
+
+    /**
+     * Show a message with the specified type
+     * @param {string} message - The message to display
+     * @param {string} type - The type of message ('success' or 'error')
+     */
+    showMessage(message, type) {
+        // Remove any existing messages
+        const existingMessage = document.querySelector('.notification-message-toast');
+        if (existingMessage) {
+            existingMessage.remove();
+        }
+
+        // Create message element
+        const messageElement = document.createElement('div');
+        messageElement.className = `notification-message-toast ${type}`;
+        messageElement.innerHTML = `
+            <div class="message-content">
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+                <span>${message}</span>
+            </div>
+            <button class="message-close" onclick="this.parentElement.remove()">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+
+        // Add to page
+        document.body.appendChild(messageElement);
+
+        // Show the message
+        setTimeout(() => {
+            messageElement.classList.add('show');
+        }, 10);
+
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (messageElement.parentNode) {
+                messageElement.classList.add('hiding');
+                setTimeout(() => messageElement.remove(), 300);
+            }
+        }, 5000);
     }
 
     /**
