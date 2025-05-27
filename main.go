@@ -68,6 +68,7 @@ func main() {
 	http.Handle("/api/notifications", notificationHandler)
 	http.Handle("/api/notifications/count", notificationHandler)
 	http.Handle("/notifications/mark-read", notificationHandler)
+	http.Handle("/notifications/mark-all-read", notificationHandler)
 
 	// SPA catch-all route - serve index.html for all other routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
