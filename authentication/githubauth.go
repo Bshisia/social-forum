@@ -127,7 +127,7 @@ func HandleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	// fmt.Println(string(userJSON))
 
 	//extract the info needed
-	username := userData["login"].(string)
+	nickname := userData["login"].(string)
 	email := userData["email"]
 	if email == nil {
 		email = ""
@@ -136,11 +136,11 @@ func HandleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	authoriser := "github"
 
 	var userID string
-	err = GlobalDB.QueryRow(`SELECT id FROM users WHERE username = ?`, username).Scan(&userID)
+	err = GlobalDB.QueryRow(`SELECT id FROM users WHERE nickname = ?`, nickname).Scan(&userID)
 	if err == sql.ErrNoRows {
 		userID = utils.GenerateId()
 
-		_, err = GlobalDB.Exec(`INSERT INTO users (id, username, email, authoriser, profile_pic) VALUES (?, ?, ?, ?, ?)`, userID, username, email, authoriser, profile_pic)
+		_, err = GlobalDB.Exec(`INSERT INTO users (id, nickname, email, authoriser, profile_pic) VALUES (?, ?, ?, ?, ?)`, userID, nickname, email, authoriser, profile_pic)
 		if err != nil {
 			http.Error(w, "Failed to save user", http.StatusInternalServerError)
 			log.Println("Database insert error:", err)
@@ -171,7 +171,7 @@ func HandleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   24 * 60 * 60,
 	})
 
-	log.Printf("User %s logged in with session %s", username, sessionToken)
+	log.Printf("User %s logged in with session %s", nickname, sessionToken)
 
 	// Redirect to homepage after login
 	http.Redirect(w, r, "/", http.StatusSeeOther)

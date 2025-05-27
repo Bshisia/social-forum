@@ -146,7 +146,7 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 5️⃣ Extract user details
-	username := userData["name"].(string)
+	nickname := userData["name"].(string)
 	email := userData["email"].(string)
 	profilePic := userData["picture"].(string)
 	authoriser := "google"
@@ -157,8 +157,8 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	if err == sql.ErrNoRows {
 		// If user does not exist, create a new user
 		userID = utils.GenerateId()
-		_, err := GlobalDB.Exec(`INSERT INTO users (id, username, email, authoriser, profile_pic) VALUES (?, ?, ?, ?, ?)`,
-			userID, username, email, authoriser, profilePic)
+		_, err := GlobalDB.Exec(`INSERT INTO users (id, nickname, email, authoriser, profile_pic) VALUES (?, ?, ?, ?, ?)`,
+			userID, nickname, email, authoriser, profilePic)
 		if err != nil {
 			http.Error(w, "Failed to save user", http.StatusInternalServerError)
 			log.Println("Database insert error:", err)
@@ -185,7 +185,7 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   24 * 60 * 60, // Expires in 1 day
 	})
 
-	log.Printf("User %s logged in with session %s", username, sessionToken)
+	log.Printf("User %s logged in with session %s", nickname, sessionToken)
 
 	// 9️⃣ Redirect to homepage
 	http.Redirect(w, r, "/", http.StatusSeeOther)
