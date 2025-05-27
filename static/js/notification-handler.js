@@ -8,6 +8,8 @@ import eventBus from './utils/event-bus.js';
 class NotificationHandler {
     constructor() {
         this.initialize();
+        this.notificationSound = new Audio('/static/sounds/notification.mp3');
+        this.notificationSound.volume = 0.5;
     }
 
     /**
@@ -93,6 +95,18 @@ class NotificationHandler {
 
         // Add to container
         toastContainer.appendChild(toast);
+
+        // Play notification sound
+        try {
+            // Only play sound if the page is visible
+            if (!document.hidden) {
+                this.notificationSound.play().catch(err => {
+                    console.warn('Could not play notification sound:', err);
+                });
+            }
+        } catch (err) {
+            console.warn('Error playing notification sound:', err);
+        }
 
         // Add event listeners
         toast.querySelector('.toast-close').addEventListener('click', () => {
