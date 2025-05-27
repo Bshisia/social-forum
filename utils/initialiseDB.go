@@ -32,8 +32,9 @@ func InitialiseDB() (*sql.DB, error) {
         first_name TEXT,
         last_name TEXT,
         email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
+        password TEXT,
         profile_pic TEXT,
+        authoriser TEXT DEFAULT 'local',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         is_online INTEGER DEFAULT 0,
         last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
