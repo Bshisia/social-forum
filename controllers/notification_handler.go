@@ -24,6 +24,7 @@ func NewNotificationHandler() *NotificationHandler {
 // - GET /api/notifications - Get notifications as JSON
 // - GET /api/notifications/count - Get unread notification count as JSON
 // - POST /notifications/mark-read - Mark a notification as read
+// - POST /notifications/mark-all-read - Mark all notifications as read
 func (nh *NotificationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/notifications":
@@ -34,6 +35,8 @@ func (nh *NotificationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		nh.handleGetNotificationCount(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/notifications/mark-read":
 		nh.handleMarkAsRead(w, r)
+	case r.Method == http.MethodPost && r.URL.Path == "/notifications/mark-all-read":
+		nh.handleMarkAllAsRead(w, r)
 	default:
 		utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
 	}
@@ -143,6 +146,61 @@ func (nh *NotificationHandler) handleMarkAsRead(w http.ResponseWriter, r *http.R
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// handleMarkAllAsRead marks all notifications as read for the current user
+// Accepts POST requests and marks all unread notifications as read
+func (nh *NotificationHandler) handleMarkAllAsRead(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Unauthorized - No session found",
+		})
+		return
+	}
+
+	userID, err := utils.ValidateSession(utils.GlobalDB, cookie.Value)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Unauthorized - Invalid session",
+		})
+		return
+	}
+
+	// Mark all notifications as read for this user
+	result, err := utils.GlobalDB.Exec(`
+		UPDATE notifications
+		SET is_read = true
+		WHERE user_id = ? AND is_read = false
+	`, userID)
+
+	if err != nil {
+		log.Printf("Error marking all notifications as read: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Failed to mark notifications as read",
+		})
+		return
+	}
+
+	// Get the number of affected rows
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("Error getting affected rows: %v", err)
+		rowsAffected = 0
+	}
+
+	// Return success response with the number of notifications marked as read
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":        true,
+		"message":        "All notifications marked as read",
+		"markedAsRead":   rowsAffected,
+		"newUnreadCount": 0,
+	})
 }
 
 // handleGetNotificationsJSON returns notifications as JSON
