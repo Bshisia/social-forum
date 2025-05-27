@@ -715,6 +715,73 @@ a:hover {
   visibility: visible;
 }
 
+/* Responsive hamburger menu width adjustments */
+/* Small tablets and large phones (under 768px) */
+@media (max-width: 767px) {
+  .nav-right {
+    width: 280px;
+  }
+}
+
+/* Large phones (under 576px) */
+@media (max-width: 575px) {
+  .nav-right {
+    width: 260px;
+  }
+}
+
+/* Medium phones (under 480px) */
+@media (max-width: 479px) {
+  .nav-right {
+    width: 240px;
+    padding: calc(var(--navbar-height) + var(--spacing-md)) var(--spacing-md) var(--spacing-md);
+  }
+}
+
+/* Small phones (under 400px) */
+@media (max-width: 399px) {
+  .nav-right {
+    width: 220px;
+    padding: calc(var(--navbar-height) + var(--spacing-md)) var(--spacing-sm) var(--spacing-sm);
+  }
+
+  .mobile-menu-section h3 {
+    font-size: 15px;
+  }
+
+  .menu-toggle-btn {
+    padding: 10px;
+    font-size: 14px;
+  }
+}
+
+/* Very small phones (under 350px) */
+@media (max-width: 349px) {
+  .nav-right {
+    width: 200px;
+    padding: calc(var(--navbar-height) + var(--spacing-sm)) var(--spacing-xs) var(--spacing-xs);
+  }
+
+  .mobile-menu-section h3 {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .menu-toggle-btn {
+    padding: 8px;
+    font-size: 13px;
+  }
+
+  .mobile-menu-content a {
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+
+  .mobile-username {
+    font-size: 13px;
+  }
+}
+
 /* Desktop styles */
 @media (min-width: 1200px) {
   .hamburger-btn {
