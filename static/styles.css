@@ -4557,6 +4557,20 @@ input[type="file"] {
   box-sizing: border-box;
 }
 
+/* Select option styling for black background */
+.auth-form select option {
+  background-color: #000000;
+  color: var(--text-color);
+  padding: 8px 12px;
+}
+
+/* General select option styling for all forms */
+select option {
+  background-color: #000000;
+  color: var(--text-color);
+  padding: 8px 12px;
+}
+
 .auth-form input:focus,
 .auth-form select:focus {
   outline: none;
