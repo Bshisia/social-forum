@@ -2,106 +2,162 @@ package handlers
 
 import (
 	"database/sql"
-	"html/template"
+	"encoding/json"
 	"log"
 	"net/http"
 
 	"forum/utils"
 )
 
-type SignInData struct {
-	Username      string
-	UsernameError string
-	PasswordError string
-	GeneralError  string
+// LoginHandler authenticates a user and creates a session
+// Accepts POST requests with email and password in JSON format
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid request method",
+			"success": false,
+		})
+		return
+	}
+
+	var credentials struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&credentials)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid request body",
+			"success": false,
+		})
+		return
+	}
+
+	log.Printf("Login attempt for email: %s", credentials.Email)
+
+	var storedPassword string
+	var userId string
+	var nickname string
+	err = GlobalDB.QueryRow("SELECT id, password, nickname FROM users WHERE email = ?", credentials.Email).
+		Scan(&userId, &storedPassword, &nickname)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Login failed: email not found: %s", credentials.Email)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "Invalid email or password",
+				"success": false,
+			})
+		} else {
+			log.Printf("Database error during login: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "Failed to query database",
+				"success": false,
+			})
+		}
+		return
+	}
+
+	isValidPassword := utils.CheckPasswordsHash(storedPassword, credentials.Password)
+	if !isValidPassword {
+		log.Printf("Login failed: invalid password for user: %s", userId)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Invalid email or password",
+			"success": false,
+		})
+		return
+	}
+
+	go broadcastUserStatus(userId, true)
+
+	// Mark user as online
+	_, err = GlobalDB.Exec("UPDATE users SET is_online = TRUE WHERE id = ?", userId)
+	if err != nil {
+		log.Printf("Error updating user online status: %v", err)
+	}
+
+	// Create session
+	sessionToken, err := utils.CreateSession(GlobalDB, userId)
+	if err != nil {
+		log.Printf("Failed to create session: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Failed to create session",
+			"success": false,
+		})
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   24 * 60 * 60, // 1 day
+	})
+
+	log.Printf("Login successful for user: %s, session created: %s", userId, sessionToken)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":  "Login successful",
+		"success":  true,
+		"userId":   userId,
+		"nickname": nickname,
+	})
 }
 
-func SignInHandler(w http.ResponseWriter, r *http.Request) {
-	_, err := r.Cookie("session_token")
-	if err == nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
+// GetUsersWithStatus returns a list of all users with their online status
+// Users are sorted by online status (online first) and then alphabetically by nickname
+func GetUsersWithStatus(w http.ResponseWriter, r *http.Request) {
+    // Query users with their online status
+    rows, err := GlobalDB.Query(`
+        SELECT id, nickname, first_name || ' ' || last_name as user_name, profile_pic, is_online
+        FROM users
+        ORDER BY is_online DESC, nickname ASC
+    `)
+    if err != nil {
+        http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
 
-	tmpl, err := template.ParseFiles("templates/signin.html")
-	if err != nil {
-		utils.RenderErrorPage(w, http.StatusNotFound, http.StatusText(http.StatusNotFound))
-		log.Printf("Error loading template: %v", err)
-		return
-	}
+    var users []struct {
+        ID        string         `json:"id"`
+        Username  string         `json:"username"`
+        Nickname  string         `json:"nickname"`
+        ProfilePic sql.NullString `json:"profile_pic"`
+        IsOnline  bool           `json:"is_online"`
+    }
 
-	if r.Method == "GET" {
-		tmpl.Execute(w, nil)
-		return
-	}
+    for rows.Next() {
+        var user struct {
+            ID        string         `json:"id"`
+            Username  string         `json:"username"`
+            Nickname  string         `json:"nickname"`
+            ProfilePic sql.NullString `json:"profile_pic"`
+            IsOnline  bool           `json:"is_online"`
+        }
+        if err := rows.Scan(&user.ID, &user.Nickname, &user.Username, &user.ProfilePic, &user.IsOnline); err != nil {
+            http.Error(w, "Failed to parse user data", http.StatusInternalServerError)
+            return
+        }
+        users = append(users, user)
+    }
 
-	if r.Method == "POST" {
-		data := SignInData{}
-
-		username := r.FormValue("username")
-		password := r.FormValue("password")
-
-		if username == "" {
-			data.UsernameError = "Username is required"
-		}
-
-		if password == "" {
-			data.PasswordError = "password is required"
-		}
-
-		if data.UsernameError != "" || data.PasswordError != "" {
-			data.Username = username
-			tmpl.Execute(w, data)
-			return
-		}
-
-		var user utils.User
-		err := GlobalDB.QueryRow(`
-			SELECT id, password
-			FROM users
-			WHERE username = ?
-		`, username).Scan(&user.ID, &user.Password)
-		if err != nil {
-			data := struct {
-				GeneralError string
-				Username     string
-			}{
-				GeneralError: "Invalid username or password",
-				Username:     username,
-			}
-			tmpl, _ := template.ParseFiles("templates/signin.html")
-			tmpl.Execute(w, data)
-			if err != sql.ErrNoRows {
-				log.Printf("Error querying database: %v", err)
-			}
-			return
-		}
-
-		if !utils.CheckPasswordsHash(password, user.Password) {
-			data.GeneralError = "Invalid username or password"
-			data.Username = username
-			tmpl.Execute(w, data)
-			return
-		}
-
-		sessionToken, err := utils.CreateSession(GlobalDB, user.ID)
-		if err != nil {
-			utils.RenderErrorPage(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
-			return
-		}
-
-		http.SetCookie(w, &http.Cookie{
-			Name:     "session_token",
-			Value:    sessionToken,
-			Path:     "/",
-			HttpOnly: false,
-			Secure:   false,
-			SameSite: http.SameSiteLaxMode,
-			MaxAge:   24 * 60 * 60,
-		})
-
-		log.Printf("Set session cookie: %s", sessionToken)
-
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-	}
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(users)
 }

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
@@ -68,12 +69,11 @@ func LikedPosts(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// getAllUsers fetches all users from the database
 func getAllUsers() ([]utils.User, error) {
 	rows, err := utils.GlobalDB.Query(`
-		SELECT id, username, profile_pic 
+		SELECT id, username, profile_pic, is_online
 		FROM users
-		ORDER BY username
+		ORDER BY username ASC
 	`)
 	if err != nil {
 		return nil, err
@@ -83,13 +83,51 @@ func getAllUsers() ([]utils.User, error) {
 	var users []utils.User
 	for rows.Next() {
 		var user utils.User
-		err := rows.Scan(&user.ID, &user.UserName, &user.ProfilePic)
-		if err != nil {
+		if err := rows.Scan(&user.ID, &user.Nickname, &user.ProfilePic, &user.IsOnline); err != nil {
 			return nil, err
 		}
 		users = append(users, user)
 	}
+
 	return users, nil
+}
+
+// getAllUsers fetches all users from the database
+func GetAllUsers(w http.ResponseWriter, r *http.Request) {
+	rows, err := utils.GlobalDB.Query(`
+        SELECT id, username, profile_pic, is_online
+        FROM users
+        ORDER BY username ASC
+    `)
+	if err != nil {
+		http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var users []struct {
+		ID         string `json:"id"`
+		Username   string `json:"username"`
+		ProfilePic string `json:"profile_pic"`
+		IsOnline   bool   `json:"is_online"`
+	}
+
+	for rows.Next() {
+		var user struct {
+			ID         string `json:"id"`
+			Username   string `json:"username"`
+			ProfilePic string `json:"profile_pic"`
+			IsOnline   bool   `json:"is_online"`
+		}
+		if err := rows.Scan(&user.ID, &user.Username, &user.ProfilePic, &user.IsOnline); err != nil {
+			http.Error(w, "Failed to parse user data", http.StatusInternalServerError)
+			return
+		}
+		users = append(users, user)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
 }
 
 func CommentedPosts(w http.ResponseWriter, r *http.Request) {
@@ -101,8 +139,7 @@ func CommentedPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch posts
-	posts, err := fetchUserPostsForComments(userID)
+	posts, err := FetchUserPostsForComments(userID)
 	if err != nil {
 		log.Printf("Error fetching posts: %v", err)
 		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
@@ -152,7 +189,7 @@ func fetchUserPostsForPosts(userID string) ([]utils.Post, error) {
 	}
 	defer rows.Close()
 
-	postMap := make(map[int]utils.Post)
+	postMap := make(map[int64]utils.Post)
 	var postTime time.Time
 	for rows.Next() {
 		var post utils.Post
@@ -228,7 +265,7 @@ func fetchUserPostsForLikes(userID string) ([]utils.Post, error) {
         LEFT JOIN post_categories pc ON p.id = pc.post_id
         LEFT JOIN categories c ON pc.category_id = c.id
         JOIN reaction r ON p.id = r.post_id
-        WHERE r.user_id = ? AND r.like = 1 OR r.like = 0
+        WHERE r.user_id = ? AND (r.like = 1 OR r.like = 0)
         ORDER BY p.post_at DESC
     `, userID)
 	if err != nil {
@@ -236,7 +273,7 @@ func fetchUserPostsForLikes(userID string) ([]utils.Post, error) {
 	}
 	defer rows.Close()
 
-	postMap := make(map[int]utils.Post)
+	postMap := make(map[int64]utils.Post)
 	var postTime time.Time
 	for rows.Next() {
 		var post utils.Post
@@ -286,7 +323,7 @@ func fetchUserPostsForLikes(userID string) ([]utils.Post, error) {
 	return posts, nil
 }
 
-func fetchUserPostsForComments(userID string) ([]utils.Post, error) {
+func FetchUserPostsForComments(userID string) ([]utils.Post, error) {
 	rows, err := utils.GlobalDB.Query(`
 		SELECT DISTINCT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at, p.likes, p.dislikes, p.comments,
 			   u.username, u.profile_pic, c.id AS category_id, c.name AS category_name
@@ -303,7 +340,7 @@ func fetchUserPostsForComments(userID string) ([]utils.Post, error) {
 	}
 	defer rows.Close()
 
-	postMap := make(map[int]utils.Post)
+	postMap := make(map[int64]utils.Post)
 	var postTime time.Time
 	for rows.Next() {
 		var post utils.Post

@@ -78,7 +78,7 @@ func (ch *CategoryHandler) getAllUsers() ([]utils.User, error) {
 	var users []utils.User
 	for rows.Next() {
 		var user utils.User
-		err := rows.Scan(&user.ID, &user.UserName, &user.ProfilePic)
+		err := rows.Scan(&user.ID, &user.Nickname, &user.ProfilePic)
 		if err != nil {
 			return nil, err
 		}
@@ -202,7 +202,7 @@ func (ch *CategoryHandler) getPostsByCategoryName(categoryName string) ([]utils.
 	}
 	defer rows.Close()
 
-	postMap := make(map[int]utils.Post)
+	postMap := make(map[int64]utils.Post)
 	for rows.Next() {
 		var post utils.Post
 		var postTime time.Time

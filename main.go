@@ -4,17 +4,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	"strings"
 
 	handlers "forum/authentication"
 	"forum/controllers"
 	"forum/utils"
 )
 
+// main is the entry point of the application
 func main() {
-	if len(os.Args) != 1 {
-		log.Fatal("Usage: go run main.go ")
-	}
 	// Initialize database
 	db, err := utils.InitialiseDB()
 	if err != nil {
@@ -22,44 +20,70 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize handlers with database
+	// Initialize handlers
 	handlers.InitDB(db)
 	utils.InitSessionManager(utils.GlobalDB)
 
+	// Auth routes - OAuth providers
 	http.HandleFunc("/auth/github", handlers.HandleGitHubLogin)
 	http.HandleFunc("/auth/github/callback", handlers.HandleGitHubCallback)
 	http.HandleFunc("/auth/google", handlers.HandleGoogleLogin)
 	http.HandleFunc("/auth/google/callback", handlers.HandleGoogleCallback)
-	http.HandleFunc("/signup", handlers.SignUpHandler)
-	http.HandleFunc("/signin", handlers.SignInHandler)
-	http.HandleFunc("/created", controllers.CreatedPosts)
-	http.HandleFunc("/liked", controllers.LikedPosts)
-	http.HandleFunc("/commented", controllers.CommentedPosts)
-	http.HandleFunc("/static/", handlers.ServeStatic)
-	http.HandleFunc("/signout", handlers.SignOutHandler(db))
 
-	// Initialize post handler
-	postHandler := controllers.NewPostHandler()
+	// Static file serving
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
-	// http.Handle("/post", postHandler)
-	http.Handle("/", postHandler) // Handle root for posts
+	// API Routes
+	apiHandler := controllers.NewAPIHandler()
+	http.Handle("/api/", apiHandler)
+	http.HandleFunc("/api/user-status", controllers.GetUserStatus)
 
-	// Initialize profile handler
-	profileHandler := controllers.NewProfileHandler()
-	http.Handle("/profile/", profileHandler)
+	// Auth routes
+	http.Handle("/login", apiHandler)
+	http.Handle("/register", apiHandler)
 
-	// Initialize category handler
-	categoryHandler := controllers.NewCategoryHandler()
-	http.Handle("/categories", categoryHandler)
-	http.Handle("/category", categoryHandler)
+	// Signout route
+	http.HandleFunc("/signout", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Signout request received")
+		apiHandler.HandleSignout(w, r)
+	})
 
+	// WebSocket routes
+	http.HandleFunc("/ws", handlers.HandleWebSocket)
+	http.HandleFunc("/ws/chat", handlers.HandleChatWebSocket)
+	http.HandleFunc("/api/users/refresh", handlers.TriggerUsersListBroadcast)
+
+	// User routes
+	http.HandleFunc("/api/users/", handlers.GetUserHandler)
+
+	// Chat routes
+	http.HandleFunc("/api/chat/history", handlers.GetChatHistoryHandler)
+	http.HandleFunc("/api/chat/send", handlers.SendMessageHandler)
+	http.HandleFunc("/api/chat/users", handlers.GetChatUsersHandler)
+	http.HandleFunc("/api/chat/mark-read", handlers.MarkMessagesAsReadHandler)
+
+	// Notification routes
 	notificationHandler := controllers.NewNotificationHandler()
 	http.Handle("/notifications", notificationHandler)
+	http.Handle("/api/notifications", notificationHandler)
+	http.Handle("/api/notifications/count", notificationHandler)
+	http.Handle("/notifications/mark-read", notificationHandler)
+	http.Handle("/notifications/mark-all-read", notificationHandler)
+
+	// SPA catch-all route - serve index.html for all other routes
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") ||
+			strings.HasPrefix(r.URL.Path, "/static/") ||
+			strings.HasPrefix(r.URL.Path, "/auth/") ||
+			r.URL.Path == "/login" ||
+			r.URL.Path == "/register" ||
+			r.URL.Path == "/signout" {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, "templates/index.html")
+	})
 
 	fmt.Println("Server opened at port 8000...http://localhost:8000/")
-
-	err = http.ListenAndServe(":8000", nil)
-	if err != nil {
-		log.Fatalf("Server failed to start: %v", err)
-	}
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }

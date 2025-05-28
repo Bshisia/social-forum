@@ -1,5 +1,6 @@
-function markAsRead(notificationId) {
-    fetch('/notifications/mark-read', {
+// Function to mark a notification as read
+export function markAsRead(notificationId) {
+    return fetch('/notifications/mark-read', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -11,9 +12,11 @@ function markAsRead(notificationId) {
     .then(response => {
         if (response.ok) {
             // Remove unread styling
-            document.querySelector(`[data-notification-id="${notificationId}"]`)
-                .classList.remove('unread');
-            
+            const notificationElement = document.querySelector(`[data-notification-id="${notificationId}"]`);
+            if (notificationElement) {
+                notificationElement.classList.remove('unread');
+            }
+
             // Update the notification count
             const dot = document.querySelector('.notification-dot');
             if (dot) {
@@ -24,7 +27,64 @@ function markAsRead(notificationId) {
                     dot.remove();
                 }
             }
+            return true;
         }
+        return false;
     })
-    .catch(error => console.error('Error:', error));
+    .catch(error => {
+        console.error('Error:', error);
+        return false;
+    });
+}
+
+// Function to mark all notifications as read
+export function markAllAsRead() {
+    return fetch('/notifications/mark-all-read', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+
+        if (data.success) {
+            // Remove unread styling from all notification elements
+            const unreadNotifications = document.querySelectorAll('.notification-item.unread');
+            unreadNotifications.forEach(element => {
+                element.classList.remove('unread');
+                // Remove the mark as read button
+                const markReadBtn = element.querySelector('.mark-read-btn');
+                if (markReadBtn) {
+                    markReadBtn.remove();
+                }
+            });
+
+            // Remove the notification count dot
+            const dot = document.querySelector('.notification-dot');
+            if (dot) {
+                dot.remove();
+            }
+
+            return {
+                success: true,
+                markedAsRead: data.markedAsRead,
+                message: data.message
+            };
+        }
+        throw new Error(data.error || 'Failed to mark all notifications as read');
+    })
+    .catch(error => {
+        console.error('Error marking all notifications as read:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    });
 }

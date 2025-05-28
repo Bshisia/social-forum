@@ -50,15 +50,15 @@ func (ph *PostHandler) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 func (ph *PostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
-	case "/create":
-		switch r.Method {
-		case http.MethodGet:
-			ph.authMiddleware(ph.displayCreateForm).ServeHTTP(w, r)
-		case http.MethodPost:
-			ph.authMiddleware(ph.handleCreatePost).ServeHTTP(w, r)
-		default:
-			utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
-		}
+	// case "/create":
+	// 	switch r.Method {
+	// 	case http.MethodGet:
+	// 		ph.authMiddleware(ph.displayCreateForm).ServeHTTP(w, r)
+	// 	case http.MethodPost:
+	// 		ph.authMiddleware(ph.handleCreatePost).ServeHTTP(w, r)
+	// 	default:
+	// 		utils.RenderErrorPage(w, http.StatusMethodNotAllowed, utils.ErrMethodNotAllowed)
+	// 	}
 	case "/react":
 		if r.Method == http.MethodPost {
 			ph.authMiddleware(ph.handleReactions).ServeHTTP(w, r)
@@ -264,10 +264,11 @@ func (ph *PostHandler) handleGetPosts(w http.ResponseWriter, r *http.Request) {
 		utils.RenderErrorPage(w, http.StatusInternalServerError, utils.ErrTemplateExec)
 	}
 }
+
 func (ph *PostHandler) getAllUsers() ([]utils.User, error) {
 	rows, err := utils.GlobalDB.Query(`
-        SELECT id, username, profile_pic 
-        FROM users 
+        SELECT id, username, profile_pic
+        FROM users
         ORDER BY username ASC
     `)
 	if err != nil {
@@ -278,7 +279,7 @@ func (ph *PostHandler) getAllUsers() ([]utils.User, error) {
 	var users []utils.User
 	for rows.Next() {
 		var user utils.User
-		err := rows.Scan(&user.ID, &user.UserName, &user.ProfilePic)
+		err := rows.Scan(&user.ID, &user.Nickname, &user.ProfilePic)
 		if err != nil {
 			return nil, err
 		}
@@ -286,89 +287,72 @@ func (ph *PostHandler) getAllUsers() ([]utils.User, error) {
 	}
 	return users, nil
 }
+
 func (ph *PostHandler) getAllPosts() ([]utils.Post, error) {
-	rows, err := utils.GlobalDB.Query(`
-        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, 
-               p.post_at, p.likes, p.dislikes, p.comments,
-               u.username, u.profile_pic, c.id AS category_id, c.name AS category_name
+	query := `
+        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at,
+               u.username,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments,
+               u.profile_pic
         FROM posts p
         JOIN users u ON p.user_id = u.id
-        LEFT JOIN post_categories pc ON p.id = pc.post_id
-        LEFT JOIN categories c ON pc.category_id = c.id
         ORDER BY p.post_at DESC
-    `)
+    `
+
+	rows, err := utils.GlobalDB.Query(query)
 	if err != nil {
+		log.Printf("Error querying posts: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
 
-	postMap := make(map[int]utils.Post)
+	var posts []utils.Post
 	for rows.Next() {
 		var post utils.Post
 		var postTime time.Time
-		var categoryID sql.NullInt64
-		var categoryName sql.NullString
 
-		if err := rows.Scan(
+		err := rows.Scan(
 			&post.ID,
 			&post.UserID,
 			&post.Title,
 			&post.Content,
 			&post.ImagePath,
 			&postTime,
+			&post.Username,
 			&post.Likes,
 			&post.Dislikes,
 			&post.Comments,
-			&post.Username,
 			&post.ProfilePic,
-			&categoryID,
-			&categoryName,
-		); err != nil {
-			log.Printf("Error scanning post: %v", err)
-			continue
+		)
+		if err != nil {
+			log.Printf("Error scanning post row: %v", err)
+			continue // Skip this post but continue with others
 		}
 
+		// Format the time
 		post.PostTime = FormatTimeAgo(postTime)
 
-		// If this post already exists in our map, update it
-		if existingPost, exists := postMap[post.ID]; exists {
-			if categoryID.Valid && categoryName.Valid {
-				category := utils.Category{
-					ID:   int(categoryID.Int64),
-					Name: categoryName.String,
-				}
-				// Check if category already exists
-				categoryExists := false
-				for _, existingCat := range existingPost.Categories {
-					if existingCat.ID == category.ID {
-						categoryExists = true
-						break
-					}
-				}
-				if !categoryExists {
-					existingPost.Categories = append(existingPost.Categories, category)
-				}
-				postMap[post.ID] = existingPost
-			}
+		// Get categories for this post
+		categories, err := ph.getPostCategories(int64(post.ID))
+		if err != nil {
+			log.Printf("Error getting categories for post %d: %v", post.ID, err)
+			// Continue anyway, just with empty categories
+			post.Categories = []utils.Category{}
 		} else {
-			// Initialize Categories slice
-			post.Categories = make([]utils.Category, 0)
-			if categoryID.Valid && categoryName.Valid {
-				post.Categories = append(post.Categories, utils.Category{
-					ID:   int(categoryID.Int64),
-					Name: categoryName.String,
-				})
-			}
-			postMap[post.ID] = post
+			post.Categories = categories
 		}
-	}
 
-	var posts []utils.Post
-	for _, post := range postMap {
 		posts = append(posts, post)
 	}
 
-	return posts, rows.Err()
+	// If no posts were found, return an empty array rather than nil
+	if posts == nil {
+		posts = []utils.Post{}
+	}
+
+	return posts, nil
 }
 
 func (ph *PostHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
@@ -450,7 +434,7 @@ func (ph *PostHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 		utils.GlobalDB.Exec(`
-            INSERT INTO post_categories (post_id, category_id) 
+            INSERT INTO post_categories (post_id, category_id)
             VALUES (?, ?)
         `, postID, categoryID)
 	}
@@ -557,68 +541,83 @@ func (ph *PostHandler) handleSinglePost(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// Add this helper method to fetch a single post
-func (ph *PostHandler) getPostByID(id int64) (*utils.Post, []utils.Comment, error) {
-	row := utils.GlobalDB.QueryRow(`
-        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, 
-               p.post_at, p.likes, p.dislikes, p.comments,
-               u.username, u.profile_pic
-        FROM posts p
-        JOIN users u ON p.user_id = u.id
-        WHERE p.id = ?
-    `, id)
-
-	var post utils.Post
-	var postTime time.Time
-
-	err := row.Scan(
-		&post.ID,
-		&post.UserID,
-		&post.Title,
-		&post.Content,
-		&post.ImagePath,
-		&postTime,
-		&post.Likes,
-		&post.Dislikes,
-		&post.Comments,
-		&post.Username,
-		&post.ProfilePic,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, nil, err
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-
-	post.PostTime = FormatTimeAgo(postTime.Local())
+func (ph *PostHandler) getCommentsForPost(postID int64) ([]utils.Comment, error) {
 	rows, err := utils.GlobalDB.Query(`
-	  SELECT c.id, c.user_id, c.content, c.comment_at, u.username, u.profile_pic, 
-	         (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND is_like = 1) as likes,
-	         (SELECT COUNT(*) FROM comment_reaction WHERE comment_id = c.id AND is_like = 0) as dislikes
-	  FROM comments c
-	  JOIN users u ON c.user_id = u.id
-	  WHERE c.post_id = ?
-	  ORDER BY c.comment_at DESC`, id)
+		SELECT c.id, c.post_id, c.user_id, c.content, c.comment_at,
+			   u.username, u.profile_pic
+		FROM comments c
+		JOIN users u ON c.user_id = u.id
+		WHERE c.post_id = ?
+		ORDER BY c.comment_at ASC
+	`, postID)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer rows.Close()
 
 	var comments []utils.Comment
 	for rows.Next() {
-		var c utils.Comment
-		var t time.Time
-		err := rows.Scan(&c.ID, &c.UserID, &c.Content, &t, &c.Username, &c.ProfilePic, &c.Likes, &c.Dislikes)
-		if err != nil {
-			continue
+		var comment utils.Comment
+		var commentTime time.Time
+		if err := rows.Scan(
+			&comment.ID,
+			&comment.PostID,
+			&comment.UserID,
+			&comment.Content,
+			&commentTime,
+			&comment.Username,
+			&comment.ProfilePic,
+		); err != nil {
+			return nil, err
 		}
-		c.CommentTime = t.Local()
-		comments = append(comments, c)
+		comment.CommentTime = commentTime
+		comments = append(comments, comment)
 	}
 
-	return &post, comments, nil
+	return comments, rows.Err()
+}
+
+// Add this helper method to fetch a single post
+func (ph *PostHandler) getPostByID(postID int64) (*utils.Post, []utils.Comment, error) {
+	// Get post with user info
+	var postTime time.Time
+	post := &utils.Post{}
+	err := utils.GlobalDB.QueryRow(`
+        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at,
+               u.username,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 1) as likes,
+               (SELECT COUNT(*) FROM reaction WHERE post_id = p.id AND like = 0) as dislikes,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments,
+               u.profile_pic
+        FROM posts p
+        LEFT JOIN users u ON p.user_id = u.id
+        WHERE p.id = ?
+    `, postID).Scan(
+		&post.ID, &post.UserID, &post.Title, &post.Content, &post.ImagePath,
+		&postTime, &post.Username, &post.Likes, &post.Dislikes, &post.Comments,
+		&post.ProfilePic,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	post.PostTime = FormatTimeAgo(postTime)
+
+	// Get categories for the post
+	categories, err := ph.getPostCategories(postID)
+	if err != nil {
+		log.Printf("Error getting categories for post %d: %v", postID, err)
+		post.Categories = []utils.Category{}
+	} else {
+		post.Categories = categories
+	}
+
+	// Get comments
+	comments, err := ph.getCommentsForPost(postID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return post, comments, nil
 }
 
 func (ph *PostHandler) checkAuthStatus(r *http.Request) bool {
@@ -728,20 +727,28 @@ func (ph *PostHandler) handleComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	postID, err := strconv.Atoi(r.FormValue("post_id"))
+	// Validate post ID
+	postIDStr := r.FormValue("post_id")
+	postID, err := utils.ValidatePostID(postIDStr)
 	if err != nil {
+		log.Printf("Invalid post ID: %s, error: %v", postIDStr, err)
 		http.Error(w, "Invalid post ID", http.StatusBadRequest)
 		return
 	}
 
+	// Validate and sanitize content
 	content := r.FormValue("content")
-	if content == "" {
-		http.Error(w, "Comment cannot be empty", http.StatusBadRequest)
+	if err := utils.ValidateContent(content, 5000); err != nil {
+		log.Printf("Invalid comment content: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// Sanitize content to prevent XSS
+	content = utils.SanitizeString(content)
+
 	_, err = utils.GlobalDB.Exec(`
-        INSERT INTO comments (post_id, user_id, content) 
+        INSERT INTO comments (post_id, user_id, content)
         VALUES (?, ?, ?)`,
 		postID, userID, content,
 	)
@@ -752,7 +759,7 @@ func (ph *PostHandler) handleComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = utils.GlobalDB.Exec(`
-        UPDATE posts SET comments = comments + 1 
+        UPDATE posts SET comments = comments + 1
         WHERE id = ?`, postID)
 	if err != nil {
 		log.Printf("Error updating comment count: %v", err)
@@ -963,12 +970,12 @@ func (ph *PostHandler) handleDeleteComment(w http.ResponseWriter, r *http.Reques
 	// Update the post's comment count
 	if postID > 0 {
 		_, err = utils.GlobalDB.Exec(`
-			UPDATE posts 
+			UPDATE posts
 			SET comments = (
-				SELECT COUNT(*) 
-				FROM comments 
+				SELECT COUNT(*)
+				FROM comments
 				WHERE post_id = ?
-			) 
+			)
 			WHERE id = ?`, postID, postID)
 		if err != nil {
 			log.Printf("Error updating post comment count: %v", err)
@@ -1132,4 +1139,175 @@ func (ph *PostHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) 
 	}
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (ph *PostHandler) getPostsByCategoryName(categoryName string) ([]utils.Post, error) {
+	rows, err := utils.GlobalDB.Query(`
+        SELECT p.id, p.user_id, p.title, p.content, p.imagepath, p.post_at, p.likes, p.dislikes, p.comments,
+               u.username, u.profile_pic, c.id AS category_id, c.name AS category_name
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        JOIN post_categories pc ON p.id = pc.post_id
+        JOIN categories c ON pc.category_id = c.id
+        WHERE c.name = ?
+        ORDER BY p.post_at DESC
+    `, categoryName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return ph.scanPosts(rows)
+}
+
+// getPostCategories retrieves all categories for a given post
+func (ph *PostHandler) getPostCategories(postID int64) ([]utils.Category, error) {
+	query := `
+		SELECT c.id, c.name
+		FROM categories c
+		JOIN post_categories pc ON c.id = pc.category_id
+		WHERE pc.post_id = ?
+	`
+
+	rows, err := utils.GlobalDB.Query(query, postID)
+	if err != nil {
+		log.Printf("Error querying categories for post %d: %v", postID, err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categories []utils.Category
+	for rows.Next() {
+		var category utils.Category
+		if err := rows.Scan(&category.ID, &category.Name); err != nil {
+			log.Printf("Error scanning category row: %v", err)
+			continue
+		}
+		categories = append(categories, category)
+	}
+
+	return categories, nil
+}
+
+func (ph *PostHandler) scanPosts(rows *sql.Rows) ([]utils.Post, error) {
+	postMap := make(map[int64]utils.Post)
+	for rows.Next() {
+		var post utils.Post
+		var postTime time.Time
+		var categoryID sql.NullInt64
+		var categoryName sql.NullString
+
+		// Scan row into post struct
+		err := rows.Scan(
+			&post.ID,
+			&post.UserID,
+			&post.Title,
+			&post.Content,
+			&post.ImagePath,
+			&postTime,
+			&post.Likes,
+			&post.Dislikes,
+			&post.Comments,
+			&post.Username,
+			&post.ProfilePic,
+			&categoryID,
+			&categoryName,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		post.PostTime = FormatTimeAgo(postTime)
+
+		if existingPost, ok := postMap[post.ID]; ok {
+			if categoryID.Valid && categoryName.Valid {
+				existingPost.Categories = append(existingPost.Categories, utils.Category{
+					ID:   int(categoryID.Int64),
+					Name: categoryName.String,
+				})
+				postMap[post.ID] = existingPost
+			}
+		} else {
+			post.Categories = make([]utils.Category, 0)
+			if categoryID.Valid && categoryName.Valid {
+				post.Categories = append(post.Categories, utils.Category{
+					ID:   int(categoryID.Int64),
+					Name: categoryName.String,
+				})
+			}
+			postMap[post.ID] = post
+		}
+	}
+
+	var posts []utils.Post
+	for _, post := range postMap {
+		posts = append(posts, post)
+	}
+	return posts, nil
+}
+
+func (ph *PostHandler) getUserProfile(userID string) (*ProfileData, error) {
+	var profile ProfileData
+
+	// Validate userID
+	if userID == "" {
+		return nil, fmt.Errorf("invalid user ID")
+	}
+
+	// First check if user exists
+	var exists bool
+	err := utils.GlobalDB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", userID).Scan(&exists)
+	if err != nil {
+		return nil, fmt.Errorf("error checking user existence: %v", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	// Get user profile data
+	err = utils.GlobalDB.QueryRow(`
+        SELECT username, email, COALESCE(profile_pic, '') as profile_pic
+        FROM users
+        WHERE id = ?
+    `, userID).Scan(&profile.Username, &profile.Email, &profile.ProfilePic)
+	if err != nil {
+		return nil, fmt.Errorf("error getting user profile: %v", err)
+	}
+
+	// Get post count
+	err = utils.GlobalDB.QueryRow(`
+        SELECT COUNT(*)
+        FROM posts
+        WHERE user_id = ?
+    `, userID).Scan(&profile.PostCount)
+	if err != nil {
+		return nil, fmt.Errorf("error getting post count: %v", err)
+	}
+
+	// Get comment count
+	err = utils.GlobalDB.QueryRow(`
+        SELECT COUNT(*)
+        FROM comments
+        WHERE user_id = ?
+    `, userID).Scan(&profile.CommentCount)
+	if err != nil {
+		return nil, fmt.Errorf("error getting comment count: %v", err)
+	}
+
+	// Get likes received
+	err = utils.GlobalDB.QueryRow(`
+        SELECT COUNT(*)
+        FROM reaction l
+        JOIN posts p ON l.post_id = p.id
+        WHERE p.user_id = ? AND l.like = 1
+    `, userID).Scan(&profile.LikesReceived)
+	if err != nil {
+		return nil, fmt.Errorf("error getting likes received: %v", err)
+	}
+
+	profile.UserID = userID
+	profile.IsLoggedIn = true    // Set based on session
+	profile.IsOwnProfile = false // Set based on comparison with current user
+
+	return &profile, nil
 }

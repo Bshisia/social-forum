@@ -5,6 +5,8 @@ import (
 	"net/http"
 )
 
+// Error message constants used throughout the application
+// These provide consistent error messages for common error scenarios
 const (
 	ErrMethodNotAllowed = "The requested method is not supported for this endpoint."
 	ErrInternalServer   = "An unexpected error occurred. Please try again later."
@@ -24,6 +26,16 @@ const (
 	ErrNotFound         = "Not Found."
 )
 
+// ErrorPageData contains the data needed to render an error page
+type ErrorPageData struct {
+	Code    int    // HTTP status code
+	Message string // Error message to display
+}
+
+// RenderErrorPage renders an error page with the given status code and message
+// @param w - The HTTP response writer
+// @param code - The HTTP status code to return
+// @param message - The error message to display
 func RenderErrorPage(w http.ResponseWriter, code int, message string) {
 	// Set content type before writing status
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

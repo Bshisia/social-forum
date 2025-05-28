@@ -7,8 +7,13 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// GlobalDB is the shared database connection used throughout the application
 var GlobalDB *sql.DB
 
+// InitialiseDB initializes the database connection and creates all required tables
+// Sets up the database schema, indexes, triggers, and default data
+// @returns *sql.DB - The database connection
+// @returns error - Any error that occurred during initialization
 func InitialiseDB() (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", "./forum.db")
 	if err != nil {
@@ -19,20 +24,46 @@ func InitialiseDB() (*sql.DB, error) {
 
 	// Create Users table
 	_, err = db.Exec(`
-
         CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY NOT NULL,
-            email TEXT UNIQUE,
-            username TEXT UNIQUE,
-            authoriser TEXT,
-            password TEXT,
-            profile_pic TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-        CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+        id TEXT PRIMARY KEY NOT NULL,
+        nickname TEXT UNIQUE NOT NULL,
+        age INTEGER,
+        gender TEXT,
+        first_name TEXT,
+        last_name TEXT,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT,
+        profile_pic TEXT,
+        authoriser TEXT DEFAULT 'local',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        is_online INTEGER DEFAULT 0,
+        last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_users_nickname ON users(nickname);
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
     `)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create users table: %v", err)
+	}
+
+	// Create Messages table
+	_, err = db.Exec(`
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id TEXT NOT NULL,
+            receiver_id TEXT NOT NULL,
+            content TEXT NOT NULL,
+            sent_at TIMESTAMP NOT NULL,
+            read BOOLEAN DEFAULT 0,
+            FOREIGN KEY (sender_id) REFERENCES users(id),
+            FOREIGN KEY (receiver_id) REFERENCES users(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver ON messages(sender_id, receiver_id);
+        CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at);
+    `)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create messages table: %v", err)
 	}
 
 	// Create Posts table
@@ -101,13 +132,13 @@ CREATE TRIGGER IF NOT EXISTS AfterReactionInsert
 AFTER INSERT ON reaction
 BEGIN
     UPDATE posts SET
-        likes = CASE 
-            WHEN NEW.like = 1 THEN likes + 1 
-            ELSE likes 
+        likes = CASE
+            WHEN NEW.like = 1 THEN likes + 1
+            ELSE likes
         END,
-        dislikes = CASE 
-            WHEN NEW.like = 0 THEN dislikes + 1 
-            ELSE dislikes 
+        dislikes = CASE
+            WHEN NEW.like = 0 THEN dislikes + 1
+            ELSE dislikes
         END
     WHERE id = NEW.post_id;
 END;
@@ -121,15 +152,15 @@ CREATE TRIGGER IF NOT EXISTS AfterReactionUpdate
 AFTER UPDATE ON reaction
 BEGIN
     UPDATE posts SET
-        likes = CASE 
+        likes = CASE
             WHEN OLD.like = 1 THEN likes - 1
             WHEN NEW.like = 1 THEN likes + 1
-            ELSE likes 
+            ELSE likes
         END,
-        dislikes = CASE 
+        dislikes = CASE
             WHEN OLD.like = 0 THEN dislikes - 1
             WHEN NEW.like = 0 THEN dislikes + 1
-            ELSE dislikes 
+            ELSE dislikes
         END
     WHERE id = NEW.post_id;
 END;
@@ -143,13 +174,13 @@ CREATE TRIGGER IF NOT EXISTS AfterReactionDelete
 AFTER DELETE ON reaction
 BEGIN
     UPDATE posts SET
-        likes = CASE 
-            WHEN OLD.like = 1 THEN likes - 1 
-            ELSE likes 
+        likes = CASE
+            WHEN OLD.like = 1 THEN likes - 1
+            ELSE likes
         END,
-        dislikes = CASE 
-            WHEN OLD.like = 0 THEN dislikes - 1 
-            ELSE dislikes 
+        dislikes = CASE
+            WHEN OLD.like = 0 THEN dislikes - 1
+            ELSE dislikes
         END
     WHERE id = OLD.post_id;
 END;
@@ -163,7 +194,7 @@ END;
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT NOT NULL,
         actor_id TEXT NOT NULL,
-        post_id INTEGER NOT NULL,
+        post_id INTEGER,
         type TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         is_read BOOLEAN DEFAULT FALSE,
@@ -183,11 +214,11 @@ CREATE TRIGGER IF NOT EXISTS AfterPostReaction
 AFTER INSERT ON reaction
 BEGIN
     INSERT INTO notifications (user_id, actor_id, post_id, type)
-    SELECT 
+    SELECT
         p.user_id,     -- Post owner (receiver of notification)
         NEW.user_id,   -- Person who reacted (actor)
         NEW.post_id,   -- Post that was reacted to
-        CASE 
+        CASE
             WHEN NEW.like = 1 THEN 'like'
             ELSE 'dislike'
         END
@@ -200,7 +231,7 @@ CREATE TRIGGER IF NOT EXISTS AfterPostComment
 AFTER INSERT ON comments
 BEGIN
     INSERT INTO notifications (user_id, actor_id, post_id, type)
-    SELECT 
+    SELECT
         p.user_id,     -- Post owner (receiver of notification)
         NEW.user_id,   -- Person who commented (actor)
         NEW.post_id,   -- Post that was commented on
@@ -254,15 +285,15 @@ CREATE TRIGGER IF NOT EXISTS AfterCommentReactionUpdate
 AFTER UPDATE ON comment_reaction
 BEGIN
     UPDATE comments SET
-        likes = CASE 
+        likes = CASE
                     WHEN OLD.is_like = 1 THEN likes - 1
                     WHEN NEW.is_like = 1 THEN likes + 1
-                    ELSE likes 
+                    ELSE likes
                 END,
-        dislikes = CASE 
+        dislikes = CASE
                     WHEN OLD.is_like = 0 THEN dislikes - 1
                     WHEN NEW.is_like = 0 THEN dislikes + 1
-                    ELSE dislikes 
+                    ELSE dislikes
                 END
     WHERE id = NEW.comment_id;
 END;
@@ -329,9 +360,37 @@ END;
 		return nil, fmt.Errorf("failed to create sessions table: %v", err)
 	}
 
+	_, err = db.Exec(`
+    -- Update user online status when session is created
+    CREATE TRIGGER IF NOT EXISTS update_user_online_on_session_create
+    AFTER INSERT ON sessions
+    BEGIN
+        UPDATE users
+        SET is_online = 1,
+            last_seen = CURRENT_TIMESTAMP
+        WHERE id = NEW.user_id;
+    END;
+
+    -- Update user offline status when session is deleted
+    CREATE TRIGGER IF NOT EXISTS update_user_offline_on_session_delete
+    AFTER DELETE ON sessions
+    BEGIN
+        UPDATE users
+        SET is_online = 0,
+            last_seen = CURRENT_TIMESTAMP
+        WHERE id = OLD.user_id;
+    END;
+`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user status triggers: %v", err)
+	}
+
 	return db, nil
 }
 
+// InsertDefaultCategories adds default post categories to the database
+// Uses INSERT OR IGNORE to avoid duplicates if categories already exist
+// @returns error - Any error that occurred during insertion
 func InsertDefaultCategories() error {
 	categories := []string{
 		"Tech",
