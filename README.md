@@ -1,133 +1,128 @@
-# forum-advanced-features
+# Social Forum
 
-A modern web forum built with Go that enables user communication through posts, comments, and reactions.
+A modern web forum built with Go that enables user communication through posts, comments, reactions, and real-time notifications.
 
-## Project Objectives
+## Project Overview
 
-The project follows the same principles as the first subject while implementing advanced features:
+A feature-rich social forum platform with real-time notifications, user activity tracking, and interactive features.
 
 ### Core Features
 
-1. **User Notifications**
-   - Notifications for post likes/dislikes
-   - Notifications for post comments
+1. **Real-time Notifications**
+   - Toast notifications for new interactions
+   - Custom notification sounds
+   - Visual notification alerts
+   - Notifications for:
+     - Post likes/dislikes
+     - New comments
+     - Direct messages
 
-2. **User Activity Tracking**
-   - User created posts
-   - Posts where user left likes/dislikes
-   - User comments with:
-     - Comment content
-     - Associated post details
+2. **User Activity & Profile**
+   - Customizable profile pictures
+   - Activity statistics tracking
+   - View created posts
+   - Comment history
+   - Liked content tracking
 
-3. **Content Management**
-   - Edit/Remove posts
-   - Edit/Remove comments
+3. **Interactive Features**
+   - Real-time post updates
+   - Dynamic content loading
+   - Animated interactions
+   - Toast notifications
 
-## Features
+## Technical Features
 
-- **User Authentication**
-  - Secure registration and login system
-  - Email verification
-  - Session management with cookies
-  - Password encryption using bcrypt
+### Frontend Components
 
-- **Posts & Comments**
-  - Create, read, and delete posts
-  - Comment on posts
-  - Associate categories with posts
-  - File attachments for posts
+- **Notification System**
+  - Custom notification handler
+  - Toast notifications
+  - Sound alerts
+  - Animation effects
 
-- **Interactive Features**
-  - Like/dislike posts and comments
-  - Real-time updates for reactions
-  - User profile management
-  - Avatar/profile picture support
+- **Profile Management**
+  - Profile picture upload
+  - Activity statistics
+  - User content management
+  - Image upload validation
 
-- **Content Organization**
-  - Category-based post filtering
-  - View created posts
-  - View liked posts
-  
-- **Image Upload Constraints**
-  - Maximum image size: 20 MB
-  - If an image exceeds 20 MB, an error message will inform the user that the image is too large
+- **User Interface**
+  - Responsive design
+  - Modern animations
+  - Interactive components
+  - Real-time updates
+
+### Backend Services
+
+- **API Endpoints**
+  - User authentication
+  - Profile management
+  - Content CRUD operations
+  - Image processing
+
+- **Data Management**
+  - SQLite database
+  - File storage
+  - Session handling
+  - Data validation
+
+### Image Upload Features
+
+- **Profile Pictures**
+  - Maximum size: 20MB
+  - Supported formats: JPEG, PNG, GIF
+  - Automatic validation
+  - Error handling
+
+- **Upload Constraints**
+  - Server-side validation
+  - Client-side checks
+  - Format restrictions
+  - Size limitations
 
 ## Technology Stack
 
 ### Backend
 - Go (Standard library)
-- SQLite3 for database
-- bcrypt for password encryption
-- UUID package (gofrs/uuid or google/uuid)
+- SQLite3 database
+- bcrypt encryption
+- UUID management
 
 ### Frontend
-- Pure HTML/CSS/JavaScript
-- No external frameworks
-- Responsive design
-- Modern UI/UX
+- Vanilla JavaScript
+- Custom CSS
+- HTML5
+- WebSocket (for real-time features)
 
-### Project Structure
+## Project Structure
 ```bash
-forum-advanced-features/
-│
-├── authentication/
+social-forum/
 ├── controllers/
-│   ├── categories.go
-│   ├── categories_test.go
-│   ├── filters.go
+│   ├── api_handler.go
 │   ├── image_handler.go
-│   ├── post_handler.go
-│   ├── post_handler_test.go
 │   └── profile_handler.go
 ├── static/
+│   ├── js/
+│   │   ├── components/
+│   │   │   ├── profile/
+│   │   │   └── posts/
+│   │   └── utils/
+│   ├── css/
+│   └── sounds/
 ├── templates/
 ├── utils/
-├── Dockerfile
-├── README.md
-├── buildDocker.sh
-├── fly.toml
-├── go.mod
-├── go.sum
 └── main.go
 ```
 
-## Development Guidelines
-
-1. **Backend Requirements**
-   - Must be written in Go
-   - Must follow good coding practices
-   - Unit testing is recommended
-
-2. **Allowed Packages**
-   - All standard Go packages
-   - sqlite3
-   - bcrypt
-   - gofrs/uuid or google/uuid
-
-## Learning Objectives
-
-This project focuses on implementing:
-- Real-time notifications
-- Users activity tracking
-
-## Prerequisites
-
-- Go 1.19 or higher
-- Docker
-- SQLite3
-
-## Installation
+## Setup Instructions
 
 1. Clone the repository:
 ```bash
-git clone https://learn.zone01kisumu.ke/git/somotto/forum-advanced-features.git
-cd forum-advanced-features
+git clone https://github.com/bshisia/social-forum.git
+cd social-forum
 ```
 
 2. Install dependencies:
-```bash
-go mod init forum
-```
 ```bash
 go mod tidy
 ```
@@ -137,125 +132,36 @@ go mod tidy
 go run .
 ```
 
-## Building and Running the Application
+## Development Guidelines
 
-### Using the `buildDocker.sh` Script
+1. **Code Structure**
+   - Modular component design
+   - Event-driven architecture
+   - Clean code practices
+   - Comprehensive error handling
 
-
-2. **Make the script executable**:
-
-```sh
-  chmod +x buildDocker.sh
-```
-
-3. **Run the script**:
-
-```sh
-  ./buildDocker.sh
-```
-
-  This script will:
-  - Build the Docker image for the application.
-  - Stop and remove any existing container with the same name.
-  - Run a new container with the built image.
-
-4. **Access the application**:
-
-  Open your web browser and navigate to `http://localhost:8000`.
-
-### Manually Using Docker Commands
-
-1. **Build the Docker image**:
-
-```sh
-  docker build -t forum .
-```
-
-2. **Run the Docker container**:
-
-```sh
-  docker run -d --name forum-container -p 8000:8000 forum
-```
-
-
-## Troubleshooting
-
-- **Check container logs**:
-
-  If you encounter any issues, you can check the logs of the running container:
-
-```sh
-  docker logs forum-container
-```
-
-- **Interactive mode**:
-
-You can run the container in interactive mode to debug:
-
-```sh
-  docker run -it --name forum-container -p 8000:8000 forum /bin/sh
-```
-
-  Once inside the container, you can manually start the application and check for any errors.
-
-
-## Database Schema
-
-The application uses SQLite with the following main tables:
-- Users
-- Posts
-- Comments
-- Categories
-- Reactions
-- Sessions
-
-## API Endpoints
-
-### Authentication
-- `POST /signup` - Register new user
-- `POST /signin` - User login
-- `POST /signout` - User logout
-
-### Posts
-- `GET /` - Get all posts
-- `GET /post/{id}` - Get single post
-- `POST /post` - Create new post
-- `POST /post/delete` - Delete post
-
-### Comments
-- `POST /comment` - Add comment
-- `POST /comment/delete` - Delete comment
-- `POST /comment/edit` - Edit comment
-
-### Reactions
-- `POST /react` - Like/dislike post
-- `POST /commentreact` - Like/dislike comment
-
-### Filters
-- `GET /category/{id}` - Filter posts by category
-- `GET /created` - View created posts
-- `GET /liked` - View liked posts
+2. **Feature Implementation**
+   - Client-side validation
+   - Server-side security
+   - Responsive design
+   - Cross-browser compatibility
 
 ## Security Features
 
-- Password encryption using bcrypt
-- Session management with UUID
-- Input validation and sanitization
-- Secure cookie handling
-
-### Running Tests
-```bash
-go test ./...
-```
+- Secure file uploads
+- Input validation
+- XSS prevention
+- CSRF protection
+- Secure session management
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+2. Create a feature branch
+3. Implement changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.
